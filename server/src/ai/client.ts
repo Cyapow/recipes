@@ -33,12 +33,12 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
   const client: SdkLike = sdk ?? new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 1 });
   const tools = [{ name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', input_schema: recipeToolSchema() }];
 
-  async function call(messages: Msg[]) {
+  async function call(messages: Msg[], maxTokens: number) {
     try {
       return await client.messages.create(
         {
           model: config.anthropicModel,
-          max_tokens: MAX_TOKENS,
+          max_tokens: maxTokens,
           system: SYSTEM_PROMPT,
           tools: tools as Anthropic.Tool[],
           tool_choice: { type: 'tool', name: TOOL_NAME },
@@ -55,8 +55,15 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
     async extractRecipe(input) {
       const messages: Msg[] = [{ role: 'user', content: buildUserMessage(input) }];
       let lastError = '';
+      let maxTokens = MAX_TOKENS;
       for (let attempt = 0; attempt < 2; attempt++) {
-        const res = await call(messages);
+        const res = await call(messages, maxTokens);
+        if (res.stop_reason === 'max_tokens') {
+          // Truncated tool input can still validate (gaps is last), so never accept it.
+          lastError = 'response truncated (max_tokens)';
+          maxTokens *= 2;
+          continue;
+        }
         const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
         if (block && block.type === 'tool_use') {
           const parsed = RecipeDraftSchema.safeParse(block.input);

@@ -72,4 +72,30 @@ describe('createAnthropicClient', () => {
     expect(err).toBeInstanceOf(AiRequestError);
     expect(err.message).not.toContain('sk-secret');
   });
+
+  it('never accepts a max_tokens-truncated result; retries with a larger budget', async () => {
+    const { sdk, create } = fake({ ...toolUse(draft), stop_reason: 'max_tokens' }, { ...toolUse(draft), stop_reason: 'tool_use' });
+    const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
+    expect(out).toEqual(draft);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1]![0].max_tokens).toBeGreaterThan(create.mock.calls[0]![0].max_tokens);
+    expect(create.mock.calls[1]![0].messages).toHaveLength(1);
+  });
+
+  it('throws AiInvalidOutputError when truncated twice', async () => {
+    const t = { ...toolUse(draft), stop_reason: 'max_tokens' };
+    const { sdk, create } = fake(t, t);
+    await expect(createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).rejects.toBeInstanceOf(
+      AiInvalidOutputError,
+    );
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves normal stop reasons unaffected', async () => {
+    for (const stop_reason of ['end_turn', 'tool_use']) {
+      const { sdk, create } = fake({ ...toolUse(draft), stop_reason });
+      expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+      expect(create).toHaveBeenCalledTimes(1);
+    }
+  });
 });
