@@ -64,3 +64,25 @@ describe('Library', () => {
     );
   });
 });
+
+describe('Library redesign', () => {
+  it('has the CTA and icon links', async () => {
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    const href = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
+    expect(href('Describe it')).toBe('/describe');
+    expect(href('From a link')).toBe('/import');
+    expect(href('New recipe')).toBe('/new');
+    expect(href('Settings')).toBe('/settings');
+  });
+  it('shows a monogram tile without a thumbnail and an image with one', async () => {
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    const tile = screen.getByText('CA');
+    expect(tile.getAttribute('aria-hidden')).toBe('true');
+    expect(tile.getAttribute('style')).toContain('var(--tile-');
+    const img = screen.getByRole('link', { name: /Dal/ }).querySelector('img');
+    expect(img?.getAttribute('src')).toBe('/api/images/img1/thumb');
+    expect(screen.queryByText('DA')).toBeNull();
+  });
+});
