@@ -23,3 +23,7 @@ export const GearIcon = () => (
 );
 export const BackIcon = () => <Svg><path d="m15 6-6 6 6 6" /></Svg>;
 export const CartIcon = () => <Svg><path d="M5 6h15l-1.5 8H7.2L5 3H2M9 20h.01M17 20h.01" /></Svg>;
+export const CloseIcon = () => <Svg><path d="M6 6l12 12M18 6 6 18" /></Svg>;
+export const ListIcon = () => <Svg><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" /></Svg>;
+export const SunIcon = () => <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Svg>;
+export const CameraIcon = () => <Svg sw={1.6}><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="13" r="3.5" /></Svg>;
