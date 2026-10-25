@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
-import { AiInvalidOutputError, AiRequestError, type AiClient } from './client.js';
+import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'other', sourceName: 'x', sourceUrl: 'http://x',
@@ -45,6 +45,12 @@ describe('POST /api/ai/describe', () => {
     const res = await post(make({ extractRecipe: vi.fn().mockRejectedValue(new AiInvalidOutputError('bad')) }), { text: 'x' });
     expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({ error: 'AI returned an invalid recipe' });
+  });
+
+  it('502 with a distinct message when the AI refuses', async () => {
+    const res = await post(make({ extractRecipe: vi.fn().mockRejectedValue(new AiRefusedError()) }), { text: 'x' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'The AI declined this request' });
   });
 
   it('502 on request failure', async () => {

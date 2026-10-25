@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AiInvalidOutputError, type AiClient } from './client.js';
+import { AiInvalidOutputError, AiRefusedError, type AiClient } from './client.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
 
@@ -13,6 +13,7 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined)
       const draft = await ai.extractRecipe({ kind: 'description', text: text.trim() });
       return { ...draft, origin: 'mine', sourceName: null, sourceUrl: null };
     } catch (err) {
+      if (err instanceof AiRefusedError) return reply.code(502).send({ error: 'The AI declined this request' });
       if (err instanceof AiInvalidOutputError) return reply.code(502).send({ error: 'AI returned an invalid recipe' });
       return reply.code(502).send({ error: 'AI request failed' });
     }
