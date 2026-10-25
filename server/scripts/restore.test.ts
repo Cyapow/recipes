@@ -248,7 +248,7 @@ describe('restore rollback when the swap fails part-way', () => {
       return realRename(f, t);
     };
     await expect(restoreFromDirectory(backupDir, dataDir, { force: true, rename })).rejects.toThrow(
-      /rollback failed.*recipes\.sqlite\.pre-restore-[\d-]+.*recipes\.sqlite\.pre-restore-[\d-]+-wal/s,
+      /Rollback failed.*recipes\.sqlite\.pre-restore-[\d-]+.*recipes\.sqlite\.pre-restore-[\d-]+-wal/s,
     );
   });
 });
