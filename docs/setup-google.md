@@ -31,3 +31,7 @@ The app asks for the `drive.file` scope, so it can only see files it created its
 - The Google token is stored in `<DATA_DIR>/google-token.json` (mode 0600). It is not inside the database, so it is never uploaded to Drive.
 - If a backup reports "authorisation failed - reconnect Drive", the token was revoked or expired: click Disconnect, then Connect again in Settings.
 - If Google returns no refresh token on connect, remove the app at <https://myaccount.google.com/permissions> and connect again.
+
+## Security note
+
+The app has no login. Anyone who can reach the site can open Settings, disconnect Drive, or (once disconnected) connect a different Google account, which would send future backups to that account's Drive. Mitigations in place are modest: connecting is refused while an account is already connected (switching needs an explicit Disconnect), and the OAuth `state` is bound to the browser that started the flow by a short-lived cookie. These do not replace access control. Keep the Caddy LAN-only guard in place and keep guest wifi on a separate network from the one that can reach this site.

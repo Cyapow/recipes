@@ -27,6 +27,8 @@ export type AppDeps = { config: Config; db: Database; webDir?: string; images?: 
   /** Test seams for Google: default is built from config; the Drive factory defaults to google.getDriveClient. */
   google?: GoogleAuth;
   driveFactory?: () => Promise<DriveClient | null>;
+  /** Overall deadline for one backup run (tests inject a tiny one). */
+  backupDeadlineMs?: number;
 };
 
 const defaultWebDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
@@ -53,10 +55,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const service = createBackupService({
     db: deps.db,
     dataDir: deps.config.dataDir,
+    deadlineMs: deps.backupDeadlineMs,
     getDrive: deps.driveFactory ?? (() => google.getDriveClient()),
   });
   app.decorate('backup', service);
-  registerBackupRoutes(app, { db: deps.db, google, service });
+  registerBackupRoutes(app, { db: deps.db, google, service, secureCookie: Boolean(deps.config.publicBaseUrl?.startsWith('https://')) });
 
   const webDir = deps.webDir ?? defaultWebDir;
   if (existsSync(path.join(webDir, 'index.html'))) {

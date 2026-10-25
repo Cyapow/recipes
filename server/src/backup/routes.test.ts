@@ -34,6 +34,7 @@ function setup(o: Parameters<typeof fakeGoogle>[0] = {}, driveFactory?: () => Pr
   const app = buildApp({ config: { ...loadConfig({}), dataDir }, db, google: g, driveFactory: driveFactory ?? (async () => (o.connectedAt === null ? null : new FakeDrive())) });
   return { app, calls, db, dataDir };
 }
+const cookieOf = (res: { headers: Record<string, any> }) => String(res.headers['set-cookie']).split(';')[0];
 const stateOf = (location: string) => new URL(location).searchParams.get('state')!;
 
 describe('google oauth routes', () => {
@@ -50,10 +51,45 @@ describe('google oauth routes', () => {
     expect(start.statusCode).toBe(302);
     const state = stateOf(start.headers.location as string);
     expect(state).toMatch(/^[0-9a-f]{64}$/);
-    const cb = await app.inject(`/api/backup/google/callback?code=abc&state=${state}`);
+    const cb = await app.inject({ url: `/api/backup/google/callback?code=abc&state=${state}`, headers: { cookie: cookieOf(start) } });
     expect(cb.statusCode).toBe(302);
     expect(cb.headers.location).toBe('/settings');
+    expect(String(cb.headers['set-cookie'])).toContain('Max-Age=0');
     expect(calls.callback).toEqual(['abc']);
+  });
+
+  it('start sets an httpOnly SameSite=Lax cookie scoped to the oauth path, Secure on https', async () => {
+    const { app } = setup({ connectedAt: null });
+    const res = await app.inject('/api/backup/google/start');
+    const c = String(res.headers['set-cookie']);
+    const state = stateOf(res.headers.location as string);
+    expect(c).toContain(`recipes_oauth_state=${state}`);
+    expect(c).toMatch(/HttpOnly/);
+    expect(c).toMatch(/SameSite=Lax/);
+    expect(c).toContain('Path=/api/backup/google');
+    expect(c).toContain('Max-Age=600');
+    expect(c).not.toContain('Secure'); // default config is http://localhost
+    const dataDir = mkdtempSync(path.join(tmpdir(), 'rt-'));
+    const secure = buildApp({ config: { ...loadConfig({ PUBLIC_BASE_URL: 'https://recipes.matchapman.dev' }), dataDir }, db: openDb(':memory:'), google: fakeGoogle({ connectedAt: null }).g });
+    expect(String((await secure.inject('/api/backup/google/start')).headers['set-cookie'])).toContain('Secure');
+  });
+
+  it('callback with matching state but missing or mismatched cookie is 400 and stores nothing', async () => {
+    const { app, calls } = setup({ connectedAt: null });
+    const start = await app.inject('/api/backup/google/start');
+    const state = stateOf(start.headers.location as string);
+    const url = `/api/backup/google/callback?code=abc&state=${state}`;
+    expect((await app.inject(url)).statusCode).toBe(400);
+    expect((await app.inject({ url, headers: { cookie: 'recipes_oauth_state=other' } })).statusCode).toBe(400);
+    expect(calls.callback).toEqual([]);
+  });
+
+  it('start while connected is 409', async () => {
+    const { app } = setup();
+    const res = await app.inject('/api/backup/google/start');
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'Already connected. Disconnect first.' });
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('callback with a wrong state is 400 and stores nothing', async () => {
@@ -67,16 +103,19 @@ describe('google oauth routes', () => {
 
   it('state is one-time use', async () => {
     const { app, calls } = setup({ connectedAt: null });
-    const state = stateOf((await app.inject('/api/backup/google/start')).headers.location as string);
-    expect((await app.inject(`/api/backup/google/callback?code=a&state=${state}`)).statusCode).toBe(302);
-    expect((await app.inject(`/api/backup/google/callback?code=b&state=${state}`)).statusCode).toBe(400);
+    const start = await app.inject('/api/backup/google/start');
+    const state = stateOf(start.headers.location as string);
+    const headers = { cookie: cookieOf(start) };
+    expect((await app.inject({ url: `/api/backup/google/callback?code=a&state=${state}`, headers })).statusCode).toBe(302);
+    expect((await app.inject({ url: `/api/backup/google/callback?code=b&state=${state}`, headers })).statusCode).toBe(400);
     expect(calls.callback).toEqual(['a']);
   });
 
   it('access_denied redirects back to settings without storing', async () => {
     const { app, calls } = setup({ connectedAt: null });
-    const state = stateOf((await app.inject('/api/backup/google/start')).headers.location as string);
-    const res = await app.inject(`/api/backup/google/callback?error=access_denied&state=${state}`);
+    const start = await app.inject('/api/backup/google/start');
+    const state = stateOf(start.headers.location as string);
+    const res = await app.inject({ url: `/api/backup/google/callback?error=access_denied&state=${state}`, headers: { cookie: cookieOf(start) } });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/settings?google=denied');
     expect(calls.callback).toEqual([]);
@@ -159,6 +198,34 @@ describe('backup status and run', () => {
     release();
     expect((await first).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: '/api/backup/run' })).statusCode).toBe(200);
+  });
+
+  it('a hung drive times out as failed, frees the lock, and the abandoned run cannot clobber newer state', async () => {
+    let unhang!: () => void;
+    const gate = new Promise<void>((r) => (unhang = r));
+    const hung: any = {
+      ensureFolder: async () => { await gate; throw new Error('late failure'); },
+      list: async () => [], upload: async () => 'x', remove: async () => {},
+    };
+    const good = new FakeDrive();
+    let n = 0;
+    const g = fakeGoogle();
+    const app = buildApp({
+      config: { ...loadConfig({}), dataDir: mkdtempSync(path.join(tmpdir(), 'rt-')) }, db: openDb(':memory:'), google: g.g,
+      backupDeadlineMs: 30, driveFactory: async () => (n++ === 0 ? hung : good),
+    });
+    const t = await app.inject({ method: 'POST', url: '/api/backup/run' });
+    expect(t.statusCode).toBe(200);
+    expect(t.json()).toEqual({ ok: false, error: 'Backup timed out' });
+    expect((await app.inject('/api/backup/status')).json()).toMatchObject({ banner: 'failed', lastError: 'Backup timed out', running: false });
+    const again = await app.inject({ method: 'POST', url: '/api/backup/run' });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().ok).toBe(true);
+    unhang(); // abandoned run now fails late
+    await new Promise((r) => setTimeout(r, 30));
+    const st = (await app.inject('/api/backup/status')).json();
+    expect(st.lastError).toBeNull();
+    expect(st.banner).toBe('none');
   });
 
   it('never writes the token file into anything uploaded (dataDir root is not scanned)', async () => {

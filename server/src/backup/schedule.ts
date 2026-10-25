@@ -24,12 +24,13 @@ export function startBackupSchedule(o: {
     if (stopped) return;
     timer = setT(async () => {
       timer = undefined;
+      // Arm the next night BEFORE running so a long or hung run can never stop future nights.
+      schedule();
       try {
         await o.run();
       } catch {
         // a failed run must never kill the schedule
       }
-      schedule();
     }, msUntilNext(now(), o.hour));
   };
   schedule();

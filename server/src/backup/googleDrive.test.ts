@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createGoogleDriveClient, escapeQ, type DriveRequest } from './googleDrive.js';
+import { createGoogleDriveClient, escapeQ, uploadTimeoutMs, DEFAULT_DRIVE_TIMEOUTS, type DriveRequest } from './googleDrive.js';
 
 type Call = Parameters<DriveRequest>[0];
 
@@ -87,5 +87,29 @@ describe('google drive client', () => {
       throw Object.assign(new Error('Unauthorized'), { status: 401, code: 401 });
     });
     await expect(c.list('f')).rejects.toMatchObject({ status: 401, code: 401 });
+  });
+
+  it('every request kind carries a timeout; the PUT scales with size', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'gd-'));
+    const file = path.join(dir, 'x.bin');
+    writeFileSync(file, 'hello');
+    const calls: Call[] = [];
+    const c = createGoogleDriveClient(async (o) => {
+      calls.push(o);
+      if (o.method === 'POST' && o.params?.uploadType) return { data: {}, headers: { location: 'https://u/s' } };
+      if (o.method === 'PUT') return { data: { id: 'f' } };
+      return { data: { files: [] , id: 'x' } };
+    }, { apiMs: 111, uploadMinMs: 222 });
+    await c.ensureFolder('a'); // GET + POST
+    await c.list('f');
+    await c.upload({ folderId: 'f', name: 'n', filePath: file });
+    await c.remove('z');
+    expect(calls).toHaveLength(6);
+    expect(calls.map((x) => x.timeout)).toEqual([111, 111, 111, 111, 222, 111]);
+    (calls[4].data as any).destroy();
+    const t = DEFAULT_DRIVE_TIMEOUTS;
+    expect(uploadTimeoutMs(1, t)).toBe(t.uploadMinMs);
+    expect(uploadTimeoutMs(100 * 1024 * 1024, t)).toBe(Math.ceil((100 * 1024 * 1024) / t.uploadBytesPerSec) * 1000);
+    expect(uploadTimeoutMs(10 * 1024 ** 3, t)).toBe(t.uploadMaxMs);
   });
 });

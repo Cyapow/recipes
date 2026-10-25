@@ -57,6 +57,8 @@ export async function runBackup(deps: {
   now?: () => Date;
   keep?: number;
   tmpRoot?: string;
+  /** Checked just before recording; false means this run was abandoned and must not touch status. */
+  shouldRecord?: () => boolean;
 }): Promise<BackupResult> {
   const now = deps.now ?? (() => new Date());
   const keep = deps.keep ?? 14;
@@ -113,6 +115,7 @@ export async function runBackup(deps: {
   } finally {
     if (tmp) await rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
+  if (deps.shouldRecord && !deps.shouldRecord()) return result;
   try {
     recordBackup(deps.db, result, now());
   } catch (e) {

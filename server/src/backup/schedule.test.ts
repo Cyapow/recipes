@@ -60,6 +60,15 @@ describe('startBackupSchedule', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it('a never-resolving run does not stop future nights', async () => {
+    const run = vi.fn(() => new Promise<void>(() => {}));
+    setup(run);
+    await vi.advanceTimersByTimeAsync(H);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(24 * H);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it('accepts injected timer functions', () => {
     const calls: number[] = [];
     startBackupSchedule({
