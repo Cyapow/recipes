@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rename as realRename } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDrive } from '../src/backup/fakeDrive.js';
 import { runBackup } from '../src/backup/run.js';
@@ -197,6 +198,58 @@ describe('restoreFromDirectory', () => {
     mkdirSync(empty);
     await expect(restoreFromDirectory(empty, dataDir)).rejects.toThrow(/no snapshot/i);
     await expect(restoreFromDirectory(path.join(root, 'nope'), dataDir)).rejects.toThrow(/not a directory/i);
+  });
+});
+
+describe('restore rollback when the swap fails part-way', () => {
+  const bytesOf = (d: string) => Object.fromEntries(readdirSync(d).filter((n) => n.startsWith('recipes.sqlite')).map((n) => [n, readFileSync(path.join(d, n), 'utf8')]));
+  const seed = async () => {
+    await restoreFromDirectory(backupDir, dataDir);
+    writeFileSync(path.join(dataDir, 'recipes.sqlite-wal'), 'orig-wal');
+    writeFileSync(path.join(dataDir, 'recipes.sqlite-shm'), 'orig-shm');
+    return { before: listing(dataDir), bytes: bytesOf(dataDir) };
+  };
+  const failing = (match: (from: string, to: string) => boolean) => async (from: string, to: string) => {
+    if (match(from, to)) throw new Error('injected rename failure');
+    return realRename(from, to);
+  };
+  const mainMove = (_f: string, t: string) => /recipes\.sqlite\.pre-restore-[\d-]+$/.test(t);
+
+  it('restores the original files when moving the main file aside fails after the sidecars moved', async () => {
+    const { before, bytes } = await seed();
+    await expect(restoreFromDirectory(backupDir, dataDir, { force: true, rename: failing(mainMove) })).rejects.toThrow(/moving the existing database aside.*original files were put back/s);
+    expect(listing(dataDir)).toEqual(before);
+    expect(bytesOf(dataDir)).toEqual(bytes);
+  });
+
+  it('restores the original files when a sidecar move fails', async () => {
+    const { before, bytes } = await seed();
+    await expect(
+      restoreFromDirectory(backupDir, dataDir, { force: true, rename: failing((_f, t) => t.endsWith('-shm') && /pre-restore/.test(t)) }),
+    ).rejects.toThrow(/-shm|aside/);
+    expect(listing(dataDir)).toEqual(before);
+    expect(bytesOf(dataDir)).toEqual(bytes);
+  });
+
+  it('restores the original files when installing the restored database fails', async () => {
+    const { before, bytes } = await seed();
+    await expect(
+      restoreFromDirectory(backupDir, dataDir, { force: true, rename: failing((f, t) => f.includes('.restore-') && t.endsWith('recipes.sqlite')) }),
+    ).rejects.toThrow(/installing the restored database.*original files were put back/s);
+    expect(listing(dataDir)).toEqual(before);
+    expect(bytesOf(dataDir)).toEqual(bytes);
+  });
+
+  it('names the pre-restore files when the rollback itself fails', async () => {
+    await seed();
+    const rename = async (f: string, t: string) => {
+      if (f.includes('.restore-') && t.endsWith('recipes.sqlite')) throw new Error('injected rename failure');
+      if (/pre-restore/.test(f)) throw new Error('injected rollback failure');
+      return realRename(f, t);
+    };
+    await expect(restoreFromDirectory(backupDir, dataDir, { force: true, rename })).rejects.toThrow(
+      /rollback failed.*recipes\.sqlite\.pre-restore-[\d-]+.*recipes\.sqlite\.pre-restore-[\d-]+-wal/s,
+    );
   });
 });
 

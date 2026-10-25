@@ -29,6 +29,8 @@ export type RestoreOptions = {
   /** Test hook: the migrations directory that defines "this build's" schema version. */
   migrationsDir?: string;
   now?: () => Date;
+  /** Test seam: replaces fs.rename for the database swap so failures can be injected. */
+  rename?: (from: string, to: string) => Promise<void>;
 };
 
 export type RestoreResult = {
@@ -105,15 +107,55 @@ function check(file: string, migrationsDir: string | undefined): Checked {
   }
 }
 
-async function moveAside(dataDir: string, now: Date): Promise<string> {
-  const stamp = snapshotStamp(now);
-  let base = path.join(dataDir, `recipes.sqlite.pre-restore-${stamp}`);
-  for (let n = 2; await exists(base); n++) base = path.join(dataDir, `recipes.sqlite.pre-restore-${stamp}-${n}`);
-  for (const suffix of ['', '-wal', '-shm']) {
-    const from = path.join(dataDir, `recipes.sqlite${suffix}`);
-    if (await exists(from)) await rename(from, base + suffix);
+type Rename = (from: string, to: string) => Promise<void>;
+
+/**
+ * Move the existing database aside (sidecars first, main file last) and put `staged` in place.
+ * Every rename that succeeded is recorded; on any failure they are undone in reverse order so the
+ * data dir ends up as it was. Returns the pre-restore path of the old main file, if there was one.
+ */
+async function swapIn(staged: string, target: string, dataDir: string, now: Date, rename: Rename): Promise<string | undefined> {
+  const done: [string, string][] = [];
+  let step = '';
+  const mv = async (from: string, to: string, what: string) => {
+    step = what;
+    await rename(from, to);
+    done.push([from, to]);
+  };
+  try {
+    let moved: string | undefined;
+    if (await exists(target)) {
+      const stamp = snapshotStamp(now);
+      let base = path.join(dataDir, `recipes.sqlite.pre-restore-${stamp}`);
+      for (let n = 2; await exists(base); n++) base = path.join(dataDir, `recipes.sqlite.pre-restore-${stamp}-${n}`);
+      for (const suffix of ['-wal', '-shm', '']) {
+        const from = `${target}${suffix}`;
+        if (await exists(from)) await mv(from, base + suffix, `moving the existing database aside (${path.basename(from)})`);
+      }
+      moved = base;
+    }
+    // Stale sidecars would be replayed onto the restored file by SQLite.
+    await rm(`${target}-wal`, { force: true });
+    await rm(`${target}-shm`, { force: true });
+    await mv(staged, target, 'installing the restored database');
+    return moved;
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    const failures: string[] = [];
+    for (const [from, to] of [...done].reverse()) {
+      try {
+        await rename(to, from);
+      } catch {
+        failures.push(to);
+      }
+    }
+    if (failures.length) {
+      throw new RestoreError(
+        `Restore failed while ${step}: ${reason}. Rollback failed too; put these files back by hand (drop the ".pre-restore-..." part of the name): ${failures.join(', ')}`,
+      );
+    }
+    throw new RestoreError(`Restore failed while ${step}: ${reason}. The original files were put back; nothing was changed.`);
   }
-  return base;
 }
 
 export async function restoreFromDirectory(dir: string, dataDir: string, opts: RestoreOptions = {}): Promise<RestoreResult> {
@@ -187,18 +229,8 @@ export async function restoreFromDirectory(dir: string, dataDir: string, opts: R
         }
       }
 
-      // 4. Swap the database in. The old one is moved, never deleted.
-      let movedExisting: string | undefined;
-      if (hadExisting || (await exists(target))) movedExisting = await moveAside(dataDir, opts.now?.() ?? new Date());
-      // Stale sidecars would be replayed onto the restored file by SQLite.
-      await rm(`${target}-wal`, { force: true });
-      await rm(`${target}-shm`, { force: true });
-      try {
-        await rename(staged, target);
-      } catch (e) {
-        if (movedExisting) for (const s of ['', '-wal', '-shm']) if (await exists(movedExisting + s)) await rename(movedExisting + s, `${target}${s}`);
-        throw e;
-      }
+      // 4. Swap the database in. The old one is moved, never deleted; failures roll back.
+      const movedExisting = await swapIn(staged, target, dataDir, opts.now?.() ?? new Date(), opts.rename ?? rename);
 
       let missing = 0;
       for (const ids of checked.imageIds) {
