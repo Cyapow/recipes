@@ -6,7 +6,11 @@ export type RecipeFormProps = {
   initial: RecipeInput;
   gaps?: string[];
   onSave(input: RecipeInput): void;
+  /** Disables Save and relabels it while a save is in flight. */
+  saving?: boolean;
 };
+
+// Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
 
 const num = (s: string): number | null => {
   const n = s.trim() === '' ? NaN : Number(s);
@@ -14,7 +18,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
   const [origin, setOrigin] = useState(initial.origin);
@@ -127,8 +131,8 @@ export function RecipeForm({ initial, gaps, onSave }: RecipeFormProps) {
           <input id="f-tags" aria-describedby="h-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
           <small id="h-tags">Comma-separated.</small>
         </div>
-        <button type="submit" className="primary">
-          Save
+        <button type="submit" className="primary" disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </form>
     </>

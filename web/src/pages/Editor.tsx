@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteRecipe, getRecipe, saveRecipe, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
@@ -14,20 +14,36 @@ export function Editor() {
   const nav = useNavigate();
   const [initial, setInitial] = useState<RecipeInput | null>(id ? null : EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
-    if (!id) return;
+    setError(null);
+    if (!id) {
+      setInitial(EMPTY);
+      return;
+    }
+    setInitial(null);
+    let live = true;
     getRecipe(id)
-      .then(({ id: _i, createdAt: _c, updatedAt: _u, ...input }) => setInitial(input))
-      .catch(() => setError('Could not load recipe'));
+      .then(({ id: _i, createdAt: _c, updatedAt: _u, ...input }) => live && setInitial(input))
+      .catch(() => live && setError('Could not load recipe'));
+    return () => {
+      live = false;
+    };
   }, [id]);
 
   async function onSave(input: RecipeInput) {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const saved = await saveRecipe(id ?? null, input);
       nav(`/recipe/${saved.id}`);
     } catch {
       setError('Could not save recipe');
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -48,7 +64,7 @@ export function Editor() {
         <Link className="btn small" to="/">Cancel</Link>
       </header>
       {error && <p className="field-error" role="alert">{error}</p>}
-      {initial && <RecipeForm initial={initial} onSave={onSave} />}
+      {initial && <RecipeForm key={id ?? 'new'} initial={initial} onSave={onSave} saving={saving} />}
       {id && initial && (
         <button type="button" className="danger" onClick={onDelete}>
           Delete
