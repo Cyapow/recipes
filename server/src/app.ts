@@ -32,7 +32,7 @@ export type AppDeps = { config: Config; db: Database; webDir?: string; images?: 
   google?: GoogleAuth;
   driveFactory?: () => Promise<DriveClient | null>;
   /** Overall deadline for one backup run (tests inject a tiny one). */
-  backupDeadlineMs?: number;
+  backupDeadlineMs?: number | (() => number);
 };
 
 /** SPA fallback only for extensionless page routes: a missing asset must 404, never come back as index.html. */

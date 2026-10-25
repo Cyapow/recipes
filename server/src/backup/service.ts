@@ -18,12 +18,16 @@ export function createBackupService(deps: {
   dataDir: string;
   getDrive: () => Promise<DriveClient | null>;
   now?: () => Date;
-  deadlineMs?: number;
+  /** Per-run deadline; a function is read at the start of each run (tests use it to time out one run only). */
+  deadlineMs?: number | (() => number);
 }) {
   const now = deps.now ?? (() => new Date());
   let current = 0; // token of the run holding the lock; 0 = none
   let seq = 0;
+  const pending = new Set<Promise<unknown>>();
   return {
+    /** Resolves once every started run has fully settled, even if it was abandoned at its deadline. */
+    whenIdle: (): Promise<void> => Promise.allSettled([...pending]).then(() => undefined),
     isRunning: () => current !== 0,
     /** `force` skips the "nothing changed" shortcut (explicit Back up now); the nightly schedule leaves it off. */
     async runNow(opts: { force?: boolean } = {}): Promise<RunOutcome> {
@@ -46,9 +50,11 @@ export function createBackupService(deps: {
           const result = await runBackup({ db: deps.db, dataDir: deps.dataDir, drive, now: deps.now, shouldRecord: mine, force: opts.force === true });
           return { status: 'done', result };
         })();
+        pending.add(work);
+        void work.then(() => pending.delete(work), () => pending.delete(work));
         work.catch(() => {}); // an abandoned run's late rejection must not be unhandled
         const deadline = new Promise<'timeout'>((resolve) => {
-          timer = setTimeout(() => resolve('timeout'), deps.deadlineMs ?? DEFAULT_RUN_DEADLINE_MS);
+          timer = setTimeout(() => resolve('timeout'), (typeof deps.deadlineMs === 'function' ? deps.deadlineMs() : deps.deadlineMs) ?? DEFAULT_RUN_DEADLINE_MS);
         });
         const out = await Promise.race([work, deadline]);
         if (out === 'timeout') {
