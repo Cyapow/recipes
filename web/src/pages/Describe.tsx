@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { describeRecipe, saveRecipe, type RecipeDraft, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+import { describeSaveError } from '../lib/saveError';
 
 export function Describe() {
   const nav = useNavigate();
@@ -41,8 +42,8 @@ export function Describe() {
     try {
       const saved = await saveRecipe(null, input);
       nav(`/recipe/${saved.id}`);
-    } catch {
-      setError('Could not save recipe');
+    } catch (e) {
+      setError(describeSaveError(e));
       savingRef.current = false;
       setSaving(false);
     }

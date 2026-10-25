@@ -95,3 +95,18 @@ describe('findImageUrl', () => {
     expect(findImageUrl('<p/>', 'https://x.test')).toBeNull();
   });
 });
+
+describe('parseRecipeJsonLd step caps', () => {
+  it('clamps to 200 steps, 5000 chars each, and drops [object Object] steps', () => {
+    const steps = [
+      ...Array.from({ length: 250 }, (_, i) => `Step number ${i}`),
+    ];
+    steps[0] = 'x'.repeat(6000);
+    steps[1] = 'Mix [object Object] well';
+    const r = parseRecipeJsonLd(ld(recipe({ recipeInstructions: steps })))!;
+    expect(r.steps).toHaveLength(200);
+    expect(r.steps[0]!.text).toHaveLength(5000);
+    expect(r.steps.some((s) => s.text.includes('[object Object]'))).toBe(false);
+    expect(r.steps[1]!.text).toBe('Step number 2');
+  });
+});

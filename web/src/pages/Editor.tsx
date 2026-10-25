@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteRecipe, getRecipe, saveRecipe, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+import { describeSaveError } from '../lib/saveError';
 
 const EMPTY: RecipeInput = {
   title: '', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
@@ -40,8 +41,8 @@ export function Editor() {
     try {
       const saved = await saveRecipe(id ?? null, input);
       nav(`/recipe/${saved.id}`);
-    } catch {
-      setError('Could not save recipe');
+    } catch (e) {
+      setError(describeSaveError(e));
       savingRef.current = false;
       setSaving(false);
     }

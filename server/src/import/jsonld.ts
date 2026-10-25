@@ -76,6 +76,14 @@ function flattenSteps(v: Json, out: string[], depth = 0): void {
   }
 }
 
+// Keep imported drafts within the recipe input limits so they are always savable.
+function clampSteps(steps: string[]): string[] {
+  return steps
+    .filter((t) => !t.includes('[object Object]'))
+    .slice(0, 200)
+    .map((t) => (t.length > 5000 ? t.slice(0, 5000) : t));
+}
+
 function asList(v: Json): string[] {
   if (typeof v === 'string') return v.split(',');
   if (Array.isArray(v)) return v.flatMap(asList);
@@ -106,7 +114,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     prepMinutes: parseDuration(r.prepTime),
     cookMinutes: parseDuration(r.cookTime),
     ingredients,
-    steps: steps.map((text) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
+    steps: clampSteps(steps).map((text) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
     notes: null,
     tags: tags.slice(0, 8),
     imageIds: [],

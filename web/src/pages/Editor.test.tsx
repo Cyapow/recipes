@@ -70,4 +70,22 @@ describe('Editor', () => {
     await act(async () => resolve(rec('n', 'Soup')));
     expect(await screen.findByText('cook page')).toBeTruthy();
   });
+
+  it('shows a specific message for a 400 with step issues and keeps the edits; generic otherwise', async () => {
+    const mk = (status: number, body?: unknown) => Object.assign(new Error('x'), { name: 'ApiError', status, body });
+    const user = userEvent.setup();
+    app('/new');
+    await user.type(screen.getByLabelText('Title'), 'Soup');
+    vi.mocked(saveRecipe).mockRejectedValueOnce(mk(400, { issues: [{ path: ['steps', 1, 'text'], message: 'Step text looks corrupted ([object Object])' }] }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect((await screen.findByRole('alert')).textContent).toBe("Step 2 can't be saved: Step text looks corrupted ([object Object])");
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Soup');
+    vi.mocked(saveRecipe).mockRejectedValueOnce(mk(400, { error: 'Invalid' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Could not save recipe'));
+    vi.mocked(saveRecipe).mockRejectedValueOnce(mk(500));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveRecipe).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole('alert').textContent).toBe('Could not save recipe');
+  });
 });
