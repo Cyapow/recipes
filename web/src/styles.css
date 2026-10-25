@@ -65,3 +65,7 @@ input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; bor
 .photo-list li { display: flex; flex-direction: column; gap: .25rem; align-items: stretch; width: 96px; }
 .photo-list img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; display: block; }
 .cook-hero { display: block; width: 100%; max-height: 30vh; object-fit: cover; border-radius: 12px; margin: .5rem 0; }
+
+.hint { color: var(--muted, #666); font-size: 0.9rem; }
+.spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -0.15em; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

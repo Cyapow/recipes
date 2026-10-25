@@ -1,0 +1,87 @@
+import Anthropic from '@anthropic-ai/sdk';
+import type { Config } from '../config.js';
+import { RecipeDraftSchema, type RecipeDraft } from '../recipes/schema.js';
+import { buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, TOOL_NAME } from './draft.js';
+
+export interface AiClient {
+  extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<RecipeDraft>;
+}
+
+export class AiInvalidOutputError extends Error {
+  constructor(message = 'AI returned an invalid recipe') {
+    super(message);
+    this.name = 'AiInvalidOutputError';
+  }
+}
+
+export class AiRequestError extends Error {
+  constructor(message = 'AI request failed') {
+    super(message);
+    this.name = 'AiRequestError';
+  }
+}
+
+/** The slice of the Anthropic SDK we use; lets tests inject a fake. */
+export type SdkLike = Pick<Anthropic, 'messages'>;
+
+const REQUEST_TIMEOUT_MS = 60_000;
+const MAX_TOKENS = 4096;
+
+type Msg = Anthropic.MessageParam;
+
+export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
+  const client: SdkLike = sdk ?? new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 1 });
+  const tools = [{ name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', input_schema: recipeToolSchema() }];
+
+  async function call(messages: Msg[]) {
+    try {
+      return await client.messages.create(
+        {
+          model: config.anthropicModel,
+          max_tokens: MAX_TOKENS,
+          system: SYSTEM_PROMPT,
+          tools: tools as Anthropic.Tool[],
+          tool_choice: { type: 'tool', name: TOOL_NAME },
+          messages,
+        },
+        { timeout: REQUEST_TIMEOUT_MS },
+      );
+    } catch {
+      throw new AiRequestError(); // deliberately drops the upstream error: it may echo request details
+    }
+  }
+
+  return {
+    async extractRecipe(input) {
+      const messages: Msg[] = [{ role: 'user', content: buildUserMessage(input) }];
+      let lastError = '';
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const res = await call(messages);
+        const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
+        if (block && block.type === 'tool_use') {
+          const parsed = RecipeDraftSchema.safeParse(block.input);
+          if (parsed.success) return parsed.data;
+          lastError = parsed.error.message;
+          messages.push(
+            { role: 'assistant', content: res.content },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: `Invalid recipe: ${lastError}\nCall ${TOOL_NAME} again with valid input. Still do not add anything the user did not say.`,
+                },
+              ],
+            },
+          );
+        } else {
+          lastError = 'no tool call returned';
+          break;
+        }
+      }
+      throw new AiInvalidOutputError(lastError);
+    },
+  };
+}

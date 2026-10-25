@@ -1,6 +1,6 @@
-import type { Recipe, RecipeInput, RecipeSummary } from '../../server/src/recipes/schema';
+import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary } from '../../server/src/recipes/schema';
 
-export type { Recipe, RecipeInput, RecipeSummary };
+export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary };
 
 export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
 
@@ -42,4 +42,17 @@ export async function uploadImage(file: File): Promise<string> {
   if (res.status === 415) throw new Error('not a supported image');
   if (!res.ok) throw new Error(`upload failed (${res.status})`);
   return ((await res.json()) as { id: string }).id;
+}
+
+export async function describeRecipe(text: string): Promise<RecipeDraft> {
+  const res = await fetch('/api/ai/describe', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as RecipeDraft;
 }
