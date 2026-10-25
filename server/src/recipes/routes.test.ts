@@ -113,6 +113,42 @@ describe('recipe routes', () => {
       }
     });
 
+    it('(f) steps containing "[object Object]" are 400 (string, object text, mid-sentence)', async () => {
+      const app = make();
+      const bad = [
+        ['[object Object]'],
+        [{ text: '[object Object]', imageId: null, ingredients: [] }],
+        ['Mix well [object Object] then serve'],
+        ['fine', { text: 'Mix [object Object]', imageId: null, ingredients: [] }],
+      ];
+      for (const steps of bad) {
+        const res = await post(app, steps);
+        expect(res.statusCode, JSON.stringify(steps)).toBe(400);
+        expect(JSON.stringify(res.json().issues)).toContain('looks corrupted');
+      }
+      expect((await post(app, ['Mix object', 'An [object] Object'])).statusCode).toBe(201);
+    });
+
+    it('(g) input caps: at most 200 steps, each at most 5000 chars', async () => {
+      const app = make();
+      expect((await post(app, Array.from({ length: 200 }, () => 'x'))).statusCode).toBe(201);
+      expect((await post(app, Array.from({ length: 201 }, () => 'x'))).statusCode).toBe(400);
+      expect((await post(app, ['x'.repeat(5000)])).statusCode).toBe(201);
+      expect((await post(app, ['x'.repeat(5001)])).statusCode).toBe(400);
+      expect((await post(app, [{ text: 'x'.repeat(5001), imageId: null, ingredients: [] }])).statusCode).toBe(400);
+    });
+
+    it('(h) a stored legacy row containing "[object Object]" still reads without throwing', async () => {
+      const db = openDb(':memory:');
+      const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
+      const app = buildApp({ config, db });
+      const { id } = (await post(app, ['x'])).json();
+      db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run('["[object Object]"]', id);
+      const res = await app.inject({ url: `/api/recipes/${id}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().steps).toEqual([{ text: '[object Object]', imageId: null, ingredients: [] }]);
+    });
+
     it('(e) a legacy row is served as a Step and saved back in Step shape', async () => {
       const db = openDb(':memory:');
       const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;

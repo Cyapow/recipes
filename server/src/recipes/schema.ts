@@ -61,12 +61,24 @@ export const RecipeCoreSchema = z.object({
   imageIds: z.array(z.string()),
 });
 
+// Input-only limits; stored data is never re-checked against them.
+const MAX_STEPS = 200;
+const MAX_STEP_CHARS = 5000;
+
 /** Request body: steps may be legacy strings or Steps; output always has Step[]. */
 export const RecipeInputSchema = RecipeCoreSchema.extend({
-  steps: z.array(z.union([z.string(), StepSchema])),
+  steps: z.array(z.union([z.string(), StepSchema])).max(MAX_STEPS),
 })
   .superRefine((r, ctx) => {
     r.steps.forEach((s, i) => {
+      const text = typeof s === 'string' ? s : s.text;
+      const path = typeof s === 'string' ? ['steps', i] : ['steps', i, 'text'];
+      if (text.includes('[object Object]')) {
+        ctx.addIssue({ code: 'custom', path, message: 'Step text looks corrupted ([object Object])' });
+      }
+      if (text.length > MAX_STEP_CHARS) {
+        ctx.addIssue({ code: 'custom', path, message: `Step text is too long (max ${MAX_STEP_CHARS} characters)` });
+      }
       if (typeof s === 'string') return;
       s.ingredients.forEach((n, j) => {
         if (n >= r.ingredients.length) {
