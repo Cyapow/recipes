@@ -16,7 +16,7 @@ function routeFor({ method, pathname, mode, sameOrigin }) {
   return 'bypass';
 }
 
-if (typeof module !== 'undefined') module.exports = { routeFor };
+if (typeof module !== 'undefined') module.exports = { routeFor, cacheFirst, networkFirst };
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -29,12 +29,18 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/** Only a plain, non-redirected HTML 200 may become the offline shell. */
+function canCacheShell(res) {
+  return res.ok && !res.redirected && (res.headers.get('content-type') || '').includes('text/html');
+}
+
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(request);
   if (hit) return hit;
   const res = await fetch(request);
-  if (res.status === 200) await cache.put(request, res.clone());
+  // Never cache an HTML body for an asset/image URL (e.g. an SPA fallback page): it would poison the cache.
+  if (res.status === 200 && !(res.headers.get('content-type') || '').includes('text/html')) await cache.put(request, res.clone());
   return res;
 }
 
@@ -43,7 +49,7 @@ async function networkFirst(request) {
   try {
     const res = await fetch(request);
     if (res.ok) {
-      await cache.put('/', res.clone()); // SPA: every navigation is the same shell
+      if (canCacheShell(res)) await cache.put('/', res.clone()); // SPA: every navigation is the same shell
       return res;
     }
     const shell = res.status >= 500 ? await cache.match('/') : undefined;

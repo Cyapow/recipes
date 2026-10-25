@@ -284,7 +284,9 @@ async function main(): Promise<void> {
   if (r.recipesWithMissingImages) {
     console.warn(`WARNING: ${r.recipesWithMissingImages} recipe(s) reference images that are missing from the backup.`);
   }
-  console.log('Google Drive is NOT reconnected by a restore: open Settings and connect Drive again, then start the app.');
+  console.log(
+    'Google Drive stays connected if the data volume (and its google-token.json) survived. Otherwise, start the app and reconnect Drive in Settings.',
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

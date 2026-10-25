@@ -237,3 +237,11 @@ describe('backup status and run', () => {
     expect(names.every((n) => /^recipes-.*\.(sqlite|json)$/.test(n))).toBe(true);
   });
 });
+
+describe('status when the Google client is not configured', () => {
+  it('treats a leftover token as not connected so the banner shows immediately', async () => {
+    const { app } = setup({ configured: false }); // fake still reports an account, like a token file left on disk
+    const body = (await app.inject('/api/backup/status')).json();
+    expect(body).toMatchObject({ configured: false, connected: false, account: null, banner: 'not_connected' });
+  });
+});

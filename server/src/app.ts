@@ -17,6 +17,7 @@ import { registerRecipeRoutes } from './recipes/routes.js';
 import type { DriveClient } from './backup/drive.js';
 import { createGoogleAuth, type GoogleAuth } from './backup/google.js';
 import { registerBackupRoutes } from './backup/routes.js';
+import { loggerOptions } from './logging.js';
 import { registerSameOriginGuard } from './security.js';
 import { createBackupService, type BackupService } from './backup/service.js';
 
@@ -32,10 +33,18 @@ export type AppDeps = { config: Config; db: Database; webDir?: string; images?: 
   backupDeadlineMs?: number;
 };
 
+/** SPA fallback only for extensionless page routes: a missing asset must 404, never come back as index.html. */
+function isSpaRoute(url: string): boolean {
+  const pathname = url.split('?')[0]!;
+  if (pathname.startsWith('/assets/')) return false;
+  const last = pathname.split('/').pop() ?? '';
+  return !/\.[A-Za-z0-9]+$/.test(last);
+}
+
 const defaultWebDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
 
 export function buildApp(deps: AppDeps): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: loggerOptions(process.env) });
   app.decorate('deps', deps);
   registerSameOriginGuard(app, deps.config);
   app.get('/api/health', async () => ({ ok: true }));
@@ -67,7 +76,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   if (existsSync(path.join(webDir, 'index.html'))) {
     app.register(fastifyStatic, { root: webDir });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api')) return reply.sendFile('index.html');
+      if (req.method === 'GET' && !req.url.startsWith('/api') && isSpaRoute(req.url)) return reply.sendFile('index.html');
       return reply.code(404).send({ error: 'Not found' });
     });
   }

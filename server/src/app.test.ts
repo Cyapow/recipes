@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -43,6 +43,23 @@ describe('static web serving', () => {
     const api = await app.inject({ url: '/api/nope' });
     expect(api.statusCode).toBe(404);
     expect(api.json()).toEqual({ error: 'Not found' });
+    await app.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  it('404s missing files instead of returning index.html, keeping the SPA fallback for extensionless routes', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'web-'));
+    writeFileSync(path.join(dir, 'index.html'), '<html>spa</html>');
+    mkdirSync(path.join(dir, 'assets'));
+    writeFileSync(path.join(dir, 'assets', 'app-1.js'), 'ok()');
+    const app = buildApp({ config: loadConfig({}), db: openDb(':memory:'), webDir: dir });
+    expect((await app.inject({ url: '/assets/app-1.js' })).body).toBe('ok()');
+    for (const url of ['/assets/gone-2.js', '/assets/anything', '/missing.js', '/x/y.css', '/icon.png', '/app.js.map', '/manifest.webmanifest', '/assets/gone.js?v=1']) {
+      const res = await app.inject({ url });
+      expect(res.statusCode, url).toBe(404);
+      expect(res.body, url).not.toContain('spa');
+    }
+    expect((await app.inject({ url: '/recipe/abc' })).statusCode).toBe(200);
     await app.close();
     rmSync(dir, { recursive: true });
   });

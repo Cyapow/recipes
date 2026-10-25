@@ -72,7 +72,7 @@ export function registerBackupRoutes(
   });
 
   app.get('/api/backup/status', async () => {
-    const account = await deps.google.account();
+    const account = deps.google.configured ? await deps.google.account() : null; // a token without a client can't work
     const status = getBackupStatus(deps.db);
     const since = account?.connectedAt ? new Date(account.connectedAt) : null;
     const connectedSince = since && !Number.isNaN(since.getTime()) ? since : null;
