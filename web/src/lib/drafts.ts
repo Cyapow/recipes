@@ -57,9 +57,17 @@ export function removeDraft(id: string): void {
   write(read().filter((d) => d.id !== id));
 }
 
+function hostOf(url?: string): string {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, '') : '';
+  } catch {
+    return url?.trim() ?? '';
+  }
+}
+
 /** What to call a draft in a list. */
 export function draftTitle(d: Draft): string {
-  const t = d.input?.title?.trim() || d.text?.trim().slice(0, 40) || d.url?.trim() || '';
+  const t = d.input?.title?.trim() || d.text?.trim().slice(0, 40) || hostOf(d.url) || '';
   return t || 'Untitled recipe';
 }
 

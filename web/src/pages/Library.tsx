@@ -106,26 +106,26 @@ export function Library() {
           <h2>Drafts</h2>
           <ul className="rows">
             {drafts.map((d) => (
-              <li key={d.id} className="draft-row">
-                <Link className="row" to={draftHref(d)}>
-                  <span className="meta">
-                    <span className="title">{draftTitle(d)}</span>
-                    <span className="sub">{draftKindLabel(d.kind)} · {new Date(d.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                  </span>
-                  <span className="btn small">Resume</span>
-                </Link>
-                <button
-                  type="button"
-                  className="btn small danger-text"
-                  aria-label={`Discard draft ${draftTitle(d)}`}
-                  onClick={() => {
-                    if (!window.confirm('Discard this draft?')) return;
-                    removeDraft(d.id);
-                    setDrafts(listDrafts());
-                  }}
-                >
-                  Discard
-                </button>
+              <li key={d.id} className="draft-card">
+                <span className="meta">
+                  <span className="title">{draftTitle(d)}</span>
+                  <span className="sub">{draftKindLabel(d.kind)} · {new Date(d.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </span>
+                <span className="draft-actions">
+                  <Link className="btn small primary" to={draftHref(d)} aria-label={`Resume draft ${draftTitle(d)}`}>Resume</Link>
+                  <button
+                    type="button"
+                    className="btn small danger-text"
+                    aria-label={`Discard draft ${draftTitle(d)}`}
+                    onClick={() => {
+                      if (!window.confirm('Discard this draft?')) return;
+                      removeDraft(d.id);
+                      setDrafts(listDrafts());
+                    }}
+                  >
+                    Discard
+                  </button>
+                </span>
               </li>
             ))}
           </ul>

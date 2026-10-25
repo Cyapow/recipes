@@ -295,6 +295,10 @@ body.cook-scroll-lock { overflow: hidden; }
 .load-error { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 
 .drafts h2 { font-size: 1.125rem; margin: 4px 0 8px; }
-.draft-row { display: flex; align-items: center; gap: 8px; }
-.draft-row .row { flex: 1; min-width: 0; }
-.draft-row .btn.small { min-height: 44px; }
+.draft-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.draft-card .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.draft-card .title { font-weight: 600; font-size: 1.0625rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-card .sub { color: var(--muted, #6b5e54); font-size: 0.875rem; }
+.draft-actions { display: flex; gap: 8px; }
+.draft-actions .btn.small { min-height: 44px; }
+.draft-actions .primary { flex: 1; }
