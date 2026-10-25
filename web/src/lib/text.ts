@@ -73,3 +73,16 @@ export function formatMinutes(total: number | null | undefined): string | null {
   const m = total % 60;
   return [h ? `${h}h` : null, m ? `${m}m` : null].filter(Boolean).join(' ');
 }
+
+export function originLabel(r: { origin: 'mine' | 'other'; sourceName: string | null }): string {
+  return r.origin === 'mine' ? 'Mine' : (r.sourceName ?? 'From elsewhere');
+}
+
+export function formatQuantity(q: number): string {
+  return String(Math.round(q * 100) / 100);
+}
+
+export function formatIngredientLine(i: Ingredient): string {
+  const parts = [i.quantity != null ? formatQuantity(i.quantity) : null, i.unit, i.item].filter(Boolean);
+  return parts.join(' ') + (i.note ? ` (${i.note})` : '');
+}

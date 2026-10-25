@@ -43,3 +43,19 @@ input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; bor
 .gaps h2 { font-size: 1rem; margin: 4px 0; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field label { font-weight: 600; }
+.cook-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cook-label { color: var(--muted); font-size: .9rem; text-align: center; flex: 1; }
+.cook-title { font-size: 2rem; margin: 12px 0; }
+.keep-on { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 8px 14px; margin: 8px 0;
+  border-radius: 10px; background: color-mix(in srgb, #2e7d32 18%, var(--card)); border: 1px solid #2e7d32; font-weight: 600; }
+.keep-on input { width: 28px; min-height: 28px; height: 28px; accent-color: #2e7d32; }
+.keep-on.unsupported { background: var(--chip); border-color: var(--line); color: var(--muted); font-weight: 400; }
+.ingredients h2 { font-size: 1.2rem; margin: 16px 0 4px; }
+.ingredients h3 { font-size: 1rem; color: var(--muted); margin: 10px 0 2px; }
+.ingredients ul { margin: 0; padding-left: 20px; }
+.step-card { margin: 20px 0; padding: 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.step-count { margin: 0; color: var(--muted); font-size: .9rem; }
+.step-text { font-size: 1.5rem; line-height: 1.4; margin: 8px 0 16px; }
+.step-nav { display: flex; gap: 12px; }
+.step-nav button { flex: 1; min-height: 56px; font-size: 1.1rem; }
+.step-nav button:disabled { opacity: .5; cursor: default; }

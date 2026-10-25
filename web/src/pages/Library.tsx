@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listRecipes, listTags, type RecipeSummary } from '../api';
-import { formatMinutes } from '../lib/text';
+import { formatMinutes, originLabel } from '../lib/text';
 
 type Origin = 'mine' | 'other' | undefined;
 const CHIPS: { label: string; origin: Origin }[] = [
@@ -11,8 +11,7 @@ const CHIPS: { label: string; origin: Origin }[] = [
 ];
 
 export function subtitle(r: RecipeSummary): string {
-  const originLabel = r.origin === 'mine' ? 'Mine' : (r.sourceName ?? 'From elsewhere');
-  return [originLabel, r.tags[0], formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
+  return [originLabel(r), r.tags[0], formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
 }
 
 export function Library() {
