@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { RecipeForm } from './RecipeForm';
+import type { RecipeInput } from '../../../server/src/recipes/schema';
+
+afterEach(cleanup);
+
+const empty: RecipeInput = {
+  title: '', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  servings: null, prepMinutes: null, cookMinutes: null, ingredients: [], steps: [],
+  notes: null, tags: [], imageIds: [],
+};
+
+describe('RecipeForm', () => {
+  it('calls onSave with parsed fields', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<RecipeForm initial={empty} onSave={onSave} />);
+    await user.type(screen.getByLabelText('Title'), 'Pasta');
+    await user.type(screen.getByLabelText('Servings'), '4');
+    await user.type(screen.getByLabelText('Ingredients'), '# Sauce\n2 cups flour\nsalt to taste');
+    await user.type(screen.getByLabelText('Steps'), 'Boil\n\nServe');
+    await user.type(screen.getByLabelText('Tags'), 'Pasta, quick');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const out = onSave.mock.calls[0][0] as RecipeInput;
+    expect(out.title).toBe('Pasta');
+    expect(out.servings).toBe(4);
+    expect(out.ingredients).toEqual([
+      { group: 'Sauce', quantity: 2, unit: 'cups', item: 'flour', note: null },
+      { group: 'Sauce', quantity: null, unit: null, item: 'salt to taste', note: null },
+    ]);
+    expect(out.steps).toEqual(['Boil', 'Serve']);
+    expect(out.tags).toEqual(['Pasta', 'quick']);
+  });
+
+  it('blocks save with an inline error when title is empty', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<RecipeForm initial={empty} onSave={onSave} />);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText('Enter a title')).toBeTruthy();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows gaps above the form', () => {
+    render(<RecipeForm initial={empty} gaps={['No cook time', 'Unclear quantity']} onSave={() => {}} />);
+    expect(screen.getByText('Check these')).toBeTruthy();
+    expect(screen.getByText('No cook time')).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('round-trips ingredients text', () => {
+    const initial: RecipeInput = {
+      ...empty, title: 'x',
+      ingredients: [
+        { group: null, quantity: 1.5, unit: 'tsp', item: 'salt', note: 'fine' },
+        { group: 'Sauce', quantity: null, unit: null, item: 'basil', note: null },
+      ],
+    };
+    const onSave = vi.fn();
+    render(<RecipeForm initial={initial} onSave={onSave} />);
+    const ta = screen.getByLabelText('Ingredients') as HTMLTextAreaElement;
+    expect(ta.value).toBe('1.5 tsp salt (fine)\n# Sauce\nbasil');
+  });
+});

@@ -5,6 +5,8 @@ COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY server ./server
+COPY web ./web
+COPY vite.config.ts ./
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
