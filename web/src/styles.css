@@ -100,9 +100,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .keep-on { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px; border-radius: 14px; background: var(--herb-tint); border: 1.5px solid var(--herb); color: var(--herb); font-size: .9375rem; font-weight: 700; cursor: pointer; }
 .keep-on input { width: 24px; min-height: 24px; height: 24px; padding: 0; margin: 0 0 0 auto; accent-color: var(--herb); }
 .keep-on.unsupported { margin: 0; background: var(--chip); border-color: var(--line); color: var(--muted); font-weight: 400; cursor: default; }
-.cook-page { min-height: 100dvh; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+.cook-page { height: 100dvh; min-height: 0; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+body.cook-scroll-lock { overflow: hidden; }
 .cook-main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px;
-  padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .cook-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .cook-head .icon-btn { background: var(--card); }
 .cook-step-label { font-size: .875rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--accent); }
@@ -111,15 +113,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .cook-progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
 .cook-progress span.done { background: var(--accent); }
 .cook-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
-.cook-photo { display: block; width: 100%; height: min(220px, 28vh); flex: none; object-fit: cover; border-radius: 22px; border: 1px solid var(--line); background: var(--chip); }
+.cook-photo { display: block; width: 100%; height: min(220px, 28dvh); max-height: min(28dvh, 260px); flex: none; object-fit: cover; border-radius: 22px; border: 1px solid var(--line); background: var(--chip); }
 .cook-photo-ph { display: none; }
-.cook-text { margin: 0; flex: 1; font-family: var(--font-head); font-weight: 500; font-size: 1.625rem; line-height: 1.3; overflow-wrap: anywhere; }
+.cook-text { margin: 0; flex: 1; min-height: 0; overflow-y: auto; font-family: var(--font-head); font-weight: 500; font-size: 1.625rem; line-height: 1.3; overflow-wrap: anywhere; }
 .cook-fill { flex: 1; }
-.cook-uses { padding: 12px 14px; border-radius: 16px; background: var(--chip); }
+.cook-uses { flex: none; max-height: 30dvh; overflow-y: auto; padding: 12px 14px; border-radius: 16px; background: var(--chip); }
 .cook-uses-title { margin-bottom: 8px; font-size: .75rem; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--ink-soft); }
 .cook-uses ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.cook-uses li { padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: .9375rem; font-weight: 500; }
-.cook-nav { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+.cook-uses li { padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: .9375rem; font-weight: 400; }
+.cook-uses li b { font-weight: 700; margin-right: .3em; }
+.cook-nav { flex: none; display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .cook-nav button { height: 60px; border-radius: 18px; font-size: 1.0625rem; }
 .cook-back { border: 1.5px solid var(--fg); background: var(--card); }
 .cook-back[aria-disabled='true'] { opacity: .4; cursor: default; }
@@ -134,16 +137,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .cook-sheet-list h3 { margin: 12px 0 4px; font-size: .875rem; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .cook-sheet-list ul { margin: 0; padding-left: 20px; font-size: 1.0625rem; line-height: 1.6; }
 
+@media (max-height: 520px) and (orientation: landscape) and (max-width: 899px) {
+  .cook-photo { display: none; }
+}
+
 @media (min-width: 900px) and (orientation: landscape) {
   .cook-page { max-width: none; height: 100dvh; }
-  .cook-main { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  .cook-photo { max-height: none; }
+  .cook-uses { max-height: none; }
+  .cook-main { display: grid; padding-left: max(32px, env(safe-area-inset-left)); padding-right: max(32px, env(safe-area-inset-right)); grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     column-gap: 28px; row-gap: 18px; padding: 24px 32px 32px; }
   .cook-head { grid-column: 1 / -1; flex-wrap: nowrap; justify-content: flex-start; gap: 16px; }
   .cook-head .icon-btn { width: 48px; height: 48px; border-radius: 24px; }
-  .cook-head .keep-on { flex: none; order: 0; margin-left: auto; }
+  .cook-head .keep-on { flex: none; }
   .cook-head .keep-on input { margin: 0; }
   .cook-step-label { font-size: 1.0625rem; letter-spacing: .8px; }
-  .cook-head .icon-btn:last-of-type { order: 1; }
+  .cook-step-label { flex: 1; margin: 0 8px; }
+  .cook-head .keep-on { order: 1; }
+  .cook-sheet-btn { order: 2; }
   .cook-progress { grid-column: 1 / -1; }
   .cook-progress span { height: 8px; border-radius: 4px; }
   .cook-body { display: contents; }

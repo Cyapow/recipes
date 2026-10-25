@@ -8,7 +8,7 @@ import { useCallback, useRef, type TouchEvent } from 'react';
 export function useSwipe(
   handlers: { onLeft(): void; onRight(): void },
   opts: { minDistance?: number } = {},
-): { onTouchStart(e: TouchEvent): void; onTouchEnd(e: TouchEvent): void } {
+): { onTouchStart(e: TouchEvent): void; onTouchEnd(e: TouchEvent): void; onTouchCancel(): void } {
   const minDistance = opts.minDistance ?? 60;
   const start = useRef<{ x: number; y: number } | null>(null);
   const multi = useRef(false);
@@ -41,5 +41,10 @@ export function useSwipe(
     else handlersRef.current.onRight();
   }, [minDistance]);
 
-  return { onTouchStart, onTouchEnd };
+  const onTouchCancel = useCallback(() => {
+    start.current = null;
+    multi.current = false;
+  }, []);
+
+  return { onTouchStart, onTouchEnd, onTouchCancel };
 }

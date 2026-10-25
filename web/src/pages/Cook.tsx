@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getRecipe, type Recipe } from '../api';
 import { CameraIcon, CloseIcon, ListIcon, SunIcon } from '../components/Icons';
 import { useSwipe } from '../hooks/useSwipe';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { formatIngredientLine } from '../lib/text';
+import { formatIngredientLine, formatQuantity } from '../lib/text';
 
 type Ingredient = Recipe['ingredients'][number];
 
@@ -55,13 +55,37 @@ function linkedIngredients(all: Ingredient[], links: unknown): Ingredient[] {
 const isNotFound = (e: unknown) =>
   (e as { status?: number } | null)?.status === 404 || (e instanceof Error && e.message.includes('(404)'));
 
+const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'file', 'image', 'color']);
 const isTyping = (t: EventTarget | null) =>
-  t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  t instanceof HTMLElement &&
+  ((t.tagName === 'INPUT' && !NON_TEXT_INPUTS.has((t as HTMLInputElement).type)) ||
+    t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+
+function UseChip({ ing }: { ing: Ingredient }) {
+  const qty = [ing.quantity != null ? formatQuantity(ing.quantity) : null, ing.unit].filter(Boolean).join(' ');
+  const item = ing.item + (ing.note ? ` (${ing.note})` : '');
+  return <li>{qty && <><b>{qty}</b>{' '}</>}{item}</li>;
+}
 
 function IngredientsSheet({ ingredients, onClose }: { ingredients: Ingredient[]; onClose(): void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
+
+  // Escape works wherever focus is; the background is inert so the document is the right place.
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  // Lock background scroll while the sheet is open; restore on close/unmount.
+  useEffect(() => {
+    document.body.classList.add('cook-scroll-lock');
+    return () => document.body.classList.remove('cook-scroll-lock');
+  }, []);
 
   const groups: { name: string | null; items: Ingredient[] }[] = [];
   for (const ing of ingredients) {
@@ -71,11 +95,6 @@ function IngredientsSheet({ ingredients, onClose }: { ingredients: Ingredient[];
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      onClose();
-      return;
-    }
     if (e.key !== 'Tab') return;
     const f = panelRef.current?.querySelectorAll<HTMLElement>('button, [tabindex="0"]');
     if (!f || f.length === 0) return;
@@ -172,6 +191,7 @@ function CookSlides({ id }: { id: string }) {
     wasOpen.current = sheet;
   }, [sheet]);
 
+  const closeSheet = useCallback(() => setSheet(false), []);
   const swipe = useSwipe({ onLeft: () => !sheet && go(1), onRight: () => !sheet && go(-1) });
 
   if (error) return <LoadFailure message={error} />;
@@ -204,7 +224,7 @@ function CookSlides({ id }: { id: string }) {
           <button
             ref={openerRef}
             type="button"
-            className="btn icon-btn"
+            className="btn icon-btn cook-sheet-btn"
             aria-label="Ingredients"
             aria-haspopup="dialog"
             onClick={() => setSheet(true)}
@@ -236,7 +256,7 @@ function CookSlides({ id }: { id: string }) {
             <section className="cook-uses" aria-label="Uses">
               <div className="cook-uses-title" aria-hidden="true">Uses</div>
               <ul>
-                {uses.map((ing, i) => <li key={i}>{formatIngredientLine(ing)}</li>)}
+                {uses.map((ing, i) => <UseChip key={i} ing={ing} />)}
               </ul>
             </section>
           )}
@@ -254,7 +274,7 @@ function CookSlides({ id }: { id: string }) {
           <button type="button" className="primary cook-next" onClick={onNext}>{last ? 'Done' : 'Next step'}</button>
         </div>
       </div>
-      {sheet && <IngredientsSheet ingredients={recipe.ingredients} onClose={() => setSheet(false)} />}
+      {sheet && <IngredientsSheet ingredients={recipe.ingredients} onClose={closeSheet} />}
     </div>
   );
 }

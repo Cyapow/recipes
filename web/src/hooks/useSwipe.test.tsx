@@ -76,4 +76,15 @@ describe('useSwipe', () => {
     fireEvent.touchEnd(el, { touches: [], changedTouches: [pt(100, 100)] });
     expect(onLeft).not.toHaveBeenCalled();
   });
+
+  it('resets after touchcancel so a later single swipe works', () => {
+    const onLeft = vi.fn();
+    render(<Area onLeft={onLeft} onRight={vi.fn()} />);
+    const el = screen.getByTestId('area');
+    fireEvent.touchStart(el, { touches: [pt(200, 100)], changedTouches: [pt(200, 100)] });
+    fireEvent.touchStart(el, { touches: [pt(200, 100), pt(260, 100)], changedTouches: [pt(260, 100)] });
+    fireEvent.touchCancel(el, { touches: [], changedTouches: [] });
+    gesture([200, 100], [100, 100]);
+    expect(onLeft).toHaveBeenCalledTimes(1);
+  });
 });

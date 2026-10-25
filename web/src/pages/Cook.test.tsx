@@ -70,6 +70,7 @@ afterEach(() => {
   delete (navigator as unknown as Record<string, unknown>).wakeLock;
 });
 
+const chip = (re: RegExp) => (_: string, el: Element | null) => el?.tagName === 'LI' && re.test(el.textContent ?? '');
 const uses = () => screen.queryByRole('region', { name: 'Uses' });
 
 describe('Cook slides', () => {
@@ -89,8 +90,8 @@ describe('Cook slides', () => {
     await screen.findByText('Dice the onion.');
     await user.click(screen.getByRole('button', { name: 'Next step' }));
     const u = within(uses()!);
-    expect(u.getByText(/500 g beef mince/)).toBeTruthy();
-    expect(u.getByText(/2 tbsp olive oil/)).toBeTruthy();
+    expect(u.getByText(chip(/^500 g beef mince$/))).toBeTruthy();
+    expect(u.getByText(chip(/^2 tbsp olive oil$/))).toBeTruthy();
     expect(u.queryByText(/onion/)).toBeNull();
     expect(screen.queryByText(/red wine/)).toBeNull();
   });
@@ -165,9 +166,18 @@ describe('Cook slides', () => {
     });
     const { container } = renderCook();
     await screen.findByText('Step 1 of 1');
-    expect(within(uses()!).getByText(/0\.33 cup red wine \(dry\)/)).toBeTruthy();
+    expect(within(uses()!).getByText(chip(/^0\.33 cup red wine \(dry\)$/))).toBeTruthy();
     expect(container.querySelector('.cook-text')).toBeNull();
     expect(container.querySelectorAll('p').length).toBe(0);
+  });
+
+  it('renders the quantity in bold and the item in normal weight', async () => {
+    const user = userEvent.setup();
+    renderCook();
+    await screen.findByText('Dice the onion.');
+    await user.click(screen.getByRole('button', { name: 'Next step' }));
+    const bolds = Array.from(uses()!.querySelectorAll('li b')).map((b) => b.textContent);
+    expect(bolds).toEqual(['500 g', '2 tbsp']);
   });
 
   it('marks the step text as a polite live region', async () => {
@@ -243,6 +253,26 @@ describe('Cook navigation', () => {
     area.remove();
   });
 
+  it('arrow keys still work after toggling Keep screen on', async () => {
+    const user = userEvent.setup();
+    renderCook();
+    await screen.findByText('Dice the onion.');
+    await user.click(screen.getByRole('checkbox', { name: 'Keep screen on' }));
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: 'Keep screen on' }), { key: 'ArrowRight' });
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy();
+  });
+
+  it('puts Leave first in tab order, apart from the Ingredients button', async () => {
+    renderCook();
+    await screen.findByText('Dice the onion.');
+    const leave = screen.getByRole('link', { name: 'Leave cook mode' });
+    const ing = screen.getByRole('button', { name: 'Ingredients' });
+    expect(ing.className).toContain('cook-sheet-btn');
+    expect(leave.className).not.toContain('cook-sheet-btn');
+    expect(leave.compareDocumentPosition(ing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.cook-head')!.firstElementChild).toBe(leave);
+  });
+
   it('removes the key listener on unmount', async () => {
     const spy = vi.spyOn(document, 'removeEventListener');
     const { unmount } = renderCook();
@@ -315,19 +345,56 @@ describe('Cook ingredients sheet', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it('traps Tab inside the dialog and makes the background inert', async () => {
+  it('wraps Tab from the last focusable to the first, and Shift+Tab the other way', async () => {
     const user = userEvent.setup();
-    const { container } = renderCook();
+    renderCook();
     await screen.findByText('Dice the onion.');
     await user.click(screen.getByRole('button', { name: 'Ingredients' }));
     const dialog = screen.getByRole('dialog', { name: 'Ingredients' });
     const close = within(dialog).getByRole('button', { name: 'Close' });
-    close.focus();
+    const list = dialog.querySelector<HTMLElement>('.cook-sheet-list')!;
+    list.focus();
     await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(close);
+    close.focus();
     await user.tab({ shift: true });
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(list);
+  });
+
+  it('makes the background inert while open', async () => {
+    const user = userEvent.setup();
+    const { container } = renderCook();
+    await screen.findByText('Dice the onion.');
+    expect(container.querySelector('.cook-main')!.hasAttribute('inert')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Ingredients' }));
     expect(container.querySelector('.cook-main')!.hasAttribute('inert')).toBe(true);
+  });
+
+  it('closes on Escape even when focus is on the body', async () => {
+    const user = userEvent.setup();
+    renderCook();
+    await screen.findByText('Dice the onion.');
+    const opener = screen.getByRole('button', { name: 'Ingredients' });
+    await user.click(opener);
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('locks background scroll while open and restores it on close and unmount', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderCook();
+    await screen.findByText('Dice the onion.');
+    expect(document.body.classList.contains('cook-scroll-lock')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Ingredients' }));
+    expect(document.body.classList.contains('cook-scroll-lock')).toBe(true);
+    await user.keyboard('{Escape}');
+    expect(document.body.classList.contains('cook-scroll-lock')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Ingredients' }));
+    unmount();
+    expect(document.body.classList.contains('cook-scroll-lock')).toBe(false);
   });
 
   it('arrow keys do not change steps while the sheet is open', async () => {
