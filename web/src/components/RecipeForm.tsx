@@ -1,7 +1,9 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { uploadImage } from '../api';
-import type { RecipeInput } from '../../../server/src/recipes/schema';
-import { formatIngredientLine, formatIngredients, parseIngredients, parseLines, parseTags } from '../lib/text';
+import type { RecipeInput, Step } from '../../../server/src/recipes/schema';
+import { formatIngredients, parseIngredients, parseTags } from '../lib/text';
+import { remapStepLinks } from '../lib/stepLinks';
+import { StepEditor } from './StepEditor';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
@@ -29,7 +31,8 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
   const [prep, setPrep] = useState(initial.prepMinutes?.toString() ?? '');
   const [cook, setCook] = useState(initial.cookMinutes?.toString() ?? '');
   const [ingredients, setIngredients] = useState(formatIngredients(initial.ingredients));
-  const [steps, setSteps] = useState(initial.steps.map((s) => s.text).join('\n'));
+  const [steps, setSteps] = useState<Step[]>(initial.steps);
+  const [stepsBusy, setStepsBusy] = useState(false);
   const [notes, setNotes] = useState(initial.notes ?? '');
   const [tags, setTags] = useState(initial.tags.join(', '));
   const [error, setError] = useState<string | null>(null);
@@ -55,22 +58,23 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
     }
   }
 
+  function onIngredientsChange(next: string) {
+    setSteps((cur) => remapStepLinks(parseIngredients(ingredients), parseIngredients(next), cur));
+    setIngredients(next);
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
       setError('Enter a title');
       return;
     }
-    if (pending > 0) {
+    if (pending > 0 || stepsBusy) {
       setError('Wait for the photo upload to finish before saving');
       return;
     }
     setError(null);
     const parsedIngredients = parseIngredients(ingredients);
-    // Interim: links index into the ingredient list, so they only survive while that list is unchanged.
-    const sameIngredients =
-      parsedIngredients.length === initial.ingredients.length &&
-      parsedIngredients.every((ing, i) => formatIngredientLine(ing) === formatIngredientLine(initial.ingredients[i]));
     onSave({
       ...initial,
       title: title.trim(),
@@ -82,14 +86,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       prepMinutes: num(prep),
       cookMinutes: num(cook),
       ingredients: parsedIngredients,
-      steps: parseLines(steps).map((text, i) => {
-        const prev = initial.steps[i];
-        if (!prev || prev.text !== text) return { text, imageId: null, ingredients: [] };
-        return {
-          ...prev,
-          ingredients: sameIngredients ? prev.ingredients.filter((n) => n < parsedIngredients.length) : [],
-        };
-      }),
+      steps: steps
+        .filter((st) => st.text.trim() !== '')
+        .map((st) => ({
+          ...st,
+          text: st.text.trim(),
+          ingredients: st.ingredients.filter((n) => n < parsedIngredients.length),
+        })),
       notes: str(notes),
       tags: parseTags(tags),
       imageIds,
@@ -153,14 +156,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
         </div>
         <div className="field">
           <label htmlFor="f-ingredients">Ingredients</label>
-          <textarea id="f-ingredients" aria-describedby="h-ingredients" rows={8} value={ingredients} onChange={(e) => setIngredients(e.target.value)} />
+          <textarea id="f-ingredients" aria-describedby="h-ingredients" rows={8} value={ingredients} onChange={(e) => onIngredientsChange(e.target.value)} />
           <small id="h-ingredients">One per line, e.g. "2 cups flour (sifted)". Start a line with # for a heading.</small>
         </div>
-        <div className="field">
-          <label htmlFor="f-steps">Steps</label>
-          <textarea id="f-steps" aria-describedby="h-steps" rows={8} value={steps} onChange={(e) => setSteps(e.target.value)} />
-          <small id="h-steps">One step per line.</small>
-        </div>
+        <section className="field steps-field" aria-labelledby="h-steps-title">
+          <h2 id="h-steps-title">Method</h2>
+          <StepEditor steps={steps} ingredients={parseIngredients(ingredients)} onChange={setSteps} onBusyChange={setStepsBusy} />
+        </section>
         <label>
           Notes
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />

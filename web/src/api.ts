@@ -1,20 +1,26 @@
-import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary } from '../../server/src/recipes/schema';
+import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step } from '../../server/src/recipes/schema';
+import type { ShoppingItem } from '../../server/src/shopping/repo';
 
-export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary };
+export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingItem };
 
 export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
 
 /** An API failure that keeps the HTTP status so callers can branch without string matching. */
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly body?: unknown) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
+async function jsonBody(res: Response): Promise<unknown> {
+  if (!(res.headers.get('content-type') ?? '').includes('json')) return undefined;
+  return res.json().catch(() => undefined);
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  if (!res.ok) throw new ApiError(`Request failed (${res.status})`, res.status, await jsonBody(res));
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
@@ -75,7 +81,7 @@ export async function importRecipe(url: string): Promise<ImportResult> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status);
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body ?? undefined);
   }
   return (await res.json()) as ImportResult;
 }
@@ -105,3 +111,20 @@ export async function runBackupNow(): Promise<BackupRunResult> {
 
 export const disconnectGoogle = (): Promise<void> =>
   request<unknown>('/api/backup/google/disconnect', { method: 'POST' }).then(() => undefined);
+
+export const listShopping = (): Promise<ShoppingItem[]> =>
+  request<{ items: ShoppingItem[] }>('/api/shopping').then((r) => r.items);
+
+/** Rejects with ApiError status 409 and body `{error:'already_on_list', recipeTitle}` unless `force` is set. */
+export const addToShopping = (recipeId: string, indexes: number[], force?: boolean): Promise<{ added: number }> =>
+  request<{ added: number; items: ShoppingItem[] }>('/api/shopping/add', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ recipeId, indexes, ...(force ? { force: true } : {}) }),
+  }).then((r) => ({ added: r.added }));
+
+export const removeShoppingItem = (id: string): Promise<void> =>
+  request<void>(`/api/shopping/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+export const clearShopping = (): Promise<void> =>
+  request<unknown>('/api/shopping', { method: 'DELETE' }).then(() => undefined);

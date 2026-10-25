@@ -79,3 +79,22 @@ describe('RecipeForm images', () => {
     expect(screen.queryByAltText('Photo 1')).toBeNull();
   });
 });
+
+describe('RecipeForm step uploads', () => {
+  it('blocks Save with a message while a step photo uploads', async () => {
+    let resolve!: (id: string) => void;
+    impl = () => new Promise((r) => (resolve = r));
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<RecipeForm initial={{ ...empty, steps: [{ text: 'Mix', imageId: null, ingredients: [] }] }} onSave={onSave} />);
+    await user.upload(screen.getByLabelText('Add photo', { selector: 'input' }), file());
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/Wait for the photo upload/);
+    resolve('s.jpg');
+    await screen.findByAltText('Photo for step 1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect((onSave.mock.calls[0][0] as RecipeInput).steps[0].imageId).toBe('s.jpg');
+  });
+});

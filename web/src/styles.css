@@ -127,3 +127,31 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .status-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 4px 0; padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
 .status-list dt { color: var(--muted); }
 .status-list dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Step editor */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.steps-field { gap: 12px; }
+.steps-field h2 { margin: 8px 0 0; }
+.step-editor { display: flex; flex-direction: column; gap: 14px; }
+.step-card { padding: 16px; border-radius: 22px; background: var(--card); border: 1.5px solid var(--fg); display: flex; flex-direction: column; gap: 14px; }
+.step-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.step-num { font-size: .875rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--accent); }
+.step-tools { display: flex; gap: 4px; }
+.step-tools .icon-btn { border: 0; background: transparent; font-size: 1.125rem; }
+.step-tools .icon-btn:disabled { opacity: .35; cursor: default; }
+.step-delete { color: var(--danger); }
+.step-card textarea { background: var(--bg); font-size: 1.0625rem; line-height: 1.45; resize: none; }
+.step-photo { display: flex; align-items: center; gap: 12px; }
+.step-photo img, .step-photo-empty { flex: none; width: 96px; height: 72px; border-radius: 14px; object-fit: cover; border: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, var(--chip) 0 10px, var(--bg) 10px 20px); }
+.step-photo-actions { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.step-photo-btn { height: 44px; border-radius: 12px; border: 1.5px solid var(--fg); background: var(--card); font-size: .9375rem; cursor: pointer; }
+.step-photo-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.linklike { height: 36px; min-height: 44px; border: 0; background: transparent; font-size: .875rem; font-weight: 700; }
+.danger-text { color: var(--danger); }
+.step-ingredients { margin: 0; padding: 0; border: 0; min-width: 0; }
+.step-ingredients legend { padding: 0; margin-bottom: 8px; font-size: .875rem; font-weight: 700; }
+.step-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.step-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; font-size: .9375rem; font-weight: 700; background: var(--card); color: var(--fg); border: 1.5px solid var(--border-strong); }
+.step-chip.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.add-step { height: 52px; border-radius: 16px; border: 1.5px dashed var(--fg); background: transparent; font-size: 1rem; }
