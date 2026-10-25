@@ -181,3 +181,5 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .status.dup { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-fg); }
 .status.dup p { margin: 0 0 10px; }
 .dup-actions { display: flex; gap: 10px; }
+.overview-actions.solo { grid-template-columns: 1fr; }
+.primary.busy { opacity: .6; cursor: progress; }

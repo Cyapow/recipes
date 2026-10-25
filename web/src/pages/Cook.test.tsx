@@ -23,10 +23,10 @@ const base: Recipe = {
 
 function renderCook() {
   return render(
-    <MemoryRouter initialEntries={['/recipe/a']}>
+    <MemoryRouter initialEntries={['/recipe/a/cook']}>
       <Routes>
         <Route path="/" element={<p>LIBRARY</p>} />
-        <Route path="/recipe/:id" element={<Cook />} />
+        <Route path="/recipe/:id/cook" element={<Cook />} />
       </Routes>
     </MemoryRouter>,
   );

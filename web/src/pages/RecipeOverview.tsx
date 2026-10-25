@@ -18,23 +18,28 @@ function LoadFailure({ message }: { message: string }) {
   );
 }
 
+/** Keyed by id so all page state (ticks, notices, in-flight guard) is remounted per recipe. */
 export function RecipeOverview() {
   const { id = '' } = useParams();
+  return <Overview key={id} id={id} />;
+}
+
+function Overview({ id }: { id: string }) {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [have, setHave] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const inFlight = useRef(false);
+  const addAgainRef = useRef<HTMLButtonElement>(null);
+  const duplicate = notice?.kind === 'duplicate';
+
+  useEffect(() => {
+    if (duplicate) addAgainRef.current?.focus();
+  }, [duplicate]);
 
   useEffect(() => {
     let live = true;
-    setRecipe(null);
-    setError(null);
-    setHave(new Set());
-    setNotice(null);
-    setBusy(false);
-    inFlight.current = false;
     getRecipe(id)
       .then((r) => live && setRecipe(r))
       .catch((e: unknown) => {
@@ -57,12 +62,18 @@ export function RecipeOverview() {
     formatMinutes(recipe.cookMinutes) && `Cook ${formatMinutes(recipe.cookMinutes)}`,
   ].filter(Boolean).join(' · ');
 
-  const toggle = (i: number) =>
+  const toggle = (i: number) => {
+    setNotice((n) => (n?.kind === 'added' ? null : n));
     setHave((prev) => {
       const next = new Set(prev);
       if (!next.delete(i)) next.add(i);
       return next;
     });
+  };
+  const setAll = (all: boolean) => {
+    setNotice((n) => (n?.kind === 'added' ? null : n));
+    setHave(all ? new Set(recipe!.ingredients.map((_, i) => i)) : new Set());
+  };
 
   async function add(force?: boolean) {
     if (inFlight.current || needed.length === 0) return;
@@ -104,7 +115,7 @@ export function RecipeOverview() {
           <p className="hint">Tick the ingredients that are already in the cupboard. We'll list the rest.</p>
           <div className="have-bar">
             <span className="have-count">{have.size} of {total} ticked</span>
-            <button type="button" className="link-btn" onClick={() => setHave(allTicked ? new Set() : new Set(recipe.ingredients.map((_, i) => i)))}>
+            <button type="button" className="link-btn" onClick={() => setAll(!allTicked)}>
               {allTicked ? 'Untick all' : 'Tick all'}
             </button>
           </div>
@@ -140,17 +151,19 @@ export function RecipeOverview() {
         <div className="status dup" role="alert">
           <p>{notice.title} is already on your shopping list.</p>
           <div className="dup-actions">
-            <button type="button" className="primary" onClick={() => void add(true)}>Add again</button>
+            <button type="button" ref={addAgainRef} className="primary" onClick={() => void add(true)}>Add again</button>
             <button type="button" onClick={() => setNotice(null)}>Cancel</button>
           </div>
         </div>
       )}
 
-      <div className="overview-actions">
+      <div className={`overview-actions${total === 0 ? ' solo' : ''}`}>
         <Link className="btn outline" to={`/recipe/${encodeURIComponent(recipe.id)}/cook`}>Start cooking</Link>
-        <button type="button" className={needed.length === 0 ? 'primary muted-btn' : 'primary'} aria-disabled={needed.length === 0 || busy} onClick={() => void add()}>
-          {busy ? 'Adding…' : total > 0 && needed.length === 0 ? 'Nothing to add' : `Add ${needed.length} to shopping list`}
-        </button>
+        {total > 0 && (
+          <button type="button" className={`primary${needed.length === 0 ? ' muted-btn' : ''}${busy ? ' busy' : ''}`} aria-disabled={needed.length === 0 || busy} aria-busy={busy} onClick={() => void add()}>
+            {busy ? 'Adding…' : needed.length === 0 ? 'Nothing to add' : `Add ${needed.length} to shopping list`}
+          </button>
+        )}
       </div>
     </main>
   );

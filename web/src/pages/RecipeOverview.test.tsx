@@ -178,6 +178,99 @@ describe('RecipeOverview', () => {
   });
 });
 
+describe('RecipeOverview stale add results and polish', () => {
+  const deferred = () => {
+    let resolve!: (v: { added: number }) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<{ added: number }>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  };
+
+  it.each([
+    ['success', (d: ReturnType<typeof deferred>) => d.resolve({ added: 3 })],
+    ['409', (d: ReturnType<typeof deferred>) => d.reject(new ApiError('x', 409, { error: 'already_on_list', recipeTitle: 'Carbonara' }))],
+    ['failure', (d: ReturnType<typeof deferred>) => d.reject(new Error('boom'))],
+  ])('a late %s from recipe A does not touch recipe B', async (_n, settle) => {
+    const user = userEvent.setup();
+    const d = deferred();
+    vi.mocked(addToShopping).mockReturnValueOnce(d.promise);
+    renderAt();
+    await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
+    await user.click(screen.getByRole('link', { name: 'to-b' }));
+    await screen.findByRole('heading', { name: 'Soup' });
+    settle(d);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText(/Added|already on your|Could not add/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add 1 to shopping list' })).toBeTruthy();
+  });
+
+  it("A's late result does not release B's double-tap guard", async () => {
+    const user = userEvent.setup();
+    const a = deferred();
+    const b = deferred();
+    vi.mocked(addToShopping).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+    renderAt();
+    await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
+    await user.click(screen.getByRole('link', { name: 'to-b' }));
+    await user.click(await screen.findByRole('button', { name: 'Add 1 to shopping list' }));
+    a.resolve({ added: 3 });
+    await new Promise((r) => setTimeout(r, 0));
+    await user.click(screen.getByRole('button', { name: 'Adding…' }));
+    expect(addToShopping).toHaveBeenCalledTimes(2);
+    b.resolve({ added: 1 });
+    await screen.findByText('Added 1 item to your shopping list');
+  });
+
+  it('Add again clicked twice quickly sends one forced request, and focus moves to it', async () => {
+    const user = userEvent.setup();
+    vi.mocked(addToShopping).mockRejectedValueOnce(new ApiError('x', 409, { error: 'already_on_list', recipeTitle: 'Carbonara' }));
+    vi.mocked(addToShopping).mockReturnValueOnce(new Promise(() => {}));
+    renderAt();
+    await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
+    const again = await screen.findByRole('button', { name: 'Add again' });
+    expect(document.activeElement).toBe(again);
+    await user.dblClick(again);
+    expect(addToShopping).toHaveBeenCalledTimes(2);
+    expect(addToShopping).toHaveBeenLastCalledWith('a', [0, 1, 2], true);
+  });
+
+  it('sends non-contiguous unticked indexes', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getRecipe).mockResolvedValue({
+      ...base,
+      ingredients: ['a', 'b', 'c', 'd'].map((item) => ({ group: null, quantity: null, unit: null, item, note: null })),
+    });
+    renderAt();
+    await user.click(await box('b'));
+    await user.click(await box('d'));
+    await user.click(screen.getByRole('button', { name: 'Add 2 to shopping list' }));
+    expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined);
+  });
+
+  it('clears the Added status when a tick changes', async () => {
+    const user = userEvent.setup();
+    renderAt();
+    await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
+    await screen.findByText(/Added 2 items/);
+    await user.click(await box('200 g spaghetti'));
+    expect(screen.queryByText(/Added 2 items/)).toBeNull();
+  });
+
+  it('has no add button for a recipe without ingredients, and shows busy state', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, ingredients: [] });
+    const { unmount } = renderAt();
+    await screen.findByRole('heading', { name: 'Carbonara' });
+    expect(screen.queryByRole('button', { name: /Add|Nothing/ })).toBeNull();
+    unmount();
+    vi.mocked(getRecipe).mockResolvedValue(base);
+    vi.mocked(addToShopping).mockReturnValue(new Promise(() => {}));
+    renderAt();
+    await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
+    expect(screen.getByRole('button', { name: 'Adding…' }).className).toContain('busy');
+  });
+});
+
 describe('routes', () => {
   it('/recipe/:id is the overview and /recipe/:id/cook is Cook', async () => {
     const { unmount } = render(<MemoryRouter initialEntries={['/recipe/a']}><App /></MemoryRouter>);
