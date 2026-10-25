@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import type { AiClient } from '../ai/client.js';
+import { AiRequestError, type AiClient, type ProviderErrorCode, type ProviderName } from '../ai/client.js';
 import type { ImageStore } from '../images/store.js';
 import type { RecipeDraft } from '../recipes/schema.js';
 import { findImageUrl, parseRecipeJsonLd } from './jsonld.js';
@@ -13,7 +13,16 @@ export type ImportDeps = {
   images: ImageStore;
 };
 
-export type ImportResult = { draft: RecipeDraft; usedAi: boolean; usable: boolean };
+export type ImportResult = {
+  draft: RecipeDraft;
+  usedAi: boolean;
+  usable: boolean;
+  /** Which AI answered (only when usedAi). Never part of the draft, so it is never saved. */
+  provider?: ProviderName;
+  model?: string;
+  /** Set when the AI fallback failed because of the provider (credit, key, busy...), so the page can say why. */
+  aiError?: { error: string; code: ProviderErrorCode };
+};
 
 /** Visible text of the page's main content, whitespace collapsed and capped. */
 export function extractVisibleText(html: string): string {
@@ -54,14 +63,16 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
   }
 
   const text = extractVisibleText(html);
+  let aiError: ImportResult['aiError'];
   if (deps.ai && text !== '') {
     try {
-      const ai = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
+      const { draft: ai, provider, model } = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
       if (ai.ingredients.length > 0 || ai.steps.length > 0) {
         const imageIds = await downloadImage(html, finalUrl, deps);
-        return { draft: { ...ai, ...source, imageIds }, usedAi: true, usable: true };
+        return { draft: { ...ai, ...source, imageIds }, usedAi: true, usable: true, provider, model };
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof AiRequestError) aiError = { error: err.message, code: err.code };
       // fall through to the unusable draft
     }
   }
@@ -71,5 +82,5 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
     title: sourceName, description: null, ...source, servings: null, prepMinutes: null, cookMinutes: null,
     ingredients: [], steps: [], notes: null, tags: [], imageIds: [], gaps: [],
   };
-  return { draft: empty, usedAi: false, usable: false };
+  return { draft: empty, usedAi: false, usable: false, ...(aiError ? { aiError } : {}) };
 }

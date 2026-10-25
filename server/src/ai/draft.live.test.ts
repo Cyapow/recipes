@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
 import { linkIngredients } from '../recipes/links.js';
-import { createAnthropicClient } from './client.js';
+import { createAiClient, type ProviderName } from './client.js';
 
 const config = loadConfig(process.env);
-const live = process.env.LIVE_AI === '1' && !!config.anthropicApiKey;
+const live = process.env.LIVE_AI === '1';
+const KEYS: Record<ProviderName, string | undefined> = { anthropic: config.anthropicApiKey, openai: config.openaiApiKey, gemini: config.geminiApiKey };
+// One run per provider that has a key in the environment; the others are skipped. Keys are never printed.
+const PROVIDERS = (['anthropic', 'openai', 'gemini'] as const).map((name) => ({ name, hasKey: Boolean(KEYS[name]) }));
 
 const TEXT =
   'Spag bol: brown some beef mince with a chopped onion and two cloves of garlic, add a tin of chopped tomatoes ' +
@@ -12,9 +15,19 @@ const TEXT =
 // Words the text actually mentions (ingredient items must be traceable to these).
 const MENTIONED = ['beef', 'mince', 'onion', 'garlic', 'tomato', 'wine', 'spaghetti'];
 
-describe.skipIf(!live)('live: describe-to-recipe', () => {
-  it('flags the wine quantity and invents no ingredients', async () => {
-    const draft = await createAnthropicClient(config).extractRecipe({ kind: 'description', text: TEXT });
+describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) => {
+  it.skipIf(!live || !hasKey)('flags the wine quantity and invents no ingredients', async () => {
+    // Force this provider only: no fallback, so a failure is attributed to the right one.
+    const only = {
+      ...config,
+      aiProvider: name,
+      anthropicApiKey: name === 'anthropic' ? KEYS.anthropic : undefined,
+      openaiApiKey: name === 'openai' ? KEYS.openai : undefined,
+      geminiApiKey: name === 'gemini' ? KEYS.gemini : undefined,
+    };
+    const out = await createAiClient(only).extractRecipe({ kind: 'description', text: TEXT });
+    expect(out.provider).toBe(name);
+    const draft = out.draft;
     expect(draft.gaps.join(' ').toLowerCase()).toContain('wine');
     const wine = draft.ingredients.find((i) => /wine/i.test(i.item));
     expect(wine?.quantity ?? null).toBeNull();

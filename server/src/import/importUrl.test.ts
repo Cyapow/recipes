@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import type { AiClient } from '../ai/client.js';
+import { AiRefusedError, AiRequestError, type AiClient } from '../ai/client.js';
 import { RecipeDraftSchema, RecipeInputSchema, type RecipeDraft } from '../recipes/schema.js';
 import { extractVisibleText, importFromUrl } from './importUrl.js';
 
@@ -10,7 +10,8 @@ const aiDraft: RecipeDraft = {
   ingredients: [{ group: null, quantity: null, unit: null, item: 'onion', note: null }], steps: [{ text: 'Fry an onion', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['servings'],
 };
 const page = (name: string, finalUrl = 'https://www.bbcgoodfood.com/recipes/easy-pancakes') => vi.fn(async () => ({ html: fixture(name), finalUrl }));
-const fakeAi = (impl?: () => Promise<RecipeDraft>) => ({ extractRecipe: vi.fn(impl ?? (async () => aiDraft)) }) satisfies AiClient;
+const extraction = (draft: RecipeDraft) => ({ draft, provider: 'gemini' as const, model: 'g-1' });
+const fakeAi = (impl?: () => Promise<ReturnType<typeof extraction>>) => ({ extractRecipe: vi.fn(impl ?? (async () => extraction(aiDraft))) }) satisfies AiClient;
 const images = () => ({ save: vi.fn(async () => 'a'.repeat(64) + '.jpg'), path: vi.fn(), dir: '/x' });
 const img = (over: Partial<{ fetchBytes: never }> = {}) => ({ fetchBytes: vi.fn(async () => ({ bytes: Buffer.from('img'), contentType: 'image/jpeg', finalUrl: 'x' })), ...over });
 
@@ -44,6 +45,8 @@ describe('importFromUrl', () => {
     expect(arg.sourceUrl).toBe('https://www.nan.example/soup');
     expect(arg.text).toContain('Fry an onion');
     expect(arg.text).not.toContain('tracking');
+    expect(r).toMatchObject({ provider: 'gemini', model: 'g-1' });
+    expect(r.draft).not.toHaveProperty('provider');
     expect(r.draft).toMatchObject({ title: 'Nan soup', origin: 'other', sourceName: 'nan.example', sourceUrl: 'https://www.nan.example/soup', gaps: ['servings'], imageIds: [] });
   });
   it('is not usable without an AI client', async () => {
@@ -54,11 +57,23 @@ describe('importFromUrl', () => {
     expect(RecipeInputSchema.safeParse(r.draft).success).toBe(true);
   });
   it('is not usable when the AI throws, or finds nothing', async () => {
-    for (const impl of [async () => { throw new Error('down'); }, async () => ({ ...aiDraft, ingredients: [], steps: [] })]) {
+    for (const impl of [async () => { throw new Error('down'); }, async () => extraction({ ...aiDraft, ingredients: [], steps: [] })]) {
       const r = await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html', 'https://nan.example/soup'), fetchBytes: img().fetchBytes, ai: fakeAi(impl), images: images() });
       expect(r.usable).toBe(false);
       expect(r.draft).toMatchObject({ sourceUrl: 'https://nan.example/soup', title: 'nan.example', ingredients: [] });
     }
+  });
+  it('reports a provider failure so the page can explain it, still returning an editable draft', async () => {
+    const ai = fakeAi(async () => { throw new AiRequestError('no_credit'); });
+    const r = await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html', 'https://nan.example/soup'), fetchBytes: img().fetchBytes, ai, images: images() });
+    expect(r.usable).toBe(false);
+    expect(r.aiError).toEqual({ error: 'The AI account is out of credit. Add credit or switch provider.', code: 'no_credit' });
+    expect(r.draft.title).toBe('nan.example');
+  });
+  it('does not report refusals or invalid output as a provider failure', async () => {
+    const ai = fakeAi(async () => { throw new AiRefusedError(); });
+    const r = await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html', 'https://nan.example/soup'), fetchBytes: img().fetchBytes, ai, images: images() });
+    expect(r.aiError).toBeUndefined();
   });
   it('treats an empty JSON-LD recipe as a miss', async () => {
     const html = '<script type="application/ld+json">{"@type":"Recipe","name":"Empty"}</script><p>Boil water.</p>';

@@ -1,10 +1,19 @@
-import Anthropic from '@anthropic-ai/sdk';
 import type { Config } from '../config.js';
 import type { RecipeDraft } from '../recipes/schema.js';
-import { AiDraftParseSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, TOOL_NAME, toRecipeDraft } from './draft.js';
+import { AiDraftParseSchema, buildUserMessage, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
+import { createAnthropicProvider, type SdkLike } from './providers/anthropic.js';
+import { createGeminiProvider } from './providers/gemini.js';
+import { createOpenAiProvider } from './providers/openai.js';
+import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderMessage, type ProviderName, type ProviderResult } from './providers/types.js';
+import { providerOrder } from './registry.js';
+
+export type { SdkLike };
+export type { ProviderErrorCode, ProviderName };
+
+export type AiExtraction = { draft: RecipeDraft; provider: ProviderName; model: string };
 
 export interface AiClient {
-  extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<RecipeDraft>;
+  extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<AiExtraction>;
 }
 
 export class AiInvalidOutputError extends Error {
@@ -14,9 +23,10 @@ export class AiInvalidOutputError extends Error {
   }
 }
 
+/** A provider failure. `code` is safe to show; the message is the plain-language text for it. */
 export class AiRequestError extends Error {
-  constructor(message = 'AI request failed') {
-    super(message);
+  constructor(readonly code: ProviderErrorCode = 'other') {
+    super(aiErrorMessage(code));
     this.name = 'AiRequestError';
   }
 }
@@ -28,98 +38,99 @@ export class AiRefusedError extends Error {
   }
 }
 
-/** The slice of the Anthropic SDK we use; lets tests inject a fake. */
-export type SdkLike = { messages: { stream(params: Anthropic.MessageCreateParamsNonStreaming, opts?: { timeout?: number; signal?: AbortSignal }): { finalMessage(): Promise<Anthropic.Message> } } };
-
 const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_TOKENS = 16_000;
 
-type Msg = Anthropic.MessageParam;
+export type AiClientDeps = {
+  /** Replaces the Anthropic SDK (tests). */
+  sdk?: SdkLike;
+  /** Replaces fetch for the OpenAI and Gemini providers (tests). */
+  fetchImpl?: typeof fetch;
+  /** Replaces whole providers by name (tests). Which ones are tried, and in what order, still comes from the config. */
+  providers?: Partial<Record<ProviderName, Provider>>;
+  attemptTimeoutMs?: number;
+};
 
 /**
  * Each attempt is bounded by an AbortController (the SDK's own timeout only covers waiting for response headers).
- * A timeout or abort throws AiRequestError straight away: it is not retried and does not use the invalid-output
- * retry, so the worst case is two attempts (invalid output, then a second call) of attemptTimeoutMs each.
+ * A timeout throws AiRequestError('timeout') for that provider: it is not retried against the same provider, and does
+ * not use the invalid-output retry. Provider failures (auth, credit, rate limit, unavailable, timeout) move on to the
+ * next provider with a key; refusals, invalid output and our own bad requests ('other') do not.
  */
-export function createAnthropicClient(config: Config, sdk?: SdkLike, opts: { attemptTimeoutMs?: number } = {}): AiClient {
-  const attemptTimeoutMs = opts.attemptTimeoutMs ?? REQUEST_TIMEOUT_MS;
-  const client: SdkLike = sdk ?? (new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 1 }) as unknown as SdkLike);
-  const tools = [
-    { name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', strict: true, input_schema: recipeToolSchema() },
-  ];
+export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClient {
+  const attemptTimeoutMs = deps.attemptTimeoutMs ?? REQUEST_TIMEOUT_MS;
+  const make = (name: ProviderName): Provider =>
+    deps.providers?.[name] ??
+    (name === 'anthropic'
+      ? createAnthropicProvider(config, deps.sdk)
+      : name === 'openai'
+        ? createOpenAiProvider(config, deps.fetchImpl)
+        : createGeminiProvider(config, deps.fetchImpl));
+  const providers = providerOrder(config).map(make);
 
-  async function call(messages: Msg[], maxTokens: number) {
+  async function attempt(provider: Provider, messages: ProviderMessage[], maxTokens: number): Promise<ProviderResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
     try {
-      // Forced tool_choice 400s on current models, so the system prompt demands the tool call instead.
-      const stream = client.messages
-        .stream(
-          {
-            model: config.anthropicModel,
-            max_tokens: maxTokens,
-            system: SYSTEM_PROMPT,
-            tools: tools as Anthropic.Tool[],
-            tool_choice: { type: 'auto' },
-            output_config: { effort: 'low' },
-            messages,
-          },
-          { timeout: attemptTimeoutMs, signal: controller.signal },
-        );
-      const aborted = new Promise<never>((_, reject) =>
-        controller.signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true }),
-      );
-      return await Promise.race([stream.finalMessage(), aborted]);
-    } catch {
-      throw new AiRequestError(); // deliberately drops the upstream error: it may echo request details
+      return await provider.complete({ system: SYSTEM_PROMPT, messages, maxTokens, signal: controller.signal, timeoutMs: attemptTimeoutMs });
+    } catch (err) {
+      // deliberately drops the upstream error: it may echo request details
+      throw new AiRequestError(err instanceof ProviderError ? err.code : controller.signal.aborted ? 'timeout' : 'unavailable');
     } finally {
       clearTimeout(timer);
     }
   }
 
+  async function extractWith(provider: Provider, input: Parameters<AiClient['extractRecipe']>[0]): Promise<AiExtraction> {
+    const messages: ProviderMessage[] = [{ role: 'user', text: buildUserMessage(input) }];
+    let lastError = '';
+    let maxTokens = MAX_TOKENS;
+    for (let n = 0; n < 2; n++) {
+      const res = await attempt(provider, messages, maxTokens);
+      if (res.kind === 'refusal') throw new AiRefusedError();
+      if (res.kind === 'truncated') {
+        lastError = 'response truncated (max_tokens)';
+        maxTokens *= 2;
+        continue;
+      }
+      if (res.kind === 'draft') {
+        const parsed = AiDraftParseSchema.safeParse(res.input);
+        if (parsed.success) return { draft: toRecipeDraft(parsed.data), provider: provider.name, model: provider.model };
+        lastError = parsed.error.message;
+        messages.push({ role: 'retry', raw: res.raw, problem: lastError });
+      } else {
+        lastError = 'no tool call returned';
+        messages.push({ role: 'retry', raw: res.raw, problem: null });
+      }
+    }
+    throw new AiInvalidOutputError(lastError);
+  }
+
   return {
     async extractRecipe(input) {
-      const messages: Msg[] = [{ role: 'user', content: buildUserMessage(input) }];
-      let lastError = '';
-      let maxTokens = MAX_TOKENS;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const res = await call(messages, maxTokens);
-        if (res.stop_reason === 'refusal') throw new AiRefusedError();
-        if (res.stop_reason === 'max_tokens') {
-          // Truncated tool input can still validate (gaps is last), so never accept it.
-          lastError = 'response truncated (max_tokens)';
-          maxTokens *= 2;
-          continue;
-        }
-        const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
-        if (block && block.type === 'tool_use') {
-          const parsed = AiDraftParseSchema.safeParse(block.input);
-          if (parsed.success) return toRecipeDraft(parsed.data);
-          lastError = parsed.error.message;
-          messages.push(
-            { role: 'assistant', content: res.content },
-            {
-              role: 'user',
-              // One tool_result per tool_use id, or the API rejects the next request.
-              content: res.content
-                .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-                .map((b) => ({
-                  type: 'tool_result' as const,
-                  tool_use_id: b.id,
-                  is_error: true,
-                  content: `Invalid recipe: ${lastError}\nCall ${TOOL_NAME} again with valid input. Still do not add anything the user did not say.`,
-                })),
-            },
-          );
-        } else {
-          lastError = 'no tool call returned';
-          messages.push(
-            { role: 'assistant', content: res.content },
-            { role: 'user', content: `Respond only by calling ${TOOL_NAME} with the recipe. Do not reply with text, and do not add anything the user did not say.` },
-          );
+      let first: ProviderErrorCode | undefined;
+      for (const provider of providers) {
+        try {
+          return await extractWith(provider, input);
+        } catch (err) {
+          if (err instanceof AiRequestError && err.code !== 'other') {
+            first ??= err.code;
+            continue;
+          }
+          throw err;
         }
       }
-      throw new AiInvalidOutputError(lastError);
+      throw new AiRequestError(first ?? 'other');
     },
   };
+}
+
+/**
+ * Anthropic-only client with the original shape (resolves to the bare draft). Kept for the original
+ * Anthropic test-suite and for single-provider use.
+ */
+export function createAnthropicClient(config: Config, sdk?: SdkLike, opts: { attemptTimeoutMs?: number } = {}) {
+  const only = { ...config, aiProvider: 'anthropic' as const, openaiApiKey: undefined, geminiApiKey: undefined };
+  const client = createAiClient(only, { sdk, attemptTimeoutMs: opts.attemptTimeoutMs });
+  return { extractRecipe: async (input: Parameters<AiClient['extractRecipe']>[0]) => (await client.extractRecipe(input)).draft };
 }

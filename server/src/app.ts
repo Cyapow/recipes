@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Database } from 'better-sqlite3';
-import { createAnthropicClient, type AiClient } from './ai/client.js';
+import { createAiClient, type AiClient } from './ai/client.js';
+import { providerOrder } from './ai/registry.js';
 import { registerAiRoutes } from './ai/routes.js';
 import type { ImportDeps } from './import/importUrl.js';
 import type { Config } from './config.js';
@@ -57,8 +58,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const images = deps.images ?? createImageStore(deps.config.dataDir);
   registerImageRoutes(app, images);
 
-  const ai = deps.ai ?? (deps.config.anthropicApiKey ? createAnthropicClient(deps.config) : undefined);
-  registerAiRoutes(app, ai);
+  const ai = deps.ai ?? (providerOrder(deps.config).length > 0 ? createAiClient(deps.config) : undefined);
+  registerAiRoutes(app, ai, deps.config);
   registerImportRoutes(app, {
     fetchPage: deps.fetchPage ?? ((url) => fetchPage(url)),
     fetchBytes: deps.fetchBytes ?? ((url) => fetchBytes(url)),
