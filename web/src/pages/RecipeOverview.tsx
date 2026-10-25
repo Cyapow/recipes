@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addToShopping, ApiError, getRecipe, type Recipe } from '../api';
 import { BackIcon, CartIcon } from '../components/Icons';
-import { formatIngredientLine, formatMinutes, formatQuantity, originLabel } from '../lib/text';
+import { formatAmount, formatIngredientLine, formatMinutes, formatQuantity, originLabel } from '../lib/text';
 
 type Notice =
   | { kind: 'added'; count: number }
@@ -126,7 +126,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
           <ul className="have-list">
             {recipe.ingredients.map((ing, i) => {
               const ticked = have.has(i);
-              const qty = [ing.quantity != null ? formatQuantity(ing.quantity) : null, ing.unit].filter(Boolean).join(' ');
+              const qty = formatAmount(ing);
               return (
                 <li key={i}>
                   <label className={`have-row${ticked ? ' ticked' : ''}`}>
