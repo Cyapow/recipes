@@ -293,3 +293,8 @@ body.cook-scroll-lock { overflow: hidden; }
 .manual-share { display: flex; flex-direction: column; gap: 6px; }
 .manual-share textarea { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); resize: vertical; }
 .load-error { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+
+.drafts h2 { font-size: 1.125rem; margin: 4px 0 8px; }
+.draft-row { display: flex; align-items: center; gap: 8px; }
+.draft-row .row { flex: 1; min-width: 0; }
+.draft-row .btn.small { min-height: 44px; }

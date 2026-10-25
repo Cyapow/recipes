@@ -4,6 +4,7 @@ import { ApiError, importRecipe, saveRecipe, type ImportResult, type RecipeInput
 import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
+import { useDraft } from '../lib/drafts';
 
 const hostOf = (u: string) => {
   try {
@@ -25,8 +26,12 @@ function emptyDraft(url: string): ImportResult['draft'] {
 
 export function Import() {
   const nav = useNavigate();
-  const [url, setUrl] = useState('');
-  const [result, setResult] = useState<{ n: number; value: ImportResult } | null>(null);
+  const kept = useDraft('import');
+  const resumed = kept.existing;
+  const [url, setUrl] = useState(resumed?.url ?? '');
+  const [result, setResult] = useState<{ n: number; value: ImportResult } | null>(
+    resumed?.input ? { n: 1, value: { draft: { ...resumed.input, gaps: resumed.gaps ?? [] }, usedAi: false, usable: true } as ImportResult } : null,
+  );
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +48,7 @@ export function Import() {
     try {
       const value = await importRecipe(url.trim());
       setFetchFailed(false);
+      kept.save({ url: url.trim(), input: value.draft, gaps: value.draft.gaps });
       setResult((r) => ({ n: (r?.n ?? 0) + 1, value }));
     } catch (e) {
       if (e instanceof ApiError && e.status === 502) {
@@ -65,6 +71,7 @@ export function Import() {
     setSaving(true);
     try {
       const saved = await saveRecipe(null, input);
+      kept.clear();
       nav(`/recipe/${saved.id}`);
     } catch (e) {
       setError(describeSaveError(e));
@@ -96,7 +103,10 @@ export function Import() {
             autoCapitalize="none"
             spellCheck={false}
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              if (e.target.value.trim()) kept.save({ url: e.target.value });
+            }}
             placeholder="https://www.bbcgoodfood.com/recipes/…"
           />
         </label>
@@ -110,7 +120,7 @@ export function Import() {
       {result?.value.usable && draftedBy(result.value.provider) && <p className="hint">{draftedBy(result.value.provider)}</p>}
       {result && !fetchFailed && !result.value.usable && !result.value.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
-        <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />
+        <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
       )}
     </main>
   );

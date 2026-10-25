@@ -28,22 +28,25 @@ describe('SYSTEM_PROMPT', () => {
 });
 
 describe('steps and title prompt rules', () => {
-  it('splits a narrative method into steps in the user\'s own words', () => {
+  it('splits a narrative method into steps', () => {
     expect(SYSTEM_PROMPT).toMatch(/narrative/i);
     expect(SYSTEM_PROMPT).toMatch(/split.*(separate )?steps/is);
-    expect(SYSTEM_PROMPT).toMatch(/own words/i);
-    expect(SYSTEM_PROMPT).toMatch(/connecting words/i);
-    expect(SYSTEM_PROMPT).toMatch(/capitalis/i);
   });
-  it('keeps a step list the user already gave exactly as given', () => {
+  it('rewrites wording in recipe style without changing the content', () => {
+    expect(SYSTEM_PROMPT).toMatch(/imperative/i);
+    expect(SYSTEM_PROMPT).toMatch(/grammar, spelling/i);
+    expect(SYSTEM_PROMPT).toMatch(/preserve exactly what the user said/i);
+    expect(SYSTEM_PROMPT).toMatch(/no new quantity, temperature, time, ingredient/i);
+    expect(SYSTEM_PROMPT).toMatch(/nothing the user said may be dropped/i);
+  });
+  it('keeps one step per step in a list the user already gave', () => {
     expect(SYSTEM_PROMPT).toMatch(/numbered or one per line/i);
-    expect(SYSTEM_PROMPT).toMatch(/exactly as given/i);
     expect(SYSTEM_PROMPT).toMatch(/do not split, merge, reorder or add/i);
   });
   it('never adds steps or details', () => {
     expect(SYSTEM_PROMPT).toContain('never add');
     expect(SYSTEM_PROMPT).toMatch(/never add a step the user did not describe/i);
-    expect(SYSTEM_PROMPT).toMatch(/temperature, time, quantity, tip or action/i);
+    expect(SYSTEM_PROMPT).toMatch(/add no detail the user did not say/i);
   });
   it('titles: verbatim dish name, else a plain title from the user\'s words with the exact gap', () => {
     expect(SYSTEM_PROMPT).toMatch(/dish name.*verbatim/is);
@@ -53,7 +56,7 @@ describe('steps and title prompt rules', () => {
     expect(SYSTEM_PROMPT).toMatch(/never leave the title as a single stray ingredient word/i);
   });
   it('page text gets the same rules but keeps its list', () => {
-    expect(SYSTEM_PROMPT).toMatch(/page text.*same rules.*(already a list|list).*as given/is);
+    expect(SYSTEM_PROMPT).toMatch(/page text.*same rules.*list.*one-to-one/is);
   });
   it('is not telling the model to avoid splitting a narrative any more', () => {
     expect(SYSTEM_PROMPT).not.toMatch(/Do not split, merge, reorder or add steps\./);

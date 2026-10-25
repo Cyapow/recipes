@@ -4,11 +4,16 @@ import { ApiError, describeRecipe, saveRecipe, type AiDraft, type RecipeInput } 
 import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
+import { useDraft } from '../lib/drafts';
 
 export function Describe() {
   const nav = useNavigate();
-  const [text, setText] = useState('');
-  const [draft, setDraft] = useState<{ n: number; value: AiDraft } | null>(null);
+  const kept = useDraft('describe');
+  const resumed = kept.existing;
+  const [text, setText] = useState(resumed?.text ?? '');
+  const [draft, setDraft] = useState<{ n: number; value: AiDraft } | null>(
+    resumed?.input ? { n: 1, value: { ...resumed.input, gaps: resumed.gaps ?? [] } as AiDraft } : null,
+  );
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +27,8 @@ export function Describe() {
     setError(null);
     try {
       const value = await describeRecipe(text);
+      const { gaps: g, provider: _p, model: _m, ...input } = value;
+      kept.save({ text, input: input as RecipeInput, gaps: g });
       setDraft((d) => ({ n: (d?.n ?? 0) + 1, value }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
@@ -45,6 +52,7 @@ export function Describe() {
     setSaving(true);
     try {
       const saved = await saveRecipe(null, input);
+      kept.clear();
       nav(`/recipe/${saved.id}`);
     } catch (e) {
       setError(describeSaveError(e));
@@ -66,7 +74,10 @@ export function Describe() {
         <textarea
           rows={10}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (e.target.value.trim()) kept.save({ text: e.target.value });
+          }}
           placeholder="e.g. my spag bol: brown the mince with an onion, add a tin of tomatoes and a splash of red wine…"
         />
       </label>
@@ -77,7 +88,7 @@ export function Describe() {
       {error && <p className="field-error" role="alert">{error}</p>}
       {draft && draftedBy(provider) && <p className="hint">{draftedBy(provider)}</p>}
       {draft && (
-        <RecipeForm key={draft.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />
+        <RecipeForm key={draft.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ text, input })} />
       )}
     </main>
   );

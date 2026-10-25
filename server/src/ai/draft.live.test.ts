@@ -59,7 +59,7 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
     }
   }, 60_000);
 
-  it.skipIf(!live || !hasKey)('splits a narrative into steps in the user\'s own words and titles it plainly', async () => {
+  it.skipIf(!live || !hasKey)('splits a narrative into reworded recipe steps and titles it plainly', async () => {
     const out = await createAiClient(only(name)).extractRecipe({ kind: 'description', text: NARRATIVE });
     expect(out.provider).toBe(name);
     const draft = out.draft;
@@ -67,7 +67,7 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
 
     expect(draft.steps.length).toBeGreaterThanOrEqual(3);
     for (const step of draft.steps) {
-      for (const w of words(step.text)) expect(inputWords.has(w), `step "${step.text}" invents "${w}"`).toBe(true);
+      expect(step.text, 'recipe style, not first person').not.toMatch(/^\s*i\s/i);
       // No number, time or temperature the user did not say.
       for (const n of step.text.match(/\d+/g) ?? []) expect(NARRATIVE, `step "${step.text}" has number ${n}`).toContain(n);
       for (const idx of step.ingredients) {
@@ -87,6 +87,19 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
     for (const ing of draft.ingredients) {
       expect(words(ing.item).every((w) => inputWords.has(w)), `invented: ${ing.item}`).toBe(true);
     }
+  }, 60_000);
+
+  it.skipIf(!live || !hasKey)('rewords casual wording into a proper step without adding detail', async () => {
+    const text = 'omelette. i started with a cold pan and added olive oil. then cracked 3 eggs in and stired',
+      out = await createAiClient(only(name)).extractRecipe({ kind: 'description', text });
+    const steps = out.draft.steps.map((x) => x.text);
+    const all = steps.join(' | ');
+    expect(all).toMatch(/cold pan/i);
+    expect(all).toMatch(/olive oil/i);
+    expect(all).toMatch(/\bstir/i);
+    expect(all, 'typo fixed').not.toMatch(/stired/i);
+    expect(all, 'first person removed').not.toMatch(/\bI (started|added)\b/);
+    for (const n of all.match(/\d+/g) ?? []) expect(text).toContain(n);
   }, 60_000);
 
   it.skipIf(!live || !hasKey)('uses a stated dish name as the title with no title gap', async () => {

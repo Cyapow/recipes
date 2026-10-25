@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { uploadImage } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { formatIngredients, parseIngredients, parseTags } from '../lib/text';
@@ -12,6 +12,8 @@ export type RecipeFormProps = {
   onSave(input: RecipeInput): void;
   /** Disables Save and relabels it while a save is in flight. */
   saving?: boolean;
+  /** Called (debounced) with the form's current contents after the user changes something, so a draft can be kept. */
+  onChange?(input: RecipeInput): void;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -22,7 +24,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: RecipeFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
   const [origin, setOrigin] = useState(initial.origin);
@@ -80,20 +82,9 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
     setIngredients(next);
   }
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) {
-      setError('Enter a title');
-      return;
-    }
-    if (pending > 0 || stepsBusy) {
-      setError('Wait for the photo upload to finish before saving');
-      return;
-    }
-    setError(null);
-    baseline.current = null;
+  function build(): RecipeInput {
     const parsedIngredients = parseIngredients(ingredients);
-    onSave({
+    return {
       ...initial,
       title: title.trim(),
       description: str(description),
@@ -114,7 +105,46 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       notes: str(notes),
       tags: parseTags(tags),
       imageIds,
-    });
+    };
+  }
+
+  // Report edits (not the initial values) so the caller can keep a draft. The latest build is also flushed on unmount.
+  const touched = useRef(false);
+  const latest = useRef<() => RecipeInput>(build);
+  latest.current = build;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    touched.current = true;
+    if (!onChangeRef.current) return;
+    const t = setTimeout(() => onChangeRef.current?.(latest.current()), 400);
+    return () => clearTimeout(t);
+  }, [title, description, origin, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
+  useEffect(
+    () => () => {
+      if (touched.current) onChangeRef.current?.(latest.current());
+    },
+    [],
+  );
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) {
+      setError('Enter a title');
+      return;
+    }
+    if (pending > 0 || stepsBusy) {
+      setError('Wait for the photo upload to finish before saving');
+      return;
+    }
+    setError(null);
+    baseline.current = null;
+    onSave(build());
   }
 
   return (

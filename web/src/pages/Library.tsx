@@ -5,6 +5,7 @@ import { BackupBanner } from '../components/BackupBanner';
 import { CartIcon, ChevronIcon, GearIcon, LinkIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { formatMinutes, originLabel } from '../lib/text';
 import { monogram, monogramColors } from '../lib/monogram';
+import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
 
 type Origin = 'mine' | 'other' | undefined;
 const CHIPS: { label: string; origin: Origin }[] = [
@@ -26,6 +27,7 @@ export function Library() {
   const [error, setError] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupStatus | null>(null);
   const [backupFailed, setBackupFailed] = useState(false);
+  const [drafts, setDrafts] = useState<Draft[]>(() => listDrafts());
 
   useEffect(() => {
     getBackupStatus().then(setBackup).catch(() => setBackupFailed(true));
@@ -98,6 +100,36 @@ export function Library() {
             </button>
           ))}
         </div>
+      )}
+      {drafts.length > 0 && (
+        <section className="drafts" aria-label="Drafts">
+          <h2>Drafts</h2>
+          <ul className="rows">
+            {drafts.map((d) => (
+              <li key={d.id} className="draft-row">
+                <Link className="row" to={draftHref(d)}>
+                  <span className="meta">
+                    <span className="title">{draftTitle(d)}</span>
+                    <span className="sub">{draftKindLabel(d.kind)} · {new Date(d.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </span>
+                  <span className="btn small">Resume</span>
+                </Link>
+                <button
+                  type="button"
+                  className="btn small danger-text"
+                  aria-label={`Discard draft ${draftTitle(d)}`}
+                  onClick={() => {
+                    if (!window.confirm('Discard this draft?')) return;
+                    removeDraft(d.id);
+                    setDrafts(listDrafts());
+                  }}
+                >
+                  Discard
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {error && <p className="field-error" role="alert">{error}</p>}
       {rows && rows.length === 0 && <p className="empty">No recipes yet.</p>}
