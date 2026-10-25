@@ -11,7 +11,17 @@ type Status =
   | { kind: 'text'; text: string }
   | { kind: 'manual'; text: string };
 
+const selectAll = (e: { currentTarget: HTMLTextAreaElement }) => {
+  const t = e.currentTarget;
+  t.select();
+  t.setSelectionRange(0, t.value.length); // iOS ignores select() alone
+};
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+const ARM_GUARD_MS = 500;
+const REFETCH_GAP_MS = 300;
+const signature = (l: ShoppingItem[]) => l.map((i) => `${i.id}:${i.text}`).join('|');
 
 export function Shopping() {
   const [items, setItems] = useState<ShoppingItem[] | null>(null);
@@ -19,89 +29,128 @@ export function Shopping() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'none' });
   const [confirmClear, setConfirmClear] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
   const seq = useRef(0);
-  const inFlight = useRef(false);
+  const lastLoad = useRef(-Infinity);
+  const inFlight = useRef(false); // Share / Clear
+  const pending = useRef(new Set<string>()); // per-row removals
+  const itemsRef = useRef<ShoppingItem[] | null>(null);
   const timer = useRef<number | undefined>(undefined);
+  const armedAt = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const removeBtns = useRef(new Map<string, HTMLButtonElement>());
+  const focusTarget = useRef<string | 'heading' | null>(null);
 
-  const load = useCallback(() => {
+  const disarm = useCallback(() => {
+    window.clearTimeout(timer.current);
+    setConfirmClear(false);
+  }, []);
+
+  const applyItems = useCallback((next: ShoppingItem[]) => {
+    const prev = itemsRef.current;
+    itemsRef.current = next;
+    setItems(next);
+    if (prev && signature(prev) !== signature(next)) {
+      setStatus({ kind: 'none' });
+      disarm();
+    }
+  }, [disarm]);
+
+  const load = useCallback((fromEvent = false) => {
+    const now = Date.now();
+    if (fromEvent && now - lastLoad.current < REFETCH_GAP_MS) return;
+    lastLoad.current = now;
     const mine = ++seq.current;
     listShopping()
       .then((r) => {
         if (mine !== seq.current) return;
-        setItems(r);
+        applyItems(r);
         setLoadError(false);
       })
       .catch(() => {
         if (mine === seq.current) setLoadError(true);
       });
-  }, []);
+  }, [applyItems]);
 
   useEffect(() => {
     load();
+    const onFocus = () => load(true);
     const onVisible = () => {
-      if (document.visibilityState !== 'hidden') load();
+      if (document.visibilityState !== 'hidden') load(true);
     };
-    window.addEventListener('focus', load);
+    window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       seq.current++;
-      window.removeEventListener('focus', load);
+      window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
       window.clearTimeout(timer.current);
     };
   }, [load]);
 
-  async function guarded(fn: () => Promise<void>) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true);
+  useEffect(() => {
+    const t = focusTarget.current;
+    if (!t) return;
+    focusTarget.current = null;
+    if (t === 'heading') heading.current?.focus();
+    else removeBtns.current.get(t)?.focus();
+  }, [items]);
+
+  async function remove(it: ShoppingItem) {
+    if (pending.current.has(it.id)) return;
+    disarm();
+    pending.current.add(it.id);
+    setRemoving(new Set(pending.current));
+    setActionError(null);
     try {
-      await fn();
+      await removeShoppingItem(it.id);
+      seq.current++; // an older in-flight fetch must not bring the row back
+      const cur = itemsRef.current ?? [];
+      const idx = cur.findIndex((x) => x.id === it.id);
+      const rest = cur.filter((x) => x.id !== it.id);
+      const neighbour = rest[idx] ?? rest[idx - 1];
+      focusTarget.current = neighbour ? neighbour.id : 'heading';
+      applyItems(rest);
+      setStatus({ kind: 'text', text: `Removed ${it.text}` });
+    } catch {
+      setActionError(`Could not remove ${it.text}`);
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      pending.current.delete(it.id);
+      setRemoving(new Set(pending.current));
     }
   }
-
-  const remove = (it: ShoppingItem) =>
-    guarded(async () => {
-      setActionError(null);
-      try {
-        await removeShoppingItem(it.id);
-        seq.current++; // an older in-flight fetch must not bring the row back
-        setItems((cur) => cur && cur.filter((x) => x.id !== it.id));
-      } catch {
-        setActionError(`Could not remove ${it.text}`);
-      }
-    });
 
   function onClear() {
     if (inFlight.current) return;
     if (!confirmClear) {
+      armedAt.current = Date.now();
       setConfirmClear(true);
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => setConfirmClear(false), CONFIRM_MS);
       return;
     }
-    window.clearTimeout(timer.current);
-    setConfirmClear(false);
-    void guarded(async () => {
-      setActionError(null);
-      try {
-        await clearShopping();
+    if (Date.now() - armedAt.current < ARM_GUARD_MS) return;
+    disarm();
+    inFlight.current = true;
+    setActionError(null);
+    clearShopping()
+      .then(() => {
         seq.current++;
-        setItems([]);
+        applyItems([]);
         setStatus({ kind: 'none' });
-      } catch {
-        setActionError('Could not clear the list');
-      }
-    });
+      })
+      .catch(() => setActionError('Could not clear the list'))
+      .finally(() => {
+        inFlight.current = false;
+      });
   }
 
-  const onShare = () =>
-    guarded(async () => {
-      setActionError(null);
+  async function onShare() {
+    if (inFlight.current) return;
+    disarm();
+    inFlight.current = true;
+    setActionError(null);
+    try {
       if (!items || items.length === 0) {
         setStatus({ kind: 'text', text: 'Nothing to share' });
         return;
@@ -113,7 +162,10 @@ export function Shopping() {
           : outcome === 'manual' ? { kind: 'manual', text }
           : { kind: 'none' },
       );
-    });
+    } finally {
+      inFlight.current = false;
+    }
+  }
 
   const recipes = new Set(items?.flatMap((i) => i.sources.map((s) => s.recipeId))).size;
 
@@ -122,12 +174,13 @@ export function Shopping() {
       <header className="cook-bar">
         <Link className="btn round-btn" to="/" aria-label="Back to library"><BackIcon /></Link>
       </header>
-      <h1>Shopping list</h1>
+      <h1 ref={heading} tabIndex={-1}>Shopping list</h1>
 
-      {loadError && (
+      {loadError && items && <p className="hint">Couldn't refresh the list</p>}
+      {loadError && !items && (
         <div className="load-error">
           <p className="field-error" role="alert">Could not load the shopping list</p>
-          <button type="button" onClick={load}>Retry</button>
+          <button type="button" onClick={() => load()}>Retry</button>
         </div>
       )}
       {actionError && <p className="field-error" role="alert">{actionError}</p>}
@@ -141,7 +194,7 @@ export function Shopping() {
 
       {items && items.length > 0 && (
         <>
-          <p className="sub">{plural(items.length, 'item', 'items')} from {plural(recipes, 'recipe', 'recipes')}</p>
+          <p className="sub">{plural(items.length, 'item', 'items')}{recipes > 0 && ` from ${plural(recipes, 'recipe', 'recipes')}`}</p>
           <ul className="rows shopping-rows">
             {items.map((it) => (
               <li key={it.id} className="shopping-row">
@@ -151,7 +204,14 @@ export function Shopping() {
                     <span className="sub">{it.sources.map((s) => s.title).join(', ')}</span>
                   )}
                 </span>
-                <button type="button" className="round-btn remove-btn" aria-label={`Remove ${it.text}`} onClick={() => void remove(it)}>
+                <button
+                  type="button"
+                  className="round-btn remove-btn"
+                  aria-label={`Remove ${it.text}`}
+                  aria-busy={removing.has(it.id) || undefined}
+                  ref={(el) => { if (el) removeBtns.current.set(it.id, el); else removeBtns.current.delete(it.id); }}
+                  onClick={() => void remove(it)}
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                     <path d="M6 6l12 12M18 6 6 18" />
                   </svg>
@@ -166,7 +226,7 @@ export function Shopping() {
         <div className="shopping-actions">
           <button type="button" className="primary share-btn" onClick={() => void onShare()}>Share list</button>
           {items.length > 0 && (
-            <button type="button" className={`danger clear-btn${confirmClear ? ' confirming' : ''}`} onClick={onClear}>
+            <button type="button" className={`danger clear-btn${confirmClear ? ' confirming' : ''}`} onClick={onClear} onBlur={disarm}>
               {confirmClear ? 'Tap again to clear' : 'Clear list'}
             </button>
           )}
@@ -176,8 +236,16 @@ export function Shopping() {
       <p className="hint" role="status">{status.kind === 'text' ? status.text : ''}</p>
       {status.kind === 'manual' && (
         <div className="manual-share">
-          <p className="hint">Copy this list</p>
-          <textarea readOnly value={status.text} rows={Math.min(12, status.text.split('\n').length + 1)} onFocus={(e) => e.currentTarget.select()} />
+          <p className="hint" id="manual-hint">Copy this list</p>
+          <textarea
+            readOnly
+            aria-label="Shopping list text, copy this"
+            aria-describedby="manual-hint"
+            value={status.text}
+            rows={Math.min(12, status.text.split('\n').length + 1)}
+            onFocus={selectAll}
+            onClick={selectAll}
+          />
         </div>
       )}
     </main>
