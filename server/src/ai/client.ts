@@ -29,23 +29,31 @@ export class AiRefusedError extends Error {
 }
 
 /** The slice of the Anthropic SDK we use; lets tests inject a fake. */
-export type SdkLike = { messages: { stream(params: Anthropic.MessageCreateParamsNonStreaming, opts?: { timeout?: number }): { finalMessage(): Promise<Anthropic.Message> } } };
+export type SdkLike = { messages: { stream(params: Anthropic.MessageCreateParamsNonStreaming, opts?: { timeout?: number; signal?: AbortSignal }): { finalMessage(): Promise<Anthropic.Message> } } };
 
 const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_TOKENS = 16_000;
 
 type Msg = Anthropic.MessageParam;
 
-export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
+/**
+ * Each attempt is bounded by an AbortController (the SDK's own timeout only covers waiting for response headers).
+ * A timeout or abort throws AiRequestError straight away: it is not retried and does not use the invalid-output
+ * retry, so the worst case is two attempts (invalid output, then a second call) of attemptTimeoutMs each.
+ */
+export function createAnthropicClient(config: Config, sdk?: SdkLike, opts: { attemptTimeoutMs?: number } = {}): AiClient {
+  const attemptTimeoutMs = opts.attemptTimeoutMs ?? REQUEST_TIMEOUT_MS;
   const client: SdkLike = sdk ?? (new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 1 }) as unknown as SdkLike);
   const tools = [
     { name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', strict: true, input_schema: recipeToolSchema() },
   ];
 
   async function call(messages: Msg[], maxTokens: number) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
     try {
       // Forced tool_choice 400s on current models, so the system prompt demands the tool call instead.
-      return await client.messages
+      const stream = client.messages
         .stream(
           {
             model: config.anthropicModel,
@@ -56,11 +64,16 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
             output_config: { effort: 'low' },
             messages,
           },
-          { timeout: REQUEST_TIMEOUT_MS },
-        )
-        .finalMessage();
+          { timeout: attemptTimeoutMs, signal: controller.signal },
+        );
+      const aborted = new Promise<never>((_, reject) =>
+        controller.signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true }),
+      );
+      return await Promise.race([stream.finalMessage(), aborted]);
     } catch {
       throw new AiRequestError(); // deliberately drops the upstream error: it may echo request details
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -87,14 +100,15 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike): AiClient {
             { role: 'assistant', content: res.content },
             {
               role: 'user',
-              content: [
-                {
-                  type: 'tool_result',
-                  tool_use_id: block.id,
+              // One tool_result per tool_use id, or the API rejects the next request.
+              content: res.content
+                .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+                .map((b) => ({
+                  type: 'tool_result' as const,
+                  tool_use_id: b.id,
                   is_error: true,
                   content: `Invalid recipe: ${lastError}\nCall ${TOOL_NAME} again with valid input. Still do not add anything the user did not say.`,
-                },
-              ],
+                })),
             },
           );
         } else {

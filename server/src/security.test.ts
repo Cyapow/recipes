@@ -9,13 +9,14 @@ import type { GoogleAuth } from './backup/google.js';
 
 function setup() {
   let disconnects = 0;
+  let backupAccountChecks = 0;
   const google: GoogleAuth = {
     configured: true,
     authUrl: () => 'https://accounts.google.com/x',
     handleCallback: async () => ({ email: 'a@b.c' }),
     getDriveClient: async () => null,
     async disconnect() { disconnects++; },
-    account: async () => null,
+    account: async () => { backupAccountChecks++; return null; },
   };
   const dataDir = mkdtempSync(path.join(tmpdir(), 'sec-'));
   const app = buildApp({
@@ -23,7 +24,7 @@ function setup() {
     db: openDb(':memory:'),
     google,
   });
-  return { app, disconnects: () => disconnects };
+  return { app, disconnects: () => disconnects, accountChecks: () => backupAccountChecks };
 }
 
 const multipart = {
@@ -72,5 +73,25 @@ describe('same-origin guard', () => {
     const { app } = setup();
     const res = await app.inject({ url: '/api/health', headers: { 'sec-fetch-site': 'cross-site' } });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('same-origin guard: path encoding cannot bypass it', () => {
+  const variants = ['/%61pi/backup/google/disconnect', '/%61pi/backup/run', '/api%2Fbackup/google/disconnect', '/API/backup/google/disconnect', '/%2561pi/backup/google/disconnect'];
+  it('blocks cross-site requests to encoded and mixed-case paths without side effects', async () => {
+    const { app, disconnects } = setup();
+    for (const url of variants) {
+      const res = await app.inject({ method: 'POST', url, headers: { 'sec-fetch-site': 'cross-site' } });
+      expect(res.statusCode, url).toBe(403);
+    }
+    const up = await app.inject({ method: 'POST', url: '/%61pi/images', headers: { 'sec-fetch-site': 'cross-site', ...multipart }, payload: body });
+    expect(up.statusCode).toBe(403);
+    expect(disconnects()).toBe(0);
+  });
+  it('still allows same-origin and header-less encoded paths', async () => {
+    const { app, disconnects } = setup();
+    expect((await app.inject({ method: 'POST', url: '/%61pi/backup/google/disconnect', headers: { 'sec-fetch-site': 'same-origin' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/%61pi/backup/google/disconnect' })).statusCode).toBe(200);
+    expect(disconnects()).toBe(2);
   });
 });

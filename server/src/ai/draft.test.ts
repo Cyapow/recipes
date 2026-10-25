@@ -181,3 +181,44 @@ describe('createAnthropicClient', () => {
     }
   });
 });
+
+describe('per-attempt timeout', () => {
+  it('aborts a stalled stream, rejects with AiRequestError and does not retry', async () => {
+    let signal: AbortSignal | undefined;
+    const stream = vi.fn((_p: unknown, opts: { signal?: AbortSignal }) => {
+      signal = opts.signal;
+      return { finalMessage: () => new Promise(() => {}) };
+    });
+    const t0 = Date.now();
+    const err = await createAnthropicClient(config, { messages: { stream } } as never, { attemptTimeoutMs: 20 })
+      .extractRecipe({ kind: 'description', text: 't' })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(AiRequestError);
+    expect(signal?.aborted).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the timer on success', async () => {
+    vi.useFakeTimers();
+    try {
+      const { sdk } = fake(toolUse(draft));
+      await createAnthropicClient(config, sdk, { attemptTimeoutMs: 60_000 }).extractRecipe({ kind: 'description', text: 't' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('answers every tool_use id when retrying after multiple tool calls', async () => {
+    const two = { content: [
+      { type: 'tool_use', id: 'a', name: 'record_recipe', input: {} },
+      { type: 'tool_use', id: 'b', name: 'record_recipe', input: draft },
+    ] };
+    const { sdk, create } = fake(two, toolUse(draft));
+    await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
+    const results = (create.mock.calls[1] as unknown as [{ messages: Array<{ content: Array<{ tool_use_id: string; is_error: boolean }> }> }])[0].messages[2]!.content;
+    expect(results.map((r) => r.tool_use_id)).toEqual(['a', 'b']);
+    expect(results.every((r) => r.is_error)).toBe(true);
+  });
+});
