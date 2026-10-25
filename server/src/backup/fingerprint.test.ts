@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createShoppingRepo } from '../shopping/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { canonicalJson, computeFingerprint } from './fingerprint.js';
 
@@ -86,5 +87,15 @@ describe('computeFingerprint', () => {
       canonicalJson({ a: { c: null, d: [1, { x: 2, y: 1 }] }, b: 1 }),
     );
     expect(canonicalJson([1, 2])).not.toBe(canonicalJson([2, 1]));
+  });
+
+  it('ignores the shopping list entirely', async () => {
+    const before = await fp();
+    const shopping = createShoppingRepo(db);
+    const id = repo.list({})[0].id;
+    shopping.add({ id, title: 'Soup' }, [{ group: null, quantity: 2, unit: 'tins', item: 'tomatoes', note: null }]);
+    expect(await fp()).toBe(before);
+    shopping.clear();
+    expect(await fp()).toBe(before);
   });
 });

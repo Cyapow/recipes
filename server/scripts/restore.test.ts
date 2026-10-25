@@ -183,18 +183,18 @@ describe('restoreFromDirectory', () => {
   });
 
   it('accepts an older schema and openDb migrates it on next start', async () => {
-    // Pretend this build ships a second migration; the backup (user_version 1) is then "older".
+    // Pretend this build ships one more migration than the real one; the backup is then "older".
     const migrations = path.join(root, 'migrations');
-    mkdirSync(migrations);
-    cpSync(new URL('../src/migrations/001_init.sql', import.meta.url), path.join(migrations, '001_init.sql'));
-    writeFileSync(path.join(migrations, '002_extra.sql'), 'ALTER TABLE recipes ADD COLUMN extra TEXT;');
-    expect(latestSchemaVersion(migrations)).toBe(2);
+    cpSync(new URL('../src/migrations', import.meta.url), migrations, { recursive: true });
+    const current = latestSchemaVersion();
+    writeFileSync(path.join(migrations, '999_extra.sql'), 'ALTER TABLE recipes ADD COLUMN extra TEXT;');
+    expect(latestSchemaVersion(migrations)).toBe(current + 1);
     await restoreFromDirectory(backupDir, dataDir, { migrationsDir: migrations });
     const raw = new Database(path.join(dataDir, 'recipes.sqlite'));
-    expect(raw.pragma('user_version', { simple: true })).toBe(1);
+    expect(raw.pragma('user_version', { simple: true })).toBe(current);
     raw.close();
     const migrated = openDb(path.join(dataDir, 'recipes.sqlite'), migrations);
-    expect(migrated.pragma('user_version', { simple: true })).toBe(2);
+    expect(migrated.pragma('user_version', { simple: true })).toBe(current + 1);
     expect(migrated.prepare('SELECT extra FROM recipes').all()).toHaveLength(2);
     migrated.close();
   });
