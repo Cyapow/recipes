@@ -24,3 +24,14 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// Production only: in dev a worker would cache stale modules. A failure must never break the app.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    try {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    } catch {
+      // ignore
+    }
+  });
+}

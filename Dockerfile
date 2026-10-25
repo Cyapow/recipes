@@ -15,7 +15,8 @@ ENV NODE_ENV=production DATA_DIR=/data
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./
-COPY --from=build /app/server/scripts ./server/scripts
+# The restore script runs from source with tsx and needs server/src (incl. migrations).
+COPY --from=build /app/server ./server
 VOLUME /data
 EXPOSE 3000
 CMD ["node", "dist/server/index.js"]

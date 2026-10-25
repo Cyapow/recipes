@@ -5,21 +5,31 @@ import { fileURLToPath } from 'node:url';
 
 // Works from source (server/src) and compiled output (dist/server): the
 // build copies migrations next to db.js.
-const migrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
+const defaultMigrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 
-export function openDb(file: string): Database.Database {
+/** `migrationsDir` is only overridden by tests that need a schema newer than the shipped one. */
+export function openDb(file: string, migrationsDir: string = defaultMigrationsDir): Database.Database {
   const db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-  migrate(db);
+  migrate(db, migrationsDir);
   return db;
 }
 
-function migrate(db: Database.Database): void {
-  const files = fs
+function migrationFiles(migrationsDir: string): string[] {
+  return fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
     .sort();
+}
+
+/** The schema `user_version` a fully migrated database has with this build. */
+export function latestSchemaVersion(migrationsDir: string = defaultMigrationsDir): number {
+  return migrationFiles(migrationsDir).length;
+}
+
+function migrate(db: Database.Database, migrationsDir: string): void {
+  const files = migrationFiles(migrationsDir);
   const current = db.pragma('user_version', { simple: true }) as number;
   files.forEach((f, i) => {
     const version = i + 1;
