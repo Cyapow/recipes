@@ -6,6 +6,7 @@ import { Import } from './pages/Import';
 import { Cook } from './pages/Cook';
 import { RecipeOverview } from './pages/RecipeOverview';
 import { Settings } from './pages/Settings';
+import { Shopping } from './pages/Shopping';
 
 export function App() {
   return (
@@ -15,6 +16,7 @@ export function App() {
       <Route path="/describe" element={<Describe />} />
       <Route path="/import" element={<Import />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/shopping" element={<Shopping />} />
       <Route path="/recipe/:id" element={<RecipeOverview />} />
       <Route path="/recipe/:id/cook" element={<Cook />} />
       <Route path="/recipe/:id/edit" element={<Editor />} />

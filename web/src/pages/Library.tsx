@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getBackupStatus, listRecipes, listTags, type BackupStatus, type RecipeSummary } from '../api';
 import { BackupBanner } from '../components/BackupBanner';
-import { ChevronIcon, GearIcon, LinkIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { CartIcon, ChevronIcon, GearIcon, LinkIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { formatMinutes, originLabel } from '../lib/text';
 import { monogram, monogramColors } from '../lib/monogram';
 
@@ -51,6 +51,7 @@ export function Library() {
         <h1 className="library-title">Recipes</h1>
         <nav className="actions">
           <Link className="btn icon-btn" to="/new" aria-label="New recipe"><PlusIcon /></Link>
+          <Link className="btn icon-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>
           <Link className="btn icon-btn" to="/settings" aria-label="Settings"><GearIcon /></Link>
         </nav>
       </header>

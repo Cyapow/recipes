@@ -74,6 +74,7 @@ describe('Library redesign', () => {
     expect(href('From a link')).toBe('/import');
     expect(href('New recipe')).toBe('/new');
     expect(href('Settings')).toBe('/settings');
+    expect(href('Shopping list')).toBe('/shopping');
   });
   it('shows a monogram tile without a thumbnail and an image with one', async () => {
     render(<MemoryRouter><Library /></MemoryRouter>);
