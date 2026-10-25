@@ -2,7 +2,7 @@
   color-scheme: light dark;
   --bg: #fbf7f1; --fg: #2a211b; --muted: #6b5e54; --card: #ffffff; --line: #e6dacb;
   --chip: #f1e7da; --border-strong: #dccdbb;
-  --accent: #b4492a; --accent-fg: #ffffff; --danger: #b3261e;
+  --accent: #b4492a; --accent-fg: #ffffff; --danger: #b3261e; --danger-fg: #ffffff;
   --herb: #2f5a2a; --herb-tint: #e3efdd;
   --amber-bg: #fcefd9; --amber-line: #ebcb93; --amber-fg: #4a3512; --amber-strong: #d9a441;
   --ink-soft: #5a4d43;
@@ -18,7 +18,7 @@
   :root {
     --bg: #17140f; --fg: #f1ebe4; --muted: #a89d93; --card: #221e19; --line: #3a332b;
     --chip: #2d2720; --border-strong: #4a4137;
-    --accent: #e08a5e; --accent-fg: #1a120d; --danger: #f2877f;
+    --accent: #e08a5e; --accent-fg: #1a120d; --danger: #f2877f; --danger-fg: #1a120d;
     --herb: #9fcf92; --herb-tint: #24331f;
     --amber-bg: #3a2d14; --amber-line: #6b5326; --amber-fg: #f5dfb0; --amber-strong: #d9a441;
     --ink-soft: #cfc3b7;
@@ -48,12 +48,15 @@ h2 { font-family: var(--font-head); font-weight: 600; font-size: 1.25rem; margin
 .cta-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cta { height: 52px; border-radius: 16px; font-size: 1rem; }
 .danger { color: var(--danger); border-color: var(--danger); background: transparent; margin-top: 16px; }
-input, select, textarea { width: 100%; min-height: 52px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--border-strong); background: var(--card); font-size: 1.0625rem; }
+input, select, textarea { width: 100%; min-height: 52px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--border-strong); background: var(--card); font-size: 1.0625rem; font-weight: 400; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 textarea { line-height: 1.5; font-size: 1rem; resize: vertical; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .search-field { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
-.search-field input { flex: 1; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--fg); outline: 0; }
+.page > .search-field { flex-direction: row; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 400; }
+.search-field input { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--fg); font-weight: 400; outline: 0; }
+.search-field input::-webkit-search-cancel-button { -webkit-appearance: none; }
 .search-field:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .search-field svg, .cta svg { flex: none; }
 
@@ -100,9 +103,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .keep-on { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px; border-radius: 14px; background: var(--herb-tint); border: 1.5px solid var(--herb); color: var(--herb); font-size: .9375rem; font-weight: 700; cursor: pointer; }
 .keep-on input { width: 24px; min-height: 24px; height: 24px; padding: 0; margin: 0 0 0 auto; accent-color: var(--herb); }
 .keep-on.unsupported { margin: 0; background: var(--chip); border-color: var(--line); color: var(--muted); font-weight: 400; cursor: default; }
-.cook-page { height: 100dvh; min-height: 0; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+.cook-page { height: 100vh; height: 100dvh; min-height: 0; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
 body.cook-scroll-lock { overflow: hidden; }
-.cook-main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px;
+.cook-main { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 20px;
   padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom));
   padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .cook-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -112,23 +115,23 @@ body.cook-scroll-lock { overflow: hidden; }
 .cook-progress { display: flex; gap: 4px; }
 .cook-progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
 .cook-progress span.done { background: var(--accent); }
-.cook-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
-.cook-photo { display: block; width: 100%; height: min(220px, 28dvh); max-height: min(28dvh, 260px); flex: none; object-fit: cover; border-radius: 22px; border: 1px solid var(--line); background: var(--chip); }
+.cook-body { flex: 1; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
+.cook-photo { display: block; width: 100%; height: min(220px, 28vh); height: min(220px, 28dvh); max-height: min(28vh, 260px); max-height: min(28dvh, 260px); flex: none; object-fit: cover; border-radius: 22px; border: 1px solid var(--line); background: var(--chip); }
 .cook-photo-ph { display: none; }
-.cook-text { margin: 0; flex: 1; min-height: 0; overflow-y: auto; font-family: var(--font-head); font-weight: 500; font-size: 1.625rem; line-height: 1.3; overflow-wrap: anywhere; }
+.cook-text { margin: 0; flex: 1; min-height: 96px; overflow-y: auto; font-family: var(--font-head); font-weight: 500; font-size: 1.625rem; line-height: 1.3; overflow-wrap: anywhere; }
 .cook-fill { flex: 1; }
-.cook-uses { flex: none; max-height: 30dvh; overflow-y: auto; padding: 12px 14px; border-radius: 16px; background: var(--chip); }
+.cook-uses { flex: none; max-height: 28vh; max-height: min(30dvh, 28vh); overflow-y: auto; padding: 12px 14px; border-radius: 16px; background: var(--chip); }
 .cook-uses-title { margin-bottom: 8px; font-size: .75rem; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: var(--ink-soft); }
 .cook-uses ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .cook-uses li { padding: 8px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: .9375rem; font-weight: 400; }
-.cook-uses li b { font-weight: 700; margin-right: .3em; }
+.cook-uses li b { font-weight: 700; }
 .cook-nav { flex: none; display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .cook-nav button { height: 60px; border-radius: 18px; font-size: 1.0625rem; }
 .cook-back { border: 1.5px solid var(--fg); background: var(--card); }
 .cook-back[aria-disabled='true'] { opacity: .4; cursor: default; }
 .cook-empty p { margin: 0; }
 .cook-sheet-backdrop { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center; background: rgb(0 0 0 / .45); }
-.cook-sheet { width: 100%; max-width: 560px; max-height: 80dvh; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; padding-bottom: max(20px, env(safe-area-inset-bottom));
+.cook-sheet { width: 100%; max-width: 560px; max-height: 80vh; max-height: 80dvh; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; padding-bottom: max(20px, env(safe-area-inset-bottom));
   border-radius: 24px 24px 0 0; background: var(--bg); color: var(--fg); border: 1px solid var(--line); }
 .cook-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cook-sheet-head h2 { margin: 0; }
@@ -137,40 +140,18 @@ body.cook-scroll-lock { overflow: hidden; }
 .cook-sheet-list h3 { margin: 12px 0 4px; font-size: .875rem; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
 .cook-sheet-list ul { margin: 0; padding-left: 20px; font-size: 1.0625rem; line-height: 1.6; }
 
-/* Short landscape phones: compact two-column layout (text left; Uses + Back/Next right). */
-@media (orientation: landscape) and (max-height: 520px) and (max-width: 899px) {
-  .cook-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 40%); grid-template-rows: auto auto minmax(0, 1fr) auto;
-    column-gap: 16px; row-gap: 8px; padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom));
-    padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
-  .cook-head { grid-column: 1 / -1; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; }
-  .cook-step-label { flex: 1; margin: 0 8px; text-align: center; }
-  .cook-head .keep-on { flex: none; order: 1; min-height: 44px; padding: 4px 10px; }
-  .cook-head .keep-on span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .cook-head .keep-on.unsupported { max-width: 40%; padding: 4px 8px; font-size: .75rem; line-height: 1.2; }
-  .cook-sheet-btn { order: 2; }
-  .cook-progress { grid-column: 1 / -1; }
-  .cook-progress span { height: 4px; }
-  .cook-body { display: contents; }
-  .cook-photo, .cook-photo-ph { display: none; }
-  .cook-text, .cook-fill { grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow-y: auto; font-size: 1.5rem; line-height: 1.3; }
-  .cook-uses { grid-column: 2; grid-row: 3; align-self: start; max-height: 100%; min-height: 0; overflow-y: auto; }
-  .cook-nav { grid-column: 2; grid-row: 4; }
-  .cook-nav button { height: 52px; border-radius: 16px; }
-}
-
 @media (min-width: 900px) and (orientation: landscape) {
-  .cook-page { max-width: none; height: 100dvh; }
+  .cook-page { max-width: none; height: 100vh; height: 100dvh; }
   .cook-photo { max-height: none; }
   .cook-uses { max-height: none; }
-  .cook-main { display: grid; padding-left: max(32px, env(safe-area-inset-left)); padding-right: max(32px, env(safe-area-inset-right)); grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-    column-gap: 28px; row-gap: 18px; padding: 24px 32px 32px; }
+  .cook-main { display: grid; overflow: visible; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    column-gap: 28px; row-gap: 18px;
+    padding: max(24px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(32px, env(safe-area-inset-left)); }
   .cook-head { grid-column: 1 / -1; flex-wrap: nowrap; justify-content: flex-start; gap: 16px; }
   .cook-head .icon-btn { width: 48px; height: 48px; border-radius: 24px; }
-  .cook-head .keep-on { flex: none; }
+  .cook-head .keep-on { flex: none; order: 1; }
   .cook-head .keep-on input { margin: 0; }
-  .cook-step-label { font-size: 1.0625rem; letter-spacing: .8px; }
-  .cook-step-label { flex: 1; margin: 0 8px; }
-  .cook-head .keep-on { order: 1; }
+  .cook-step-label { font-size: 1.0625rem; letter-spacing: .8px; flex: 1; margin: 0 8px; }
   .cook-sheet-btn { order: 2; }
   .cook-progress { grid-column: 1 / -1; }
   .cook-progress span { height: 8px; border-radius: 4px; }
@@ -188,6 +169,34 @@ body.cook-scroll-lock { overflow: hidden; }
   .cook-nav button { height: 72px; border-radius: 22px; font-size: 1.25rem; }
   .cook-sheet-backdrop { align-items: center; }
   .cook-sheet { border-radius: 24px; }
+}
+
+/* Short landscape screens of any width (incl. large phones >= 900px wide): compact two-column layout
+   (text left; Uses + Back/Next right). Must stay AFTER the tablet block so it wins at equal specificity. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .cook-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 40%); grid-template-rows: auto auto minmax(0, 1fr) auto;
+    column-gap: 16px; row-gap: 8px; padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  .cook-head { grid-column: 1 / -1; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; }
+  .cook-main { overflow: visible; }
+  .cook-head .icon-btn { width: 44px; height: 44px; border-radius: 22px; }
+  .cook-head .keep-on input { margin: 0 0 0 auto; }
+  .cook-step-label { flex: 1; margin: 0 8px; text-align: center; font-size: .875rem; letter-spacing: .6px; }
+  .cook-head .keep-on { flex: none; order: 1; min-height: 44px; padding: 4px 10px; }
+  .cook-head .keep-on span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .cook-head .keep-on.unsupported { max-width: 40%; padding: 4px 8px; font-size: .75rem; line-height: 1.2; }
+  .cook-sheet-btn { order: 2; }
+  .cook-progress { grid-column: 1 / -1; }
+  .cook-progress span { height: 4px; border-radius: 2px; }
+  .cook-body { display: contents; }
+  .cook-photo, .cook-photo-ph { display: none; }
+  .cook-text, .cook-fill { grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow-y: auto; font-size: 1.5rem; line-height: 1.3; }
+  .cook-uses { grid-column: 2; grid-row: 3; align-self: start; max-height: 100%; min-height: 0; overflow-y: auto; padding: 12px 14px; border-radius: 16px; }
+  .cook-uses-title { font-size: .75rem; margin-bottom: 8px; }
+  .cook-uses ul { gap: 8px; }
+  .cook-uses li { padding: 8px 12px; border-radius: 12px; font-size: .9375rem; }
+  .cook-nav { grid-column: 2; grid-row: 4; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+  .cook-nav button { height: 52px; border-radius: 16px; font-size: 1.0625rem; }
 }
 
 .photos input[type=file] { font-size: 1rem; min-height: 0; padding: 8px 0; border: 0; background: transparent; }
@@ -277,7 +286,7 @@ body.cook-scroll-lock { overflow: hidden; }
 .shopping-actions { display: flex; flex-direction: column; gap: 10px; }
 .shopping-actions .share-btn { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
 .shopping-actions .clear-btn { margin-top: 0; height: 48px; }
-.shopping-actions .clear-btn.confirming { background: var(--danger); color: #fff; }
+.shopping-actions .clear-btn.confirming { background: var(--danger); color: var(--danger-fg); }
 .shopping [role='status'] { min-height: 1.2em; }
 .manual-share { display: flex; flex-direction: column; gap: 6px; }
 .manual-share textarea { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); resize: vertical; }
