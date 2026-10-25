@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { linkIngredients } from '../recipes/links.js';
 import type { RecipeInput } from '../recipes/schema.js';
 
 type Json = unknown;
@@ -105,7 +106,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     prepMinutes: parseDuration(r.prepTime),
     cookMinutes: parseDuration(r.cookTime),
     ingredients,
-    steps: steps.map((text) => ({ text, imageId: null, ingredients: [] })),
+    steps: steps.map((text) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
     notes: null,
     tags: tags.slice(0, 8),
     imageIds: [],

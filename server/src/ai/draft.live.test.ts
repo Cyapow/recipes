@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
+import { linkIngredients } from '../recipes/links.js';
 import { createAnthropicClient } from './client.js';
 
 const config = loadConfig(process.env);
@@ -22,6 +23,13 @@ describe.skipIf(!live)('live: describe-to-recipe', () => {
     expect(draft.prepMinutes).toBeNull();
     expect(draft.cookMinutes).toBeNull();
     expect(draft.steps.length).toBeLessThanOrEqual(4);
+    // Every link must point at an ingredient whose words the step text actually contains.
+    for (const step of draft.steps) {
+      const named = linkIngredients(step.text, draft.ingredients);
+      for (const n of step.ingredients) {
+        expect(named, `step "${step.text}" links ${draft.ingredients[n]?.item}`).toContain(n);
+      }
+    }
     for (const ing of draft.ingredients) {
       expect(MENTIONED.some((w) => ing.item.toLowerCase().includes(w)), `invented: ${ing.item}`).toBe(true);
     }

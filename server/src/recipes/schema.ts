@@ -89,15 +89,8 @@ export const RecipeSchema = RecipeCoreSchema.extend({
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 
-// No transforms here: z.toJSONSchema cannot represent them. Task 3 replaces the step schema for the AI tool.
-// Lenient on links/imageId: the AI client normalises them (range-filter, null imageId) instead of retrying.
-const DraftStepSchema = z.object({
-  text: z.string(),
-  imageId: z.string().nullable(),
-  ingredients: z.array(z.number()),
-});
+// No transforms here: keep it representable. The AI tool uses its own schema (AiDraftSchema in ai/draft.ts).
 export const RecipeDraftSchema = RecipeCoreSchema.extend({
-  steps: z.array(DraftStepSchema),
   gaps: z.array(z.string()),
 });
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;

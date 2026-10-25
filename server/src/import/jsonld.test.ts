@@ -6,6 +6,23 @@ const fixture = (n: string) => readFileSync(new URL(`../../test-fixtures/${n}`, 
 const ld = (obj: unknown) => `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
 const recipe = (extra: object = {}) => ({ '@type': 'Recipe', name: 'R', recipeIngredient: ['1 egg'], recipeInstructions: ['Cook.'], ...extra });
 
+describe('parseRecipeJsonLd step links', () => {
+  it('links named ingredients per step, keeping flattened HowToSection order', () => {
+    const r = parseRecipeJsonLd(ld(recipe({
+      recipeIngredient: ['1 onion', '2 tins chopped tomatoes', '1 carrot'],
+      recipeInstructions: [
+        { '@type': 'HowToSection', name: 'A', itemListElement: [{ '@type': 'HowToStep', text: 'Fry the onions.' }, 'Add the tomatoes.'] },
+        { '@type': 'HowToStep', text: 'Serve.' },
+      ],
+    })))!;
+    expect(r.steps).toEqual([
+      { text: 'Fry the onions.', imageId: null, ingredients: [0] },
+      { text: 'Add the tomatoes.', imageId: null, ingredients: [1] },
+      { text: 'Serve.', imageId: null, ingredients: [] },
+    ]);
+  });
+});
+
 describe('parseRecipeJsonLd', () => {
   it('parses a BBC Good Food shaped page (second block is the Recipe)', () => {
     const r = parseRecipeJsonLd(fixture('bbc-goodfood.html'))!;
@@ -18,7 +35,8 @@ describe('parseRecipeJsonLd', () => {
     expect(r.ingredients[0]).toEqual({ group: null, quantity: null, unit: null, item: '100g plain flour', note: null });
     expect(r.ingredients).toHaveLength(4);
     expect(r.steps.map((x) => x.text)).toEqual(['Put the flour, eggs & milk in a bowl and whisk.', 'Heat the oil in a pan.', 'Pour in some batter and cook for 1 min each side.']);
-    expect(r.steps.every((x) => x.imageId === null && x.ingredients.length === 0)).toBe(true);
+    expect(r.steps.every((x) => x.imageId === null)).toBe(true);
+    expect(r.steps.map((x) => x.ingredients)).toEqual([[1, 2], [], []]); // 'plain flour' and 'sunflower oil' need both words
     expect(r.tags).toEqual(['breakfast', 'brunch', 'british', 'pancakes', 'shrove tuesday', 'easy']);
     expect(r.imageIds).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, createAnthropicClient } from './client.js';
-import { buildUserMessage, recipeToolSchema, SYSTEM_PROMPT } from './draft.js';
+import { AiDraftSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
@@ -24,6 +24,31 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toContain('gaps');
     expect(SYSTEM_PROMPT).toMatch(/untrusted/i);
     expect(SYSTEM_PROMPT).toMatch(/calling the record_recipe tool exactly once/);
+  });
+});
+
+describe('step link prompt rule', () => {
+  it('limits step ingredients to ones the step text names, by index, never inferred', () => {
+    expect(SYSTEM_PROMPT).toMatch(/step.*ingredients.*only.*(name|mention)/is);
+    expect(SYSTEM_PROMPT).toMatch(/0-based index/i);
+    expect(SYSTEM_PROMPT).toMatch(/empty array/i);
+    expect(SYSTEM_PROMPT).toMatch(/never infer.*typical/is);
+  });
+});
+
+describe('toRecipeDraft', () => {
+  const ai = (links: number[]) =>
+    AiDraftSchema.parse({ ...draft, ingredients: [draft.ingredients[0], draft.ingredients[0], draft.ingredients[0]], steps: [{ text: 'a', ingredients: links }] });
+  it('maps to Steps with imageId null', () => {
+    expect(toRecipeDraft(ai([1])).steps).toEqual([{ text: 'a', imageId: null, ingredients: [1] }]);
+  });
+  it('drops -1, 99 and 1.5, dedupes and sorts', () => {
+    const raw = { ...ai([]), steps: [{ text: 'a', ingredients: [-1, 99, 1.5, 2, 2, 0] }, { text: 'b', ingredients: [] }] };
+    expect(toRecipeDraft(raw).steps.map((s) => s.ingredients)).toEqual([[0, 2], []]);
+  });
+  it('AiDraftSchema rejects a step without ingredients and ignores imageId', () => {
+    expect(AiDraftSchema.safeParse({ ...draft, steps: [{ text: 'a' }] }).success).toBe(false);
+    expect(AiDraftSchema.parse({ ...draft, steps: [{ text: 'a', imageId: 'x', ingredients: [] }] }).steps[0]).toEqual({ text: 'a', ingredients: [] });
   });
 });
 
@@ -62,6 +87,10 @@ describe('recipeToolSchema (strict-safe)', () => {
       Object.values(o).forEach(walk);
     };
     walk(schema);
+    const step = ((schema.properties as Record<string, { items: Record<string, unknown> }>).steps).items;
+    expect(step.additionalProperties).toBe(false);
+    expect(Object.keys(step.properties as object)).toEqual(['text', 'ingredients']);
+    expect(JSON.stringify(step)).not.toContain('imageId');
     expect(schema.type).toBe('object');
     expect(Object.keys(schema.properties as object)).toContain('gaps');
   });
@@ -234,7 +263,7 @@ describe('step normalisation of AI drafts', () => {
     return (await client.extractRecipe({ kind: 'description', text: 'x' })).steps;
   };
   it('drops out-of-range and non-integer links', async () => {
-    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1, 1.5] }]);
+    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1] }]);
     expect(steps).toEqual([{ text: 'a', imageId: null, ingredients: [0] }]);
   });
   it('dedupes and sorts links', async () => {
