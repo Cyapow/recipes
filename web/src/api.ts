@@ -56,3 +56,18 @@ export async function describeRecipe(text: string): Promise<RecipeDraft> {
   }
   return (await res.json()) as RecipeDraft;
 }
+
+export type ImportResult = { draft: RecipeDraft; usedAi: boolean; usable: boolean };
+
+export async function importRecipe(url: string): Promise<ImportResult> {
+  const res = await fetch('/api/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as ImportResult;
+}
