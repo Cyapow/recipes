@@ -68,14 +68,14 @@ describe('RecipeOverview', () => {
     await user.click(await box('3 eggs (large)'));
     expect(screen.getByText('1 of 3 ticked')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Add 2 to shopping list' }));
-    expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined);
+    expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined, '');
   });
 
   it('sends all indexes when nothing is ticked', async () => {
     const user = userEvent.setup();
     renderAt();
     await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
-    expect(addToShopping).toHaveBeenCalledWith('a', [0, 1, 2], undefined);
+    expect(addToShopping).toHaveBeenCalledWith('a', [0, 1, 2], undefined, '');
   });
 
   it('with everything ticked says Nothing to add and sends nothing', async () => {
@@ -132,7 +132,7 @@ describe('RecipeOverview', () => {
     vi.mocked(addToShopping).mockRejectedValueOnce(new ApiError('x', 409, { error: 'already_on_list', recipeTitle: 'Carbonara' }));
     await user.click(screen.getByRole('button', { name: 'Add 3 to shopping list' }));
     await user.click(await screen.findByRole('button', { name: 'Add again' }));
-    expect(addToShopping).toHaveBeenLastCalledWith('a', [0, 1, 2], true);
+    expect(addToShopping).toHaveBeenLastCalledWith('a', [0, 1, 2], true, '');
     await screen.findByText('Added 2 items to your shopping list');
   });
 
@@ -231,7 +231,7 @@ describe('RecipeOverview stale add results and polish', () => {
     expect(document.activeElement).toBe(again);
     await user.dblClick(again);
     expect(addToShopping).toHaveBeenCalledTimes(2);
-    expect(addToShopping).toHaveBeenLastCalledWith('a', [0, 1, 2], true);
+    expect(addToShopping).toHaveBeenLastCalledWith('a', [0, 1, 2], true, '');
   });
 
   it('sends non-contiguous unticked indexes', async () => {
@@ -244,7 +244,7 @@ describe('RecipeOverview stale add results and polish', () => {
     await user.click(await box('b'));
     await user.click(await box('d'));
     await user.click(screen.getByRole('button', { name: 'Add 2 to shopping list' }));
-    expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined);
+    expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined, '');
   });
 
   it('clears the Added status when a tick changes', async () => {

@@ -7,6 +7,7 @@ import { formatIngredientLine, formatMinutes, formatQuantity, originLabel } from
 type Notice =
   | { kind: 'added'; count: number }
   | { kind: 'duplicate'; title: string }
+  | { kind: 'changed' }
   | { kind: 'error' };
 
 function LoadFailure({ message }: { message: string }) {
@@ -21,10 +22,11 @@ function LoadFailure({ message }: { message: string }) {
 /** Keyed by id so all page state (ticks, notices, in-flight guard) is remounted per recipe. */
 export function RecipeOverview() {
   const { id = '' } = useParams();
-  return <Overview key={id} id={id} />;
+  const [reloads, setReloads] = useState(0);
+  return <Overview key={`${id}:${reloads}`} id={id} onReload={() => setReloads((n) => n + 1)} />;
 }
 
-function Overview({ id }: { id: string }) {
+function Overview({ id, onReload }: { id: string; onReload: () => void }) {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [have, setHave] = useState<Set<number>>(new Set());
@@ -57,7 +59,8 @@ function Overview({ id }: { id: string }) {
   const needed = recipe.ingredients.map((_, i) => i).filter((i) => !have.has(i));
   const allTicked = total > 0 && needed.length === 0;
   const meta = [
-    `${recipe.servings} servings`,
+    recipe.servings != null &&
+      `${formatQuantity(recipe.servings)} ${recipe.servings === 1 ? 'serving' : 'servings'}`,
     formatMinutes(recipe.prepMinutes) && `Prep ${formatMinutes(recipe.prepMinutes)}`,
     formatMinutes(recipe.cookMinutes) && `Cook ${formatMinutes(recipe.cookMinutes)}`,
   ].filter(Boolean).join(' · ');
@@ -82,11 +85,12 @@ function Overview({ id }: { id: string }) {
     setNotice(null);
     const rid = recipe!.id;
     try {
-      const res = await addToShopping(rid, needed, force);
+      const res = await addToShopping(rid, needed, force, recipe!.updatedAt);
       setNotice({ kind: 'added', count: res.added });
     } catch (e) {
-      const body = e instanceof ApiError && e.status === 409 ? (e.body as { recipeTitle?: string } | undefined) : undefined;
-      setNotice(body ? { kind: 'duplicate', title: body.recipeTitle ?? recipe!.title } : { kind: 'error' });
+      const body = e instanceof ApiError && e.status === 409 ? (e.body as { error?: string; recipeTitle?: string } | undefined) : undefined;
+      if (body?.error === 'recipe_changed') setNotice({ kind: 'changed' });
+      else setNotice(body ? { kind: 'duplicate', title: body.recipeTitle ?? recipe!.title } : { kind: 'error' });
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -147,6 +151,14 @@ function Overview({ id }: { id: string }) {
         </p>
       )}
       {notice?.kind === 'error' && <p className="field-error" role="alert">Could not add to the shopping list</p>}
+      {notice?.kind === 'changed' && (
+        <div className="status dup" role="alert">
+          <p>This recipe was changed on another device. Reload to see the latest ingredients.</p>
+          <div className="dup-actions">
+            <button type="button" className="primary" onClick={onReload}>Reload</button>
+          </div>
+        </div>
+      )}
       {notice?.kind === 'duplicate' && (
         <div className="status dup" role="alert">
           <p>{notice.title} is already on your shopping list.</p>

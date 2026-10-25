@@ -115,12 +115,25 @@ export const disconnectGoogle = (): Promise<void> =>
 export const listShopping = (): Promise<ShoppingItem[]> =>
   request<{ items: ShoppingItem[] }>('/api/shopping').then((r) => r.items);
 
-/** Rejects with ApiError status 409 and body `{error:'already_on_list', recipeTitle}` unless `force` is set. */
-export const addToShopping = (recipeId: string, indexes: number[], force?: boolean): Promise<{ added: number }> =>
+/**
+ * Rejects with ApiError 409 and body `{error:'already_on_list', recipeTitle}` unless `force` is set, or
+ * `{error:'recipe_changed'}` when `expectedUpdatedAt` no longer matches the stored recipe.
+ */
+export const addToShopping = (
+  recipeId: string,
+  indexes: number[],
+  force?: boolean,
+  expectedUpdatedAt?: string,
+): Promise<{ added: number }> =>
   request<{ added: number; items: ShoppingItem[] }>('/api/shopping/add', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ recipeId, indexes, ...(force ? { force: true } : {}) }),
+    body: JSON.stringify({
+      recipeId,
+      indexes,
+      ...(force ? { force: true } : {}),
+      ...(expectedUpdatedAt !== undefined ? { expectedUpdatedAt } : {}),
+    }),
   }).then((r) => ({ added: r.added }));
 
 export const removeShoppingItem = (id: string): Promise<void> =>

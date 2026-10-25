@@ -75,6 +75,42 @@ describe('shopping routes', () => {
     expect(forced.json().items[0].text).toBe('4 tins chopped tomatoes');
   });
 
+  describe('expectedUpdatedAt', () => {
+    async function seedWithStamp(app: ReturnType<typeof make>) {
+      const id = await seed(app);
+      const updatedAt = (await app.inject({ url: `/api/recipes/${id}` })).json().updatedAt as string;
+      return { id, updatedAt };
+    }
+
+    it('mismatch is 409 recipe_changed and leaves the list untouched', async () => {
+      const app = make();
+      const { id } = await seedWithStamp(app);
+      const res = await add(app, { recipeId: id, indexes: [0], expectedUpdatedAt: '1999-01-01T00:00:00.000Z' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: 'recipe_changed' });
+      expect((await app.inject({ url: '/api/shopping' })).json().items).toEqual([]);
+    });
+
+    it('recipe_changed is checked before already_on_list', async () => {
+      const app = make();
+      const { id, updatedAt } = await seedWithStamp(app);
+      expect((await add(app, { recipeId: id, indexes: [0], expectedUpdatedAt: updatedAt })).statusCode).toBe(200);
+      const res = await add(app, { recipeId: id, indexes: [1], expectedUpdatedAt: 'stale' });
+      expect(res.json()).toEqual({ error: 'recipe_changed' });
+      expect((await add(app, { recipeId: id, indexes: [1], expectedUpdatedAt: updatedAt })).json()).toMatchObject({
+        error: 'already_on_list',
+      });
+      expect((await app.inject({ url: '/api/shopping' })).json().items).toHaveLength(1);
+    });
+
+    it('a matching value works, and omitting it still works', async () => {
+      const app = make();
+      const { id, updatedAt } = await seedWithStamp(app);
+      expect((await add(app, { recipeId: id, indexes: [0], expectedUpdatedAt: updatedAt })).statusCode).toBe(200);
+      expect((await add(app, { recipeId: id, indexes: [1], force: true })).statusCode).toBe(200);
+    });
+  });
+
   it('DELETE one item: 204 then 404', async () => {
     const app = make();
     const recipeId = await seed(app);
