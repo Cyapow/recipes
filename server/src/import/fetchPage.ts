@@ -19,8 +19,7 @@ export class FetchFailedError extends Error {
 }
 
 export type Resolver = (hostname: string) => Promise<string[]>;
-/** Sent as a desktop browser: some recipe sites (behind Cloudflare) reject unfamiliar agents. Personal, single-user use. */
-export const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+export const USER_AGENT = 'Mozilla/5.0 (compatible; RecipeBookImporter/1.0)';
 
 export type FetchImpl = (url: string, init: { redirect: 'manual'; signal: AbortSignal; headers: Record<string, string> }) => Promise<Response>;
 export type FetchOpts = { fetchImpl?: FetchImpl; resolve?: Resolver; timeoutMs?: number };
