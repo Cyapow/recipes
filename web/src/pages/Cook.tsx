@@ -4,7 +4,7 @@ import { getRecipe, type Recipe } from '../api';
 import { CameraIcon, CloseIcon, ListIcon, SunIcon } from '../components/Icons';
 import { useSwipe } from '../hooks/useSwipe';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { formatIngredientLine, formatQuantity } from '../lib/text';
+import { formatAmount, formatIngredientLine } from '../lib/text';
 
 type Ingredient = Recipe['ingredients'][number];
 
@@ -62,7 +62,7 @@ const isTyping = (t: EventTarget | null) =>
     t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 
 function UseChip({ ing }: { ing: Ingredient }) {
-  const qty = [ing.quantity != null ? formatQuantity(ing.quantity) : null, ing.unit].filter(Boolean).join(' ');
+  const qty = formatAmount(ing);
   const item = ing.item + (ing.note ? ` (${ing.note})` : '');
   return <li>{qty && <><b>{qty}</b>{' '}</>}{item}</li>;
 }

@@ -90,7 +90,7 @@ describe('Cook slides', () => {
     await screen.findByText('Dice the onion.');
     await user.click(screen.getByRole('button', { name: 'Next step' }));
     const u = within(uses()!);
-    expect(u.getByText(chip(/^500 g beef mince$/))).toBeTruthy();
+    expect(u.getByText(chip(/^500g beef mince$/))).toBeTruthy();
     expect(u.getByText(chip(/^2 tbsp olive oil$/))).toBeTruthy();
     expect(u.queryByText(/onion/)).toBeNull();
     expect(screen.queryByText(/red wine/)).toBeNull();
@@ -177,7 +177,7 @@ describe('Cook slides', () => {
     await screen.findByText('Dice the onion.');
     await user.click(screen.getByRole('button', { name: 'Next step' }));
     const bolds = Array.from(uses()!.querySelectorAll('li b')).map((b) => b.textContent);
-    expect(bolds).toEqual(['500 g', '2 tbsp']);
+    expect(bolds).toEqual(['500g', '2 tbsp']);
   });
 
   it('marks the step text as a polite live region', async () => {
@@ -325,7 +325,7 @@ describe('Cook ingredients sheet', () => {
     expect(d.getByText('Sauce')).toBeTruthy();
     expect(d.getAllByRole('listitem')).toHaveLength(4);
     expect(d.getByText(/1 onion/)).toBeTruthy();
-    expect(d.getByText(/500 g beef mince/)).toBeTruthy();
+    expect(d.getByText(/500g beef mince/)).toBeTruthy();
     expect(d.getByText(/2 tbsp olive oil/)).toBeTruthy();
     expect(d.getByText(/0\.33 cup red wine \(dry\)/)).toBeTruthy();
     expect(dialog.contains(document.activeElement)).toBe(true);

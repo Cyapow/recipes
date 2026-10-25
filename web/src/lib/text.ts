@@ -7,6 +7,23 @@ const UNITS = new Set([
   'bunch', 'bunches', 'handful', 'handfuls', 'stick', 'sticks', 'sprig', 'sprigs',
 ]);
 
+const ATTACHED_UNITS = new Set(['g', 'kg', 'ml', 'l']);
+
+// "500g", "1.5kg" (compact units attach to the number) but "2 tins", "3 tbsp".
+function amount(qty: string | null, unit: string | null): string {
+  if (qty != null && unit != null && ATTACHED_UNITS.has(unit.toLowerCase())) return `${qty}${unit}`;
+  return [qty, unit].filter(Boolean).join(' ');
+}
+
+function joinIngredient(i: Ingredient, qty: string | null): string {
+  return [amount(qty, i.unit), i.item].filter(Boolean).join(' ') + (i.note ? ` (${i.note})` : '');
+}
+
+/** Quantity and unit only, e.g. "500g" or "2 tins" (empty string when neither is set). */
+export function formatAmount(i: Pick<Ingredient, 'quantity' | 'unit'>): string {
+  return amount(i.quantity != null ? formatQuantity(i.quantity) : null, i.unit);
+}
+
 function parseQuantity(s: string): number | null {
   const m = /^(?:(\d+)\s+)?(\d+)\/(\d+)$/.exec(s);
   if (m) return Number(m[1] ?? 0) + Number(m[2]) / Number(m[3]);
@@ -32,8 +49,13 @@ export function parseIngredients(text: string): Ingredient[] {
     }
     let quantity: number | null = null;
     let unit: string | null = null;
-    const q = /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s+(.+)$/.exec(rest);
-    if (q) {
+    const att = /^(\d+(?:\.\d+)?)(g|kg|ml|l)\s+(.+)$/i.exec(rest);
+    const q = att ? null : /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s+(.+)$/.exec(rest);
+    if (att) {
+      quantity = Number(att[1]);
+      unit = att[2];
+      rest = att[3];
+    } else if (q) {
       quantity = parseQuantity(q[1]);
       rest = q[2];
       const [first, ...others] = rest.split(/\s+/);
@@ -55,8 +77,7 @@ export function formatIngredients(list: Ingredient[]): string {
       lines.push(i.group ? `# ${i.group}` : '#');
       group = i.group;
     }
-    const parts = [i.quantity != null ? String(i.quantity) : null, i.unit, i.item].filter(Boolean);
-    lines.push(parts.join(' ') + (i.note ? ` (${i.note})` : ''));
+    lines.push(joinIngredient(i, i.quantity != null ? String(i.quantity) : null));
   }
   return lines.join('\n');
 }
@@ -83,6 +104,5 @@ export function formatQuantity(q: number): string {
 }
 
 export function formatIngredientLine(i: Ingredient): string {
-  const parts = [i.quantity != null ? formatQuantity(i.quantity) : null, i.unit, i.item].filter(Boolean);
-  return parts.join(' ') + (i.note ? ` (${i.note})` : '');
+  return joinIngredient(i, i.quantity != null ? formatQuantity(i.quantity) : null);
 }

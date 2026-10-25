@@ -94,7 +94,7 @@ describe('RecipeOverview', () => {
   it('marks ticked rows Have it', async () => {
     const user = userEvent.setup();
     renderAt();
-    await user.click(await box('200 g spaghetti'));
+    await user.click(await box('200g spaghetti'));
     expect(screen.getAllByText('Have it')).toHaveLength(1);
   });
 
@@ -162,7 +162,7 @@ describe('RecipeOverview', () => {
   it('resets ticks when navigating to another recipe', async () => {
     const user = userEvent.setup();
     renderAt();
-    await user.click(await box('200 g spaghetti'));
+    await user.click(await box('200g spaghetti'));
     await user.click(screen.getByRole('link', { name: 'to-b' }));
     await screen.findByRole('heading', { name: 'Soup' });
     expect(screen.getByText('0 of 1 ticked')).toBeTruthy();
@@ -252,7 +252,7 @@ describe('RecipeOverview stale add results and polish', () => {
     renderAt();
     await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
     await screen.findByText(/Added 2 items/);
-    await user.click(await box('200 g spaghetti'));
+    await user.click(await box('200g spaghetti'));
     expect(screen.queryByText(/Added 2 items/)).toBeNull();
   });
 
