@@ -19,6 +19,8 @@ export class FetchFailedError extends Error {
 }
 
 export type Resolver = (hostname: string) => Promise<string[]>;
+export const USER_AGENT = 'Mozilla/5.0 (compatible; RecipeBookImporter/1.0)';
+
 export type FetchImpl = (url: string, init: { redirect: 'manual'; signal: AbortSignal; headers: Record<string, string> }) => Promise<Response>;
 export type FetchOpts = { fetchImpl?: FetchImpl; resolve?: Resolver; timeoutMs?: number };
 
@@ -166,7 +168,7 @@ async function guardedGet(
       const url = await race(assertPublicUrl(current, { resolve: opts.resolve }));
       let res: Response;
       try {
-        res = await race(fetchImpl(url.href, { redirect: 'manual', signal: ctrl.signal, headers: { 'user-agent': 'RecipeBookImporter/1.0', accept: cfg.acceptHeader } }));
+        res = await race(fetchImpl(url.href, { redirect: 'manual', signal: ctrl.signal, headers: { 'user-agent': USER_AGENT, accept: cfg.acceptHeader } }));
       } catch (err) {
         if (err instanceof BlockedUrlError || err instanceof FetchFailedError) throw err;
         throw causedByBlock(err) ? new BlockedUrlError() : new FetchFailedError();

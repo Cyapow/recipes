@@ -6,8 +6,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Import } from './Import';
 import type { ImportResult } from '../api';
 
-vi.mock('../api', () => ({ importRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
-import { importRecipe, saveRecipe } from '../api';
+vi.mock('../api', async () => ({ ...(await vi.importActual<typeof import('../api')>('../api')), importRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
+import { ApiError, importRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -66,6 +66,33 @@ describe('Import', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText("Couldn't find a recipe on that page")).toBeTruthy();
     expect(screen.getAllByDisplayValue('https://nan.example/x')).toHaveLength(2); // address box + source field
+  });
+
+  it('opens a prefilled empty editor when the page could not be fetched (502)', async () => {
+    vi.mocked(importRecipe).mockRejectedValue(new ApiError("Couldn't fetch that page", 502));
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n2', createdAt: '', updatedAt: '' });
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByLabelText(/recipe page address/i), 'https://www.blocked.example/r/1');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't fetch that page/);
+    expect(screen.getAllByDisplayValue('blocked.example')).toHaveLength(2); // title + source name
+    expect(screen.getAllByDisplayValue('https://www.blocked.example/r/1')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(screen.getByText('cook page')).toBeTruthy());
+    expect(vi.mocked(saveRecipe).mock.calls[0]![1]).toMatchObject({
+      title: 'blocked.example', origin: 'other', sourceName: 'blocked.example', sourceUrl: 'https://www.blocked.example/r/1', ingredients: [], steps: [],
+    });
+  });
+
+  it('shows only the error, no form, for a blocked URL (400)', async () => {
+    vi.mocked(importRecipe).mockRejectedValue(new ApiError("That URL can't be fetched", 400));
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByLabelText(/recipe page address/i), 'http://10.0.0.1');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    expect((await screen.findByRole('alert')).textContent).toBe("That URL can't be fetched");
+    expect(screen.queryByRole('button', { name: /^save/i })).toBeNull();
   });
 
   it('shows the server error and no form on failure', async () => {

@@ -4,6 +4,14 @@ export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary };
 
 export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
 
+/** An API failure that keeps the HTTP status so callers can branch without string matching. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
@@ -67,7 +75,7 @@ export async function importRecipe(url: string): Promise<ImportResult> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Request failed (${res.status})`);
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status);
   }
   return (await res.json()) as ImportResult;
 }

@@ -71,6 +71,12 @@ describe('fetchPage', () => {
     expect(await fetchPage('http://a.test/', { fetchImpl: f, resolve })).toEqual({ html: '<p>hi</p>', finalUrl: 'https://c.test/final' });
     for (const call of f.mock.calls) expect((call as unknown[])[1]).toMatchObject({ redirect: 'manual' });
   });
+  it('sends a browser-compatible user agent', async () => {
+    const f = fakeFetch({ 'http://a.test/': () => html('<p>hi</p>') });
+    await fetchPage('http://a.test/', { fetchImpl: f, resolve });
+    const init = (f.mock.calls[0] as unknown[])[1] as { headers: Record<string, string> };
+    expect(init.headers['user-agent']).toBe('Mozilla/5.0 (compatible; RecipeBookImporter/1.0)');
+  });
   it('rejects a redirect from a public URL to a private address', async () => {
     const f = fakeFetch({ 'http://a.test/': () => redirect('http://192.168.1.1/admin') });
     await expect(fetchPage('http://a.test/', { fetchImpl: f, resolve })).rejects.toBeInstanceOf(BlockedUrlError);

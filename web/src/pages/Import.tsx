@@ -1,7 +1,25 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { importRecipe, saveRecipe, type ImportResult, type RecipeInput } from '../api';
+import { ApiError, importRecipe, saveRecipe, type ImportResult, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./i, '');
+  } catch {
+    return u;
+  }
+};
+
+/** Empty draft for a page we couldn't fetch: the user can still fill it in by hand. */
+function emptyDraft(url: string): ImportResult['draft'] {
+  const host = hostOf(url);
+  return {
+    title: host, description: null, origin: 'other', sourceName: host, sourceUrl: url,
+    servings: null, prepMinutes: null, cookMinutes: null,
+    ingredients: [], steps: [], notes: null, tags: [], imageIds: [], gaps: [],
+  };
+}
 
 export function Import() {
   const nav = useNavigate();
@@ -10,6 +28,7 @@ export function Import() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchFailed, setFetchFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
@@ -18,10 +37,18 @@ export function Import() {
     busyRef.current = true;
     setBusy(true);
     setError(null);
+    setFetchFailed(false);
     try {
       const value = await importRecipe(url.trim());
+      setFetchFailed(false);
       setResult((r) => ({ n: (r?.n ?? 0) + 1, value }));
     } catch (e) {
+      if (e instanceof ApiError && e.status === 502) {
+        setFetchFailed(true);
+        setResult((r) => ({ n: (r?.n ?? 0) + 1, value: { draft: emptyDraft(url.trim()), usedAi: false, usable: false } }));
+        return;
+      }
+      setFetchFailed(false);
       setResult(null);
       setError(e instanceof Error && e.message ? e.message : 'Could not import that page');
     } finally {
@@ -76,7 +103,8 @@ export function Import() {
         </button>
       </form>
       {error && <p className="field-error" role="alert">{error}</p>}
-      {result && !result.value.usable && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
+      {fetchFailed && <p className="field-error" role="alert">Couldn't fetch that page. You can still type the recipe in below.</p>}
+      {result && !fetchFailed && !result.value.usable && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
         <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />
       )}
