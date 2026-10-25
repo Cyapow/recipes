@@ -12,4 +12,16 @@ describe('App routes', () => {
     render(<MemoryRouter initialEntries={['/shopping']}><App /></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeTruthy();
   });
+
+  it('renders Page not found with a link back for an unknown URL', () => {
+    render(<MemoryRouter initialEntries={['/nope/at/all']}><App /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Back to library' }).getAttribute('href')).toBe('/');
+  });
+
+  it('does not show Page not found on a known route', async () => {
+    render(<MemoryRouter initialEntries={['/shopping']}><App /></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Shopping list' });
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+  });
 });

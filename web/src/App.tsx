@@ -7,6 +7,7 @@ import { Cook } from './pages/Cook';
 import { RecipeOverview } from './pages/RecipeOverview';
 import { Settings } from './pages/Settings';
 import { Shopping } from './pages/Shopping';
+import { NotFound } from './pages/NotFound';
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
       <Route path="/recipe/:id" element={<RecipeOverview />} />
       <Route path="/recipe/:id/cook" element={<Cook />} />
       <Route path="/recipe/:id/edit" element={<Editor />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
