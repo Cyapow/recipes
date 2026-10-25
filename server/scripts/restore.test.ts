@@ -9,6 +9,7 @@ import { FakeDrive } from '../src/backup/fakeDrive.js';
 import { runBackup } from '../src/backup/run.js';
 import { latestSchemaVersion, openDb } from '../src/db.js';
 import { createRecipeRepo } from '../src/recipes/repo.js';
+import { createShoppingRepo } from '../src/shopping/repo.js';
 import type { RecipeInput } from '../src/recipes/schema.js';
 import { restoreFromDirectory } from './restore.js';
 
@@ -222,6 +223,74 @@ describe('restoreFromDirectory', () => {
     mkdirSync(empty);
     await expect(restoreFromDirectory(empty, dataDir)).rejects.toThrow(/no snapshot/i);
     await expect(restoreFromDirectory(path.join(root, 'nope'), dataDir)).rejects.toThrow(/not a directory/i);
+  });
+});
+
+describe('restore: step photos, legacy steps and shopping rows', () => {
+  const snapFile = () => path.join(snapDir(), readdirSync(snapDir()).find((n) => n.endsWith('.sqlite'))!);
+  const withSnapshot = (fn: (d: Database.Database) => void) => {
+    const d = new Database(snapFile());
+    d.pragma('journal_mode = DELETE');
+    fn(d);
+    d.close();
+  };
+
+  it('counts distinct step images missing from the backup (and not the present ones)', async () => {
+    const steps = JSON.stringify([
+      { text: 'a', imageId: H1, ingredients: [] },
+      { text: 'b', imageId: MISSING, ingredients: [] },
+      { text: 'c', imageId: MISSING, ingredients: [] },
+      { text: 'd', imageId: null, ingredients: [] },
+    ]);
+    withSnapshot((d) => d.prepare('UPDATE recipes SET steps_json = ? WHERE title = ?').run(steps, 'Soup'));
+    const out = await restoreFromDirectory(backupDir, dataDir);
+    expect(out.missingStepImages).toBe(1);
+    expect(out.recipesWithMissingImages).toBe(0);
+  });
+
+  it('restores an old snapshot with legacy string steps; the app reads them as normalised Steps', async () => {
+    withSnapshot((d) => d.prepare('UPDATE recipes SET steps_json = ? WHERE title = ?').run('["Boil","Serve"]', 'Soup'));
+    const out = await restoreFromDirectory(backupDir, dataDir);
+    expect(out.missingStepImages).toBe(0);
+    const restored = open();
+    const repo = createRecipeRepo(restored);
+    const soup = repo.list({}).find((r) => r.title === 'Soup')!;
+    expect(repo.get(soup.id)!.steps).toEqual([
+      { text: 'Boil', imageId: null, ingredients: [] },
+      { text: 'Serve', imageId: null, ingredients: [] },
+    ]);
+    restored.close();
+  });
+
+  it('restores shopping rows intact', async () => {
+    const recipe = createRecipeRepo(db).get(createRecipeRepo(db).list({})[0].id)!;
+    createShoppingRepo(db).add({ id: recipe.id, title: recipe.title }, recipe.ingredients);
+    const before = createShoppingRepo(db).list();
+    expect(before.length).toBeGreaterThan(0);
+    const drive = new FakeDrive();
+    await runBackup({ db, dataDir: src, drive, force: true, now: () => new Date(Date.UTC(2026, 0, 4, 3, 0, 0)) });
+    const dir2 = path.join(root, 'backup-shopping');
+    drive.dumpTo(dir2);
+    await restoreFromDirectory(dir2, dataDir);
+    const restored = open();
+    expect(createShoppingRepo(restored).list()).toEqual(before);
+    restored.close();
+  });
+
+  it('restores a snapshot from before the shopping migration and openDb migrates it', async () => {
+    withSnapshot((d) => {
+      d.exec('DROP TABLE shopping_items');
+      d.pragma('user_version = 1');
+    });
+    await restoreFromDirectory(backupDir, dataDir);
+    const raw = new Database(path.join(dataDir, 'recipes.sqlite'));
+    expect(raw.prepare("SELECT 1 FROM sqlite_master WHERE name = 'shopping_items'").get()).toBeUndefined();
+    raw.close();
+    const migrated = open();
+    expect(migrated.pragma('user_version', { simple: true })).toBe(latestSchemaVersion());
+    expect(createShoppingRepo(migrated).list()).toEqual([]);
+    expect(createRecipeRepo(migrated).list({})).toHaveLength(2);
+    migrated.close();
   });
 });
 

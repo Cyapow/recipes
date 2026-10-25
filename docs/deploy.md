@@ -25,7 +25,7 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
 
    - It restores the NEWEST snapshot. If that file is damaged or from a newer app version it stops with a message and changes nothing; it will not silently use an older one. Pick one explicitly with `--snapshot recipes-20260101-030000.sqlite`.
    - `--force` is needed when a database already exists. The old one is moved to `recipes.sqlite.pre-restore-<timestamp>` in the data volume (never deleted). Without `--force` the restore refuses to touch an existing database.
-   - Images already present are skipped; recipes referencing images missing from the backup are counted in a warning.
+   - Images already present are skipped; recipes referencing images missing from the backup are counted in a warning, and so are distinct step photos missing from it (a photo missing in both places shows in both counts).
    - Outside Docker: `npm run restore -- <backupDir> [--data-dir <dir>] [--force]` (`--data-dir` defaults to `$DATA_DIR`, else `/data`).
 
 4. Start the app again:
@@ -35,6 +35,22 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
    ```
 
 5. Google Drive is not restored (the token is deliberately not part of a backup): open Settings and connect Drive again.
+
+## What's new in this release
+
+- New pages: `/recipe/:id` is an overview with a "what do we already have?" ingredient checklist, `/recipe/:id/cook` is a step-by-step slideshow, and `/shopping` is the shopping list.
+- The shopping list lives in the SQLite file, so every snapshot includes it. The backup fingerprint ignores it, so a shopping-only change does not trigger a nightly upload; "Back up now" always uploads.
+- Step photos are stored with the other photos and ride in the existing images backup.
+- Step data changed shape, so the first nightly backup after upgrading uploads once even if nothing else changed.
+- Old recipes keep working: their steps just have no photos or ingredient links until you edit them. Old backups restore fine and migrate on next start.
+
+Checks after deploying:
+
+1. Open a recipe's slideshow on a phone and a tablet.
+2. Add recipe ingredients to the list and share the list from a phone.
+3. Press "Back up now" and confirm step photos appear in the Drive images folder.
+4. Do a restore drill (see above).
+5. Run the live AI test once with a key: `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real API, and the AI step-link schema changed.
 
 ## Installing as an app
 

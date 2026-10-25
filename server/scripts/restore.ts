@@ -18,6 +18,7 @@ import { snapshotStamp } from '../src/backup/run.js';
 import { loadConfig } from '../src/config.js';
 import { latestSchemaVersion } from '../src/db.js';
 import { IMAGE_ID_RE } from '../src/images/store.js';
+import { normaliseSteps } from '../src/recipes/schema.js';
 
 export class RestoreError extends Error {}
 
@@ -40,6 +41,11 @@ export type RestoreResult = {
   imagesSkipped: number;
   /** Recipes whose image_ids reference files not present in the data dir after restore. */
   recipesWithMissingImages: number;
+  /**
+   * Distinct step photo ids (recipes' steps, normalised like the app reads them) that are not in the data dir
+   * after restore. Counted separately from recipesWithMissingImages: an id missing in both places shows in both.
+   */
+  missingStepImages: number;
   /** Where the previous recipes.sqlite went, when --force replaced one. */
   movedExisting?: string;
 };
@@ -73,7 +79,7 @@ async function locate(dir: string): Promise<Located> {
   throw new RestoreError(`No snapshot (recipes-YYYYMMDD-HHmmss.sqlite) found in ${dir}`);
 }
 
-type Checked = { recipes: number; imageIds: string[][] };
+type Checked = { recipes: number; imageIds: string[][]; stepImageIds: string[] };
 
 /** Validates a COPY of the snapshot (so a read-only source and WAL sidecars are no problem). */
 function check(file: string, migrationsDir: string | undefined): Checked {
@@ -92,7 +98,11 @@ function check(file: string, migrationsDir: string | undefined): Checked {
         `schema version ${version} is newer than this app supports (${latest}); upgrade the app before restoring it`,
       );
     }
-    const rows = db.prepare('SELECT image_ids_json FROM recipes').all() as { image_ids_json: string }[];
+    const rows = db.prepare('SELECT image_ids_json, ingredients_json, steps_json FROM recipes').all() as {
+      image_ids_json: string;
+      ingredients_json: string;
+      steps_json: string;
+    }[];
     const imageIds = rows.map((r) => {
       try {
         const v = JSON.parse(r.image_ids_json);
@@ -101,7 +111,20 @@ function check(file: string, migrationsDir: string | undefined): Checked {
         throw new RestoreError('a recipe has unreadable image_ids_json');
       }
     });
-    return { recipes: rows.length, imageIds };
+    const stepImageIds = new Set<string>();
+    for (const r of rows) {
+      let steps: unknown = null;
+      let ingredientCount = 0;
+      try {
+        steps = JSON.parse(r.steps_json);
+        const ing = JSON.parse(r.ingredients_json);
+        ingredientCount = Array.isArray(ing) ? ing.length : 0;
+      } catch {
+        // unreadable steps read as none, as in the app
+      }
+      for (const step of normaliseSteps(steps, ingredientCount)) if (step.imageId) stepImageIds.add(step.imageId);
+    }
+    return { recipes: rows.length, imageIds, stepImageIds: [...stepImageIds] };
   } finally {
     db.close();
   }
@@ -250,12 +273,14 @@ export async function restoreFromDirectory(dir: string, dataDir: string, opts: R
       for (const ids of checked.imageIds) {
         if (ids.some((id) => !(IMAGE_ID_RE.test(id) && existsSync(path.join(imagesDir, id))))) missing++;
       }
+      const missingStepImages = checked.stepImageIds.filter((id) => !existsSync(path.join(imagesDir, id))).length;
       return {
         snapshot: chosen,
         recipes: checked.recipes,
         imagesCopied,
         imagesSkipped,
         recipesWithMissingImages: missing,
+        missingStepImages,
         ...(movedExisting ? { movedExisting } : {}),
       };
     } finally {
@@ -297,6 +322,11 @@ async function main(): Promise<void> {
   if (r.movedExisting) console.log(`Moved existing database to ${r.movedExisting}`);
   if (r.recipesWithMissingImages) {
     console.warn(`WARNING: ${r.recipesWithMissingImages} recipe(s) reference images that are missing from the backup.`);
+  }
+  if (r.missingStepImages) {
+    console.warn(
+      `WARNING: ${r.missingStepImages} step photo(s) referenced by recipes are not in the backup (counted separately from the recipe images above).`,
+    );
   }
   console.log(
     'Google Drive stays connected if the data volume (and its google-token.json) survived. Otherwise, start the app and reconnect Drive in Settings.',
