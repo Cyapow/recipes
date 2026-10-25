@@ -54,6 +54,8 @@ describe('foldPlural', () => {
   it('folds trickier plurals', () => {
     expect(foldPlural('chillies')).toBe(foldPlural('chilli'));
     expect(foldPlural('chilis')).toBe(foldPlural('chilli'));
+    expect(foldPlural('chili')).toBe(foldPlural('chilli'));
+    expect(foldPlural('chili')).toBe(foldPlural('chilis'));
     expect(foldPlural('leaves')).toBe(foldPlural('leaf'));
     expect(foldPlural('cherries')).toBe(foldPlural('cherry'));
     expect(foldPlural('glasses')).toBe(foldPlural('glass'));

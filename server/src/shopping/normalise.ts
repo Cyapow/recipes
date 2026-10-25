@@ -58,6 +58,23 @@ function pluralise(item: string): string {
   return `${t}s`;
 }
 
+// Units that take a regular plural. Abbreviations (g, kg, ml, l, tbsp, tsp) never do; unknown units print as typed.
+const PLURALISED_UNITS = new Set([
+  'tin', 'can', 'clove', 'pack', 'packet', 'bunch', 'bag', 'jar', 'bottle', 'slice', 'piece', 'stick', 'sprig',
+  'head', 'pinch', 'litre', 'gram', 'pint', 'kilogram', 'millilitre',
+]);
+
+/** Singular/plural form of a known countable unit for the given quantity, else the unit as typed. */
+function displayUnit(unit: string, quantity: number): string {
+  const t = unit.toLowerCase();
+  const base = [t, t.replace(/es$/, ''), t.replace(/s$/, '')].find((c) => PLURALISED_UNITS.has(c));
+  if (base === undefined) return unit;
+  if (!(quantity > 1)) return base;
+  return /(ch|sh|s|x)$/.test(base) ? `${base}es` : `${base}s`;
+}
+
+const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
+
 /**
  * Display text for a shopping row. `merged` rows get a simple plural when they are unit-less and the
  * quantity exceeds 1 (`3 onions`); everything else prints the item as typed.
@@ -69,10 +86,13 @@ export function formatShoppingText(
   note: string | null = null,
   merged = false,
 ): string {
+  item = oneLine(item);
+  note = note ? oneLine(note) || null : null;
   const suffix = note ? ` (${note})` : '';
   if (quantity === null || !(quantity > 0)) return `${item}${suffix}`;
   const q = formatQuantity(quantity);
-  const u = unit?.trim() || null;
+  const trimmed = unit ? oneLine(unit) : '';
+  const u = trimmed ? displayUnit(trimmed, quantity) : null;
   if (u === null) {
     const shown = merged && quantity > 1 ? pluralise(item) : item;
     return `${q} ${shown}${suffix}`;

@@ -59,7 +59,47 @@ describe('formatShoppingText', () => {
     expect(formatShoppingText(3, null, 'onions', null, true)).toBe('3 onions');
     expect(formatShoppingText(3, null, 'olive oil', null, true)).toBe('3 olive oil');
     expect(formatShoppingText(1, null, 'onion', null, true)).toBe('1 onion');
-    expect(formatShoppingText(3, 'tin', 'onion', null, true)).toBe('3 tin onion');
+    expect(formatShoppingText(3, 'tin', 'onion', null, true)).toBe('3 tins onion');
     expect(formatShoppingText(3, null, 'carrot', null, true)).toBe('3 carrots');
+  });
+});
+
+describe('formatShoppingText units and whitespace', () => {
+  it('pluralises count units above 1 and uses the singular at 1 or less', () => {
+    expect(formatShoppingText(2, 'tin', 'chopped tomatoes', null, true)).toBe('2 tins chopped tomatoes');
+    expect(formatShoppingText(1, 'tin', 'chopped tomatoes')).toBe('1 tin chopped tomatoes');
+    expect(formatShoppingText(0.5, 'tins', 'chopped tomatoes')).toBe('0.5 tin chopped tomatoes');
+    expect(formatShoppingText(3, 'clove', 'garlic', null, true)).toBe('3 cloves garlic');
+    expect(formatShoppingText(2, 'bunch', 'parsley')).toBe('2 bunches parsley');
+    expect(formatShoppingText(2, 'pinch', 'salt')).toBe('2 pinches salt');
+    expect(formatShoppingText(1.5, 'bag', 'spinach')).toBe('1.5 bags spinach');
+    for (const u of ['can', 'pack', 'packet', 'jar', 'bottle', 'slice', 'piece', 'stick', 'sprig', 'head']) {
+      expect(formatShoppingText(2, u, 'x')).toBe(`2 ${u}s x`);
+      expect(formatShoppingText(1, u, 'x')).toBe(`1 ${u} x`);
+    }
+  });
+  it('fixes an already-plural or wrongly-singular input unit', () => {
+    expect(formatShoppingText(3, 'tins', 'chopped tomatoes', null, true)).toBe('3 tins chopped tomatoes');
+    expect(formatShoppingText(1, 'tins', 'chopped tomatoes')).toBe('1 tin chopped tomatoes');
+    expect(formatShoppingText(2, 'Tin', 'chopped tomatoes')).toBe('2 tins chopped tomatoes');
+  });
+  it('pluralises spelled-out measures but never abbreviations', () => {
+    expect(formatShoppingText(2, 'litre', 'milk', null, true)).toBe('2 litres milk');
+    expect(formatShoppingText(1, 'litres', 'milk')).toBe('1 litre milk');
+    expect(formatShoppingText(2, 'pint', 'milk')).toBe('2 pints milk');
+    expect(formatShoppingText(2, 'gram', 'sugar')).toBe('2 grams sugar');
+    expect(formatShoppingText(2, 'l', 'milk')).toBe('2l milk');
+    for (const u of ['g', 'kg', 'ml', 'tbsp', 'tsp']) expect(formatShoppingText(2, u, 'x')).toMatch(new RegExp(`^2 ?${u} x$`));
+  });
+  it('leaves unknown units and the other documented outputs alone', () => {
+    expect(formatShoppingText(2, 'handful', 'basil')).toBe('2 handful basil');
+    expect(formatShoppingText(500, 'g', 'beef mince')).toBe('500g beef mince');
+    expect(formatShoppingText(1.5, 'tbsp', 'olive oil')).toBe('1.5 tbsp olive oil');
+    expect(formatShoppingText(3, null, 'onion', null, true)).toBe('3 onions');
+  });
+  it('collapses whitespace and newlines so one item stays on one line', () => {
+    expect(formatShoppingText(null, null, 'red\nwine \r\n  vinegar', 'a\nb')).toBe('red wine vinegar (a b)');
+    expect(formatShoppingText(2, 'tin', '  chopped\ttomatoes\n')).toBe('2 tins chopped tomatoes');
+    expect(formatShoppingText(null, null, '  salt \n')).toBe('salt');
   });
 });

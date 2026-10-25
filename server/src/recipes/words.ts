@@ -6,7 +6,7 @@ export function tokenize(text: string): string[] {
 // Words that already look plural (or are not) and must be left exactly as they are.
 const KEEP_AS_IS = new Set(['hummus', 'couscous', 'asparagus', 'molasses', 'watercress', 'swiss', 'grass', 'citrus']);
 
-const CHILLI = new Set(['chilli', 'chillies', 'chilies', 'chilis', 'chillis']);
+const CHILLI = new Set(['chilli', 'chili', 'chillies', 'chilies', 'chilis', 'chillis']);
 // -ies words whose singular ends in -ie, not -y.
 const IE_WORDS = new Set(['cookies', 'pies', 'brownies', 'movies', 'calories']);
 
