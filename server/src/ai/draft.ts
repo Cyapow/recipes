@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { RecipeCoreSchema, normaliseSteps, type RecipeDraft } from '../recipes/schema.js';
 
 /** What the model may say about a step: its text and which ingredients it names. No photo, ever. */
@@ -13,9 +14,20 @@ export const AiDraftParseSchema = AiDraftSchema.extend({
 });
 export type AiDraft = z.infer<typeof AiDraftParseSchema>;
 
-/** Map the model's draft to the app's: Steps get imageId null; links are range-checked, deduped and sorted. */
+/**
+ * Map the model's draft to the app's: Steps get imageId null; links are range-checked, deduped and sorted,
+ * then an AI link is dropped unless the step text mentions at least one significant word of that ingredient
+ * (the prompt asks for this, but only code can enforce it).
+ */
 export function toRecipeDraft(ai: AiDraft): RecipeDraft {
-  return { ...ai, steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({ ...s, imageId: null })) };
+  return {
+    ...ai,
+    steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({
+      ...s,
+      imageId: null,
+      ingredients: s.ingredients.filter((i) => mentionsAnySignificantWord(s.text, ai.ingredients[i]!)),
+    })),
+  };
 }
 
 export const TOOL_NAME = 'record_recipe';

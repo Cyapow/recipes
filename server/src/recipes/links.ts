@@ -15,6 +15,15 @@ function significantWords(item: string): string[] {
 }
 
 /**
+ * True when at least ONE significant word of the ingredient appears in the step text (whole word,
+ * accent-, case- and plural-insensitive). Looser than linkIngredients, which needs all of them.
+ */
+export function mentionsAnySignificantWord(stepText: string, ingredient: Pick<Ingredient, 'item'>): boolean {
+  const stepWords = new Set(tokenize(stepText).map(foldPlural));
+  return significantWords(ingredient.item).some((w) => stepWords.has(w));
+}
+
+/**
  * Indexes of the ingredients whose significant words ALL appear (whole word, case-insensitive, plural-folded)
  * in the step text. Deliberately conservative: "Brown the mince" does not link "beef mince".
  */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkIngredients } from './links.js';
+import { linkIngredients, mentionsAnySignificantWord } from './links.js';
 import { foldPlural } from './words.js';
 
 const ing = (item: string) => ({ group: null, quantity: null, unit: null, item, note: null });
@@ -63,5 +63,15 @@ describe('foldPlural', () => {
     for (const w of ['hummus', 'couscous', 'asparagus', 'molasses', 'glass', 'gas']) expect(foldPlural(w)).toBe(w);
     expect(foldPlural('lentils')).toBe('lentil');
     expect(foldPlural('swiss')).toBe('swiss');
+  });
+});
+
+describe('mentionsAnySignificantWord', () => {
+  it('needs only one significant word, ignores units and descriptors', () => {
+    expect(mentionsAnySignificantWord('Brown the mince', ing('500g beef mince'))).toBe(true);
+    expect(mentionsAnySignificantWord('Brown the beef', ing('500g beef mince'))).toBe(true);
+    expect(mentionsAnySignificantWord('Stir in 2 tins', ing('2 tins chopped tomatoes'))).toBe(false);
+    expect(mentionsAnySignificantWord('Add tomatoes', ing('2 tins chopped tomatoes'))).toBe(true);
+    expect(mentionsAnySignificantWord('anything', ing('2 tins'))).toBe(false);
   });
 });

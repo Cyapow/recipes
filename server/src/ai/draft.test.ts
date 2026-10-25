@@ -38,12 +38,12 @@ describe('step link prompt rule', () => {
 
 describe('toRecipeDraft', () => {
   const ai = (links: number[]) =>
-    AiDraftSchema.parse({ ...draft, ingredients: [draft.ingredients[0], draft.ingredients[0], draft.ingredients[0]], steps: [{ text: 'a', ingredients: links }] });
+    AiDraftSchema.parse({ ...draft, ingredients: [draft.ingredients[0], draft.ingredients[0], draft.ingredients[0]], steps: [{ text: 'red wine', ingredients: links }] });
   it('maps to Steps with imageId null', () => {
-    expect(toRecipeDraft(ai([1])).steps).toEqual([{ text: 'a', imageId: null, ingredients: [1] }]);
+    expect(toRecipeDraft(ai([1])).steps).toEqual([{ text: 'red wine', imageId: null, ingredients: [1] }]);
   });
   it('drops -1, 99 and 1.5, dedupes and sorts', () => {
-    const raw = { ...ai([]), steps: [{ text: 'a', ingredients: [-1, 99, 1.5, 2, 2, 0] }, { text: 'b', ingredients: [] }] };
+    const raw = { ...ai([]), steps: [{ text: 'red wine', ingredients: [-1, 99, 1.5, 2, 2, 0] }, { text: 'b', ingredients: [] }] };
     expect(toRecipeDraft(raw).steps.map((s) => s.ingredients)).toEqual([[0, 2], []]);
   });
   it('AiDraftSchema rejects a step without ingredients and ignores imageId', () => {
@@ -252,6 +252,31 @@ describe('per-attempt timeout', () => {
   });
 });
 
+describe('toRecipeDraft link post-filter', () => {
+  const item = (name: string) => ({ group: null, quantity: null, unit: null, item: name, note: null });
+  const run = (text: string, names: string[], links: number[]) =>
+    toRecipeDraft(
+      AiDraftSchema.parse({ ...draft, ingredients: names.map(item), steps: [{ text, ingredients: links }] }),
+    ).steps[0]!.ingredients;
+
+  it('drops a link whose ingredient words are all absent from the step', () => {
+    expect(run('Stir well', ['red wine', 'onion'], [0, 1])).toEqual([]);
+    expect(run('Add the onion', ['red wine', 'onion'], [0, 1])).toEqual([1]);
+  });
+  it('keeps a link when ANY significant word appears ("Brown the mince" keeps beef mince)', () => {
+    expect(run('Brown the mince', ['500g beef mince'], [0])).toEqual([0]);
+  });
+  it('keeps accent and plural variants', () => {
+    expect(run('Add the Tomatoes', ['2 tins chopped tomato'], [0])).toEqual([0]);
+    expect(run('Fry the jalapeno', ['1 jalapeño'], [0])).toEqual([0]);
+    expect(run('Add the chilis', ['2 chillies'], [0])).toEqual([0]);
+  });
+  it('drops a link to an ingredient with no significant words', () => {
+    expect(run('Add 2 tins of it', ['2 tins'], [0])).toEqual([]);
+    expect(run('Add salt', ['optional'], [0])).toEqual([]);
+  });
+});
+
 describe('step normalisation of AI drafts', () => {
   const two = {
     ...draft,
@@ -265,13 +290,13 @@ describe('step normalisation of AI drafts', () => {
     return (await client.extractRecipe({ kind: 'description', text: 'x' })).steps;
   };
   it('drops out-of-range and non-integer links', async () => {
-    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1, 1.5, 1] }]);
-    expect(steps).toEqual([{ text: 'a', imageId: null, ingredients: [0, 1] }]);
+    const steps = await run([{ text: 'red wine and onion', imageId: null, ingredients: [0, 99, -1, 1.5, 1] }]);
+    expect(steps).toEqual([{ text: 'red wine and onion', imageId: null, ingredients: [0, 1] }]);
     expect(called).toHaveBeenCalledTimes(1); // no retry
   });
   it('dedupes and sorts links', async () => {
-    expect(await run([{ text: 'a', imageId: null, ingredients: [1, 1, 0] }])).toEqual([
-      { text: 'a', imageId: null, ingredients: [0, 1] },
+    expect(await run([{ text: 'red wine and onion', imageId: null, ingredients: [1, 1, 0] }])).toEqual([
+      { text: 'red wine and onion', imageId: null, ingredients: [0, 1] },
     ]);
   });
   it('always nulls imageId', async () => {
