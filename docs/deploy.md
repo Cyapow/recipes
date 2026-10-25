@@ -98,6 +98,8 @@ Checks after deploying:
 - If every provider fails, the page shows a plain message: "The AI account is out of credit. Add credit or switch provider." (no credit), "The AI key was rejected. Check the key in .env." (bad key), "The AI is busy right now. Try again in a minute." (rate limit), or "The AI didn't respond. Try again.". The message follows the first provider tried.
 - Quality and the no-invention behaviour can differ by provider, so run the live test for each one you set a key for (it runs once per key present and skips the rest): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`.
 
+Describe splits a spoken narrative ("I browned the mince, added an onion, simmered for an hour...") into separate steps in your own words, without adding any detail you didn't say; steps you already list are kept exactly. If you give no dish name it picks a plain title from what you said and flags it in "Check these" ("title chosen from your description").
+
 ## Installing as an app
 
 The site is an installable PWA (manifest plus a small service worker that only caches the page shell, built assets and recipe photos, never other API calls). On a phone open the site and use "Add to Home Screen" / "Install app". Icons are generated from `web/public/icon.svg` by `npm run icons`.

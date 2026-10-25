@@ -27,6 +27,64 @@ describe('SYSTEM_PROMPT', () => {
   });
 });
 
+describe('steps and title prompt rules', () => {
+  it('splits a narrative method into steps in the user\'s own words', () => {
+    expect(SYSTEM_PROMPT).toMatch(/narrative/i);
+    expect(SYSTEM_PROMPT).toMatch(/split.*(separate )?steps/is);
+    expect(SYSTEM_PROMPT).toMatch(/own words/i);
+    expect(SYSTEM_PROMPT).toMatch(/connecting words/i);
+    expect(SYSTEM_PROMPT).toMatch(/capitalis/i);
+  });
+  it('keeps a step list the user already gave exactly as given', () => {
+    expect(SYSTEM_PROMPT).toMatch(/numbered or one per line/i);
+    expect(SYSTEM_PROMPT).toMatch(/exactly as given/i);
+    expect(SYSTEM_PROMPT).toMatch(/do not split, merge, reorder or add/i);
+  });
+  it('never adds steps or details', () => {
+    expect(SYSTEM_PROMPT).toContain('never add');
+    expect(SYSTEM_PROMPT).toMatch(/never add a step the user did not describe/i);
+    expect(SYSTEM_PROMPT).toMatch(/temperature, time, quantity, tip or action/i);
+  });
+  it('titles: verbatim dish name, else a plain title from the user\'s words with the exact gap', () => {
+    expect(SYSTEM_PROMPT).toMatch(/dish name.*verbatim/is);
+    expect(SYSTEM_PROMPT).toMatch(/only words or ingredients the user mentioned/i);
+    expect(SYSTEM_PROMPT).toMatch(/6 words/);
+    expect(SYSTEM_PROMPT).toContain('"title chosen from your description"');
+    expect(SYSTEM_PROMPT).toMatch(/never leave the title as a single stray ingredient word/i);
+  });
+  it('page text gets the same rules but keeps its list', () => {
+    expect(SYSTEM_PROMPT).toMatch(/page text.*same rules.*(already a list|list).*as given/is);
+  });
+  it('is not telling the model to avoid splitting a narrative any more', () => {
+    expect(SYSTEM_PROMPT).not.toMatch(/Do not split, merge, reorder or add steps\./);
+  });
+});
+
+describe('a multi-step draft with the title gap', () => {
+  it('passes through toRecipeDraft with steps preserved and links filtered', () => {
+    const ingredients = [
+      { group: null, quantity: 500, unit: 'g', item: 'beef mince', note: null },
+      { group: null, quantity: null, unit: null, item: 'red wine', note: null },
+    ];
+    const ai = AiDraftSchema.parse({
+      ...draft, title: 'Beef mince and tomato spaghetti', ingredients,
+      steps: [
+        { text: 'Browned the mince', ingredients: [0] },
+        { text: 'Added an onion and a splash of red wine', ingredients: [0, 1, 7] },
+        { text: 'Simmered for an hour', ingredients: [1] },
+        { text: 'Tossed it through spaghetti', ingredients: [] },
+      ],
+      gaps: ['quantity for red wine', 'title chosen from your description'],
+    });
+    const out = toRecipeDraft(ai);
+    expect(out.steps).toHaveLength(4);
+    expect(out.steps.map((s) => s.ingredients)).toEqual([[0], [1], [], []]);
+    expect(out.steps.every((s) => s.imageId === null)).toBe(true);
+    expect(out.title).toBe('Beef mince and tomato spaghetti');
+    expect(out.gaps).toContain('title chosen from your description');
+  });
+});
+
 describe('step link prompt rule', () => {
   it('limits step ingredients to ones the step text names, by index, never inferred', () => {
     expect(SYSTEM_PROMPT).toMatch(/step.*ingredients.*only.*(name|mention)/is);
