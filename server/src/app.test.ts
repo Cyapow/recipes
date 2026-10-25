@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import Database from 'better-sqlite3';
+import { openDb } from './db.js';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 
@@ -15,7 +15,7 @@ describe('loadConfig', () => {
 
 describe('GET /api/health', () => {
   it('returns ok', async () => {
-    const app = buildApp({ config: loadConfig({}), db: new Database(':memory:') });
+    const app = buildApp({ config: loadConfig({}), db: openDb(':memory:') });
     const res = await app.inject({ url: '/api/health' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
