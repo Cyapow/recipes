@@ -16,6 +16,11 @@ describe('loadConfig', () => {
   });
 });
 
+describe('BACKUP_HOUR', () => {
+  it.each([['5', 5], ['0', 0], ['23', 23], ['24', 3], ['-1', 3], ['abc', 3], ['2.5', 3], ['', 3]])('%j -> %i', (v, want) =>
+    expect(loadConfig({ BACKUP_HOUR: v }).backupHour).toBe(want));
+});
+
 describe('GET /api/health', () => {
   it('returns ok', async () => {
     const app = buildApp({ config: loadConfig({}), db: openDb(':memory:') });

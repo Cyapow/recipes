@@ -15,3 +15,5 @@ export interface DriveClient {
   /** Delete by id. */
   remove(id: string): Promise<void>;
 }
+
+export { createGoogleDriveClient } from './googleDrive.js';

@@ -8,8 +8,9 @@ import { Library } from './Library';
 vi.mock('../api', () => ({
   listRecipes: vi.fn(),
   listTags: vi.fn(),
+  getBackupStatus: vi.fn(),
 }));
-import { listRecipes, listTags } from '../api';
+import { getBackupStatus, listRecipes, listTags } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -18,6 +19,30 @@ beforeEach(() => {
     { id: 'b', title: 'Dal', origin: 'other', sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45 },
   ]);
   vi.mocked(listTags).mockReset().mockResolvedValue(['Pasta']);
+  vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
+    configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, running: false,
+  });
+});
+
+describe('Library backup banner', () => {
+  it('shows the banner for a non-none state, with a Settings link', async () => {
+    vi.mocked(getBackupStatus).mockResolvedValue({
+      configured: true, connected: false, account: null, banner: 'not_connected', lastRunAt: null, lastSuccessAt: null, lastError: null, running: false,
+    });
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    expect(await screen.findByText(/Not backed up yet/)).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Settings' }).length).toBeGreaterThan(0);
+  });
+  it('shows nothing for none', async () => {
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    expect(screen.queryByText(/Not backed up|No successful backup|Last backup failed|check backup/)).toBeNull();
+  });
+  it('says so when the status cannot be loaded', async () => {
+    vi.mocked(getBackupStatus).mockRejectedValue(new Error('x'));
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    expect(await screen.findByText("Couldn't check backup status")).toBeTruthy();
+  });
 });
 
 describe('Library', () => {

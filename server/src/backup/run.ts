@@ -22,12 +22,31 @@ export function snapshotStamp(d: Date): string {
   return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
 }
 
-function describeError(e: unknown): string {
-  const err = e as { code?: unknown; message?: unknown } | null;
-  if (err && (err.code === 401 || err.code === '401' || err.code === 'invalid_grant' || /invalid_grant/.test(String(err.message)))) {
-    return 'Google Drive authorisation failed - reconnect Drive';
-  }
-  const msg = err && typeof err.message === 'string' ? err.message : String(e);
+const SCRUBBERS: RegExp[] = [/https?:\/\/\S+/g, /ya29\.[\w-]+/g, /1\/\/[\w-]+/g, /Bearer\s+\S+/g];
+
+function isAuthError(e: unknown): boolean {
+  const err = e as {
+    code?: unknown;
+    message?: unknown;
+    response?: { status?: unknown; data?: { error?: unknown } };
+  } | null;
+  if (!err || typeof err !== 'object') return false;
+  return (
+    err.code === 401 ||
+    err.code === '401' ||
+    err.code === 'invalid_grant' ||
+    err.response?.status === 401 ||
+    err.response?.data?.error === 'invalid_grant' ||
+    /invalid_grant/.test(String(err.message))
+  );
+}
+
+/** Message safe to store and show: auth failures are normalised, URLs and tokens removed, 200 chars max. */
+export function describeError(e: unknown): string {
+  if (isAuthError(e)) return 'Google Drive authorisation failed - reconnect Drive';
+  const err = e as { message?: unknown } | null;
+  let msg = err && typeof err.message === 'string' ? err.message : String(e);
+  for (const re of SCRUBBERS) msg = msg.replace(re, '[removed]');
   return msg.slice(0, 200) || 'Backup failed';
 }
 

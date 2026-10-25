@@ -69,3 +69,10 @@ input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; bor
 .hint { color: var(--muted, #666); font-size: 0.9rem; }
 .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -0.15em; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.banner { margin: 8px 0; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--accent); background: var(--chip); }
+.banner.failed { border-color: var(--danger); }
+.banner a { color: inherit; font-weight: 600; }
+.status-list { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 16px 0; }
+.status-list dt { color: var(--muted); }
+.status-list dd { margin: 0; overflow-wrap: anywhere; }

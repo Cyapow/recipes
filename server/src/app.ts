@@ -14,12 +14,19 @@ import { fetchBytes, fetchPage } from './import/fetchPage.js';
 import { createImageStore, type ImageStore } from './images/store.js';
 import { createRecipeRepo } from './recipes/repo.js';
 import { registerRecipeRoutes } from './recipes/routes.js';
+import type { DriveClient } from './backup/drive.js';
+import { createGoogleAuth, type GoogleAuth } from './backup/google.js';
+import { registerBackupRoutes } from './backup/routes.js';
+import { createBackupService, type BackupService } from './backup/service.js';
 
 export type AppDeps = { config: Config; db: Database; webDir?: string; images?: ImageStore;
   ai?: AiClient;
   /** Test seams for the guarded network fetches. */
   fetchPage?: ImportDeps['fetchPage'];
   fetchBytes?: ImportDeps['fetchBytes'];
+  /** Test seams for Google: default is built from config; the Drive factory defaults to google.getDriveClient. */
+  google?: GoogleAuth;
+  driveFactory?: () => Promise<DriveClient | null>;
 };
 
 const defaultWebDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web');
@@ -42,6 +49,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     images,
   });
 
+  const google = deps.google ?? createGoogleAuth(deps.config, path.join(deps.config.dataDir, 'google-token.json'));
+  const service = createBackupService({
+    db: deps.db,
+    dataDir: deps.config.dataDir,
+    getDrive: deps.driveFactory ?? (() => google.getDriveClient()),
+  });
+  app.decorate('backup', service);
+  registerBackupRoutes(app, { db: deps.db, google, service });
+
   const webDir = deps.webDir ?? defaultWebDir;
   if (existsSync(path.join(webDir, 'index.html'))) {
     app.register(fastifyStatic, { root: webDir });
@@ -56,5 +72,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 declare module 'fastify' {
   interface FastifyInstance {
     deps: AppDeps;
+    backup: BackupService;
   }
 }

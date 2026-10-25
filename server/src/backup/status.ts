@@ -42,7 +42,7 @@ export function getBackupStatus(db: Database): BackupStatus {
  * Precedence: not_connected > failed > stale > none.
  * failed: lastError set and the last run is newer than the last success (or there was never a success).
  * stale: last success older than 36h; or never succeeded, never failed, and `connectedSince` is over 36h ago.
- * Never-run without `connectedSince` is 'none' (we cannot know how long it has been connected).
+ * Connected but never succeeded with `connectedSince` null (unknown) is 'stale': fail loud, never hide it.
  */
 export type BannerInput = (
   | { connected: false; connectedSince?: Date | null }

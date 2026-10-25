@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listRecipes, listTags, type RecipeSummary } from '../api';
+import { getBackupStatus, listRecipes, listTags, type BackupStatus, type RecipeSummary } from '../api';
+import { BackupBanner } from '../components/BackupBanner';
 import { formatMinutes, originLabel } from '../lib/text';
 
 type Origin = 'mine' | 'other' | undefined;
@@ -21,6 +22,12 @@ export function Library() {
   const [tags, setTags] = useState<string[]>([]);
   const [rows, setRows] = useState<RecipeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backup, setBackup] = useState<BackupStatus | null>(null);
+  const [backupFailed, setBackupFailed] = useState(false);
+
+  useEffect(() => {
+    getBackupStatus().then(setBackup).catch(() => setBackupFailed(true));
+  }, []);
 
   useEffect(() => {
     listTags().then(setTags).catch(() => {});
@@ -41,11 +48,14 @@ export function Library() {
       <header className="bar">
         <h1>Recipes</h1>
         <nav className="actions">
+          <Link className="btn small" to="/settings">Settings</Link>
           <Link className="btn small" to="/import">Import</Link>
           <Link className="btn small" to="/describe">Describe</Link>
           <Link className="btn small primary" to="/new">New</Link>
         </nav>
       </header>
+      {backup && <BackupBanner banner={backup.banner} lastError={backup.lastError} />}
+      {backupFailed && <p className="hint" role="status">Couldn't check backup status</p>}
       <input
         className="search"
         type="search"

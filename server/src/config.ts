@@ -18,6 +18,12 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     googleClientId: env.GOOGLE_CLIENT_ID || undefined,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET || undefined,
     publicBaseUrl: env.PUBLIC_BASE_URL || 'http://localhost:3000',
-    backupHour: env.BACKUP_HOUR !== undefined && env.BACKUP_HOUR !== '' ? Number(env.BACKUP_HOUR) : 3,
+    backupHour: parseHour(env.BACKUP_HOUR),
   };
+}
+
+function parseHour(v: string | undefined): number {
+  if (v === undefined || v.trim() === '') return 3;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 23 ? n : 3;
 }

@@ -71,3 +71,28 @@ export async function importRecipe(url: string): Promise<ImportResult> {
   }
   return (await res.json()) as ImportResult;
 }
+
+export type Banner = 'none' | 'not_connected' | 'failed' | 'stale';
+export type BackupStatus = {
+  configured: boolean;
+  connected: boolean;
+  account: string | null;
+  banner: Banner;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  running: boolean;
+};
+export type BackupRunResult = { ok: true; uploadedImages: number; snapshot: string } | { ok: false; error: string };
+
+export const getBackupStatus = (): Promise<BackupStatus> => request('/api/backup/status');
+
+export async function runBackupNow(): Promise<BackupRunResult> {
+  const res = await fetch('/api/backup/run', { method: 'POST' });
+  const body = (await res.json().catch(() => null)) as (BackupRunResult & { error?: string }) | null;
+  if (res.ok && body) return body;
+  return { ok: false, error: body?.error ?? `Request failed (${res.status})` };
+}
+
+export const disconnectGoogle = (): Promise<void> =>
+  request<unknown>('/api/backup/google/disconnect', { method: 'POST' }).then(() => undefined);
