@@ -17,6 +17,7 @@ import { registerRecipeRoutes } from './recipes/routes.js';
 import type { DriveClient } from './backup/drive.js';
 import { createGoogleAuth, type GoogleAuth } from './backup/google.js';
 import { registerBackupRoutes } from './backup/routes.js';
+import { registerSameOriginGuard } from './security.js';
 import { createBackupService, type BackupService } from './backup/service.js';
 
 export type AppDeps = { config: Config; db: Database; webDir?: string; images?: ImageStore;
@@ -36,6 +37,7 @@ const defaultWebDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: false });
   app.decorate('deps', deps);
+  registerSameOriginGuard(app, deps.config);
   app.get('/api/health', async () => ({ ok: true }));
   registerRecipeRoutes(app, createRecipeRepo(deps.db));
 
