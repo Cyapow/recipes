@@ -1,0 +1,106 @@
+import type { Database } from 'better-sqlite3';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { IMAGE_ID_RE } from '../images/store.js';
+import { createRecipeRepo } from '../recipes/repo.js';
+import type { DriveClient } from './drive.js';
+import { recordBackup } from './status.js';
+
+export type BackupResult = { ok: true; uploadedImages: number; snapshot: string } | { ok: false; error: string };
+
+/** Only content-hash originals and their thumbs are backed up (never .tmp-*, dotfiles, etc.). */
+export function isBackupImageName(name: string): boolean {
+  return IMAGE_ID_RE.test(name) || (name.startsWith('thumb-') && IMAGE_ID_RE.test(name.slice(6)));
+}
+
+const SNAPSHOT_RE = /^recipes-(\d{8}-\d{6})\.(sqlite|json)$/;
+const CONCURRENCY = 3;
+
+export function snapshotStamp(d: Date): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+
+function describeError(e: unknown): string {
+  const err = e as { code?: unknown; message?: unknown } | null;
+  if (err && (err.code === 401 || err.code === '401' || err.code === 'invalid_grant' || /invalid_grant/.test(String(err.message)))) {
+    return 'Google Drive authorisation failed - reconnect Drive';
+  }
+  const msg = err && typeof err.message === 'string' ? err.message : String(e);
+  return msg.slice(0, 200) || 'Backup failed';
+}
+
+export async function runBackup(deps: {
+  db: Database;
+  dataDir: string;
+  drive: DriveClient;
+  now?: () => Date;
+  keep?: number;
+  tmpRoot?: string;
+}): Promise<BackupResult> {
+  const now = deps.now ?? (() => new Date());
+  const keep = deps.keep ?? 14;
+  let result: BackupResult;
+  let tmp: string | undefined;
+  try {
+    const started = now();
+    const stamp = snapshotStamp(started);
+    const base = `recipes-${stamp}`;
+    tmp = await mkdtemp(path.join(deps.tmpRoot ?? os.tmpdir(), 'recipes-backup-'));
+    const sqliteFile = path.join(tmp, `${base}.sqlite`);
+    const jsonFile = path.join(tmp, `${base}.json`);
+    await deps.db.backup(sqliteFile);
+    const repo = createRecipeRepo(deps.db);
+    const recipes = repo.list({}).map((s) => repo.get(s.id)!);
+    await writeFile(jsonFile, JSON.stringify({ exportedAt: started.toISOString(), recipes }, null, 2));
+
+    const root = await deps.drive.ensureFolder('Recipes backup');
+    const snapshotsId = await deps.drive.ensureFolder('snapshots', root);
+    const imagesId = await deps.drive.ensureFolder('images', root);
+
+    await deps.drive.upload({ folderId: snapshotsId, name: `${base}.sqlite`, filePath: sqliteFile });
+    await deps.drive.upload({ folderId: snapshotsId, name: `${base}.json`, filePath: jsonFile });
+
+    const imagesDir = path.join(deps.dataDir, 'images');
+    const entries = await readdir(imagesDir, { withFileTypes: true }).catch((e) => {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw e;
+    });
+    const have = new Set((await deps.drive.list(imagesId)).map((f) => f.name));
+    const missing = entries.filter((e) => e.isFile() && isBackupImageName(e.name) && !have.has(e.name)).map((e) => e.name);
+    let next = 0;
+    const worker = async () => {
+      while (next < missing.length) {
+        const name = missing[next++];
+        await deps.drive.upload({ folderId: imagesId, name, filePath: path.join(imagesDir, name) });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+
+    await applyRetention(deps.drive, snapshotsId, keep, stamp);
+    result = { ok: true, uploadedImages: missing.length, snapshot: base };
+  } catch (e) {
+    result = { ok: false, error: describeError(e) };
+  } finally {
+    if (tmp) await rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+  try {
+    recordBackup(deps.db, result, now());
+  } catch (e) {
+    return { ok: false, error: describeError(e) };
+  }
+  return result;
+}
+
+async function applyRetention(drive: DriveClient, folderId: string, keep: number, currentStamp: string): Promise<void> {
+  const pairs = new Map<string, string[]>();
+  for (const f of await drive.list(folderId)) {
+    const m = SNAPSHOT_RE.exec(f.name);
+    if (!m) continue; // unrecognised: leave alone
+    pairs.set(m[1], [...(pairs.get(m[1]) ?? []), f.id]);
+  }
+  const stamps = [...pairs.keys()].sort().reverse(); // timestamps sort lexicographically
+  const doomed = stamps.slice(Math.max(keep, 1)).filter((s) => s !== currentStamp);
+  for (const s of doomed) for (const id of pairs.get(s)!) await drive.remove(id);
+}
