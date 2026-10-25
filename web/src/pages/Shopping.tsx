@@ -107,9 +107,15 @@ export function Shopping() {
       seq.current++; // an older in-flight fetch must not bring the row back
       const cur = itemsRef.current ?? [];
       const idx = cur.findIndex((x) => x.id === it.id);
+      if (idx < 0) return; // already gone (refetch or Clear): nothing to move or announce
       const rest = cur.filter((x) => x.id !== it.id);
-      const neighbour = rest[idx] ?? rest[idx - 1];
-      focusTarget.current = neighbour ? neighbour.id : 'heading';
+      // Only rescue focus that would otherwise be lost; never steal it from where the user put it.
+      const active = document.activeElement;
+      if (!active || active === document.body || active === removeBtns.current.get(it.id)) {
+        const free = (x: ShoppingItem) => !pending.current.has(x.id);
+        const next = rest.slice(idx).find(free) ?? rest.slice(0, idx).reverse().find(free);
+        focusTarget.current = next ? next.id : 'heading';
+      }
       applyItems(rest);
       setStatus({ kind: 'text', text: `Removed ${it.text}` });
     } catch {

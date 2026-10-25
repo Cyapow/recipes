@@ -18,7 +18,7 @@ const LIST = [item('1', '2 tins chopped tomatoes', [A, B]), item('2', '500g beef
 
 const view = () => render(<MemoryRouter><Shopping /></MemoryRouter>);
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 beforeEach(() => {
   vi.mocked(listShopping).mockReset().mockResolvedValue(LIST);
   vi.mocked(removeShoppingItem).mockReset().mockResolvedValue(undefined);
@@ -211,6 +211,53 @@ describe('Shopping', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove a' })));
     await user.click(screen.getByRole('button', { name: 'Remove a' }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Shopping list' })));
+  });
+  it('does not steal focus the user moved elsewhere before the remove confirmed', async () => {
+    let done!: () => void;
+    vi.mocked(removeShoppingItem).mockReturnValue(new Promise<void>((r) => { done = r; }));
+    view();
+    await screen.findByText('500g beef mince');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 2 tins chopped tomatoes' }));
+    const share = screen.getByRole('button', { name: 'Share list' });
+    share.focus();
+    await act(async () => done());
+    await waitFor(() => expect(screen.queryByText('2 tins chopped tomatoes')).toBeNull());
+    expect(document.activeElement).toBe(share);
+  });
+  it('skips a pending neighbour, then falls back to the heading', async () => {
+    vi.mocked(listShopping).mockResolvedValue([item('1', 'a', [A]), item('2', 'b', [A]), item('3', 'c', [A])]);
+    const done: Record<string, () => void> = {};
+    vi.mocked(removeShoppingItem).mockImplementation((id) => new Promise<void>((r) => { done[id] = r; }));
+    view();
+    await screen.findByText('b');
+    const rb = screen.getByRole('button', { name: 'Remove b' });
+    rb.focus();
+    fireEvent.click(rb);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove c' }));
+    await act(async () => done['2']());
+    await waitFor(() => expect(screen.queryByText('b')).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove a' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove a' }));
+    screen.getByRole('button', { name: 'Remove a' }).focus();
+    await act(async () => done['3']());
+    await act(async () => done['1']());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Shopping list' })));
+  });
+  it('neither moves focus nor announces when the removed row is already gone', async () => {
+    let done!: () => void;
+    vi.mocked(removeShoppingItem).mockReturnValue(new Promise<void>((r) => { done = r; }));
+    let now = 3_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    view();
+    await screen.findByText('500g beef mince');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove 500g beef mince' }));
+    vi.mocked(listShopping).mockResolvedValue([LIST[0]]);
+    now += 1000;
+    act(() => { window.dispatchEvent(new Event('focus')); });
+    await waitFor(() => expect(screen.queryByText('500g beef mince')).toBeNull());
+    await act(async () => done());
+    expect(screen.getByRole('status').textContent).toBe('');
+    expect(document.activeElement).toBe(document.body);
   });
   it('labels the manual textarea', async () => {
     const user = userEvent.setup();
