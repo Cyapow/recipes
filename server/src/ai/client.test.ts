@@ -3,6 +3,7 @@ import { AiInvalidOutputError, AiRefusedError, AiRequestError, createAiClient } 
 import { ProviderError, type Provider, type ProviderErrorCode, type ProviderName, type ProviderResult } from './providers/types.js';
 import { aiStatus, providerOrder } from './registry.js';
 import { loadConfig } from '../config.js';
+import type { ProviderRequest } from './providers/types.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
@@ -44,6 +45,39 @@ describe('providerOrder', () => {
 });
 
 describe('loadConfig AI settings', () => {
+  it('trims keys, models and settings; whitespace-only counts as unset', () => {
+    const c = loadConfig({ ANTHROPIC_API_KEY: '  a \n', OPENAI_API_KEY: '   ', OPENAI_MODEL: ' m2 ', GEMINI_API_KEY: ' g ', GEMINI_MODEL: '  ', AI_PROVIDER: ' OpenAI ', ANTHROPIC_MODEL: ' ' });
+    expect(c.anthropicApiKey).toBe('a');
+    expect(c.openaiApiKey).toBeUndefined();
+    expect(c.openaiModel).toBe('m2');
+    expect(c.geminiApiKey).toBe('g');
+    expect(c.geminiModel).toBe('gemini-3.5-flash-lite');
+    expect(c.anthropicModel).toBe('claude-sonnet-5-5');
+    expect(c.aiProvider).toBe('openai');
+  });
+  it('OPENAI_REASONING_EFFORT: low by default, overridable, empty/default omits, junk falls back to low', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadConfig({}).openaiReasoningEffort).toBe('low');
+    expect(loadConfig({ OPENAI_REASONING_EFFORT: ' High ' }).openaiReasoningEffort).toBe('high');
+    for (const v of ['', '  ', 'default', 'DEFAULT']) expect(loadConfig({ OPENAI_REASONING_EFFORT: v }).openaiReasoningEffort).toBeUndefined();
+    for (const v of ['none', 'minimal', 'xhigh', 'max']) expect(loadConfig({ OPENAI_REASONING_EFFORT: v }).openaiReasoningEffort).toBe(v);
+    expect(loadConfig({ OPENAI_REASONING_EFFORT: 'turbo' }).openaiReasoningEffort).toBe('low');
+    warn.mockRestore();
+  });
+  it('GEMINI_THINKING_LEVEL: low by default, overridable, empty/default omits, junk falls back to low', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadConfig({}).geminiThinkingLevel).toBe('low');
+    expect(loadConfig({ GEMINI_THINKING_LEVEL: 'Minimal' }).geminiThinkingLevel).toBe('minimal');
+    for (const v of ['', 'default']) expect(loadConfig({ GEMINI_THINKING_LEVEL: v }).geminiThinkingLevel).toBeUndefined();
+    expect(loadConfig({ GEMINI_THINKING_LEVEL: 'extreme' }).geminiThinkingLevel).toBe('low');
+    warn.mockRestore();
+  });
+  it('AI_TOTAL_TIMEOUT_MS: 100 s default, floor of 10 s, junk ignored', () => {
+    expect(loadConfig({}).aiTotalTimeoutMs).toBe(100_000);
+    expect(loadConfig({ AI_TOTAL_TIMEOUT_MS: '30000' }).aiTotalTimeoutMs).toBe(30_000);
+    expect(loadConfig({ AI_TOTAL_TIMEOUT_MS: '500' }).aiTotalTimeoutMs).toBe(10_000);
+    expect(loadConfig({ AI_TOTAL_TIMEOUT_MS: 'abc' }).aiTotalTimeoutMs).toBe(100_000);
+  });
   it('reads keys and models, with defaults', () => {
     const c = loadConfig({ ANTHROPIC_API_KEY: 'a', OPENAI_API_KEY: 'o', GEMINI_API_KEY: 'g' });
     expect([c.anthropicApiKey, c.openaiApiKey, c.geminiApiKey]).toEqual(['a', 'o', 'g']);
@@ -178,5 +212,114 @@ describe('fallback orchestration', () => {
     a.complete.mockRejectedValueOnce(new Error('boom sk-secret'));
     const o = fake('openai');
     expect((await build(cfg(), { anthropic: a, openai: o }).extractRecipe(input)).provider).toBe('openai');
+  });
+});
+
+describe('model_unavailable', () => {
+  it('falls back to the next provider and has its own message', async () => {
+    const a = fake('anthropic', 'model_unavailable'), o = fake('openai');
+    expect((await build(cfg(), { anthropic: a, openai: o }).extractRecipe(input)).provider).toBe('openai');
+    const err = await build({ openaiApiKey: 'o' }, { openai: fake('openai', 'model_unavailable') }).extractRecipe(input).catch((e) => e);
+    expect(err.code).toBe('model_unavailable');
+    expect(err.message).toBe("The AI model name isn't available. Check the model setting in .env.");
+  });
+  it('reports the first provider code when all fail', async () => {
+    const err = await build(cfg(), { anthropic: fake('anthropic', 'model_unavailable'), openai: fake('openai', 'auth'), gemini: fake('gemini', 'timeout') }).extractRecipe(input).catch((e) => e);
+    expect(err.code).toBe('model_unavailable');
+  });
+});
+
+describe('a later provider\'s non-fallback error is what the user sees', () => {
+  it('shows the refusal even though the first provider failed with a provider error', async () => {
+    const a = fake('anthropic', 'no_credit'), o = fake('openai', { kind: 'refusal' });
+    await expect(build(cfg(), { anthropic: a, openai: o }).extractRecipe(input)).rejects.toBeInstanceOf(AiRefusedError);
+  });
+});
+
+describe('overall deadline', () => {
+  /** Waits `ms` (fake clock), then fails with `code`; or never answers if code is null (until aborted). */
+  function slow(name: ProviderName, ms: number, code: ProviderErrorCode | null = null) {
+    const complete = vi.fn((req: ProviderRequest) =>
+      new Promise<ProviderResult>((_, reject) => {
+        const t = code === null ? undefined : setTimeout(() => reject(new ProviderError(code)), ms);
+        req.signal.addEventListener('abort', () => { clearTimeout(t); reject(new ProviderError('timeout')); });
+      }),
+    );
+    return { name, label: name, model: `${name}-model`, complete } as Provider & { complete: typeof complete };
+  }
+  const run = (config: unknown, fakes: Partial<Record<ProviderName, Provider>>, deps = {}) => {
+    const p = createAiClient(config as never, { providers: fakes, ...deps }).extractRecipe(input).catch((e) => e);
+    return p;
+  };
+  const withTimers = async (fn: () => Promise<void>) => {
+    vi.useFakeTimers();
+    try { await fn(); } finally { vi.useRealTimers(); }
+  };
+
+  it('three stalled providers stop at the overall deadline with code timeout, the last one capped by the time left', async () => {
+    await withTimers(async () => {
+      const a = slow('anthropic', 0), o = slow('openai', 0), g = slow('gemini', 0);
+      const p = run(cfg(), { anthropic: a, openai: o, gemini: g }, { totalTimeoutMs: 100_000, attemptTimeoutMs: 60_000 });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(40_000);
+      const err = await p;
+      expect(err).toBeInstanceOf(AiRequestError);
+      expect(err.code).toBe('timeout');
+      expect(err.message).toBe("The AI didn't respond. Try again.");
+      expect(o.complete.mock.calls[0]![0].timeoutMs).toBeLessThanOrEqual(40_000);
+      expect(g.complete).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  it('starts no new provider when the time left is below the minimum useful attempt', async () => {
+    await withTimers(async () => {
+      const a = slow('anthropic', 90_000, 'unavailable'), o = slow('openai', 0);
+      const p = run(cfg(), { anthropic: a, openai: o }, { totalTimeoutMs: 100_000, attemptTimeoutMs: 95_000 });
+      await vi.advanceTimersByTimeAsync(90_000);
+      const err = await p;
+      expect(err.code).toBe('unavailable');
+      expect(o.complete).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does start another provider when enough time is left', async () => {
+    await withTimers(async () => {
+      const a = slow('anthropic', 50_000, 'unavailable');
+      const o = fake('openai');
+      const p = createAiClient(cfg() as never, { providers: { anthropic: a, openai: o }, totalTimeoutMs: 100_000 }).extractRecipe(input);
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect((await p).provider).toBe('openai');
+    });
+  });
+
+  it('starts no invalid-output retry when time is short; reports timeout', async () => {
+    await withTimers(async () => {
+      const bad: ProviderResult = { kind: 'draft', input: {}, raw: 'x' };
+      const a = fake('anthropic', bad);
+      a.complete.mockImplementationOnce(() => new Promise((r) => setTimeout(() => r(bad), 90_000)));
+      const p = run({ anthropicApiKey: 'a' }, { anthropic: a }, { totalTimeoutMs: 100_000 });
+      await vi.advanceTimersByTimeAsync(90_000);
+      const err = await p;
+      expect(err).toBeInstanceOf(AiRequestError);
+      expect(err.code).toBe('timeout');
+      expect(a.complete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps the first provider's code when the deadline then cuts a later provider off", async () => {
+    await withTimers(async () => {
+      const a = slow('anthropic', 0, 'no_credit'), o = slow('openai', 0);
+      const p = run(cfg(), { anthropic: a, openai: o, gemini: slow('gemini', 0) }, { totalTimeoutMs: 100_000, attemptTimeoutMs: 100_000 });
+      await vi.advanceTimersByTimeAsync(100_000);
+      expect((await p).code).toBe('no_credit');
+    });
+  });
+
+  it('always makes the first attempt, even with a tiny total', async () => {
+    const a = fake('anthropic');
+    expect((await build(cfg(), { anthropic: a }).extractRecipe(input)).provider).toBe('anthropic');
+    const b = fake('anthropic');
+    expect((await createAiClient(cfg() as never, { providers: { anthropic: b }, totalTimeoutMs: 10_000 }).extractRecipe(input)).provider).toBe('anthropic');
   });
 });

@@ -225,7 +225,15 @@ describe('classifyHttpError', () => {
     [400, 'Your credit balance is too low to access the API', 'no_credit'],
     [400, 'API key not valid', 'auth'],
     [400, 'invalid schema', 'other'],
-    [404, 'model not found', 'other'],
+    [404, 'model not found', 'model_unavailable'],
+    [429, 'Project `proj_1` has exceeded its project_spend_limit_exceeded', 'no_credit'],
+    [429, 'You have hit your usage_limit for this month', 'no_credit'],
+    [400, 'credit_balance_exhausted', 'no_credit'],
+    [402, 'Payment Required', 'no_credit'],
+    [400, 'FAILED_PRECONDITION: Billing must be enabled', 'no_credit'],
+    [404, 'The model `gpt-9` does not exist or you do not have access to it. model_not_found', 'model_unavailable'],
+    [404, 'models/gemini-x is not found for API version v1beta', 'model_unavailable'],
+    [400, 'The model gemini-x was not found', 'model_unavailable'],
     [500, '', 'unavailable'],
     [529, 'overloaded', 'unavailable'],
   ] as const)('%s %s -> %s', (status, text, code) => {
@@ -234,7 +242,7 @@ describe('classifyHttpError', () => {
 });
 
 describe('provider schemas', () => {
-  const KNOWN = new Set(['type', 'properties', 'required', 'items', 'enum', 'anyOf', 'additionalProperties', 'description']);
+  const ALLOWED = new Set(['type', 'properties', 'required', 'items', 'enum', 'additionalProperties', 'description']);
   const banned = ['minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems', 'pattern', 'format', 'default', '$schema', 'nullable', 'imageId'];
   const walk = (n: unknown, f: (o: Record<string, unknown>) => void) => {
     if (Array.isArray(n)) return n.forEach((x) => walk(x, f));
@@ -255,6 +263,8 @@ describe('provider schemas', () => {
         expect(o.required).toEqual(Object.keys(o.properties as object));
       }
       if (o.anyOf) throw new Error('nullable must be a type array, not anyOf');
+      // every key of a schema node (not a property map) must be a supported keyword
+      if (o.type !== undefined) for (const k of Object.keys(o)) expect(ALLOWED.has(k), `unsupported keyword ${k}`).toBe(true);
       if (Array.isArray(o.type)) {
         expect(o.type).toContain('null');
         nullable++;
@@ -271,7 +281,6 @@ describe('provider schemas', () => {
     const ing = schema.properties.ingredients.items;
     expect(ing.properties.quantity.type).toEqual(['number', 'null']);
     expect(schema.type).toBe('object');
-    void KNOWN;
   });
 
   it('does not mutate the Anthropic tool schema', () => {
@@ -279,5 +288,41 @@ describe('provider schemas', () => {
     openaiSchema();
     geminiSchema();
     expect(JSON.stringify(recipeToolSchema())).toBe(before);
+  });
+});
+
+describe('OpenAI reasoning_effort', () => {
+  const openai = specs[0]!;
+  const bodyFor = async (cfg: Record<string, unknown>) => {
+    const { ai, sent } = client({ ...openai, config: { ...openai.config, ...cfg } }, reply(200, openai.ok(draft)));
+    await ai.extractRecipe(input);
+    return sent(0).body;
+  };
+  it('sends the configured effort', async () => {
+    expect((await bodyFor({ openaiReasoningEffort: 'low' })).reasoning_effort).toBe('low');
+    expect((await bodyFor({ openaiReasoningEffort: 'high' })).reasoning_effort).toBe('high');
+  });
+  it('omits the field entirely when unset', async () => {
+    expect(await bodyFor({ openaiReasoningEffort: undefined })).not.toHaveProperty('reasoning_effort');
+  });
+  it('an unsupported value is a 400 and surfaces as other (no fallback)', async () => {
+    const { ai } = client({ ...openai, config: { ...openai.config, openaiReasoningEffort: 'max' } }, reply(400, { error: { message: "Unsupported value: 'reasoning_effort'", code: 'unsupported_value' } }));
+    expect(await ai.extractRecipe(input).catch((e) => e.code)).toBe('other');
+  });
+});
+
+describe('Gemini thinkingLevel', () => {
+  const gemini = specs[1]!;
+  const bodyFor = async (cfg: Record<string, unknown>) => {
+    const { ai, sent } = client({ ...gemini, config: { ...gemini.config, ...cfg } }, reply(200, gemini.ok(draft)));
+    await ai.extractRecipe(input);
+    return sent(0).body;
+  };
+  it('sends thinkingConfig.thinkingLevel (enum name) in generationConfig', async () => {
+    expect((await bodyFor({ geminiThinkingLevel: 'low' })).generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'LOW' });
+    expect((await bodyFor({ geminiThinkingLevel: 'minimal' })).generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
+  });
+  it('omits thinkingConfig when unset', async () => {
+    expect((await bodyFor({ geminiThinkingLevel: undefined })).generationConfig).not.toHaveProperty('thinkingConfig');
   });
 });

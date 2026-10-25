@@ -136,5 +136,8 @@ describe('Import', () => {
     await user.type(screen.getByLabelText(/recipe page address/i), 'https://nan.example/x');
     await user.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText(msg)).toBeTruthy();
+    expect(screen.queryByText(/couldn't find a recipe/i)).toBeNull();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^save/i })).toBeTruthy(); // the form with the source still opens
   });
 });

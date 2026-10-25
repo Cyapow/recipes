@@ -56,6 +56,8 @@ export function createGeminiProvider(config: Config, fetchImpl: typeof fetch = f
           contents: toContents(req.messages),
           generationConfig: {
             maxOutputTokens: req.maxTokens,
+            // thinkingLevel is for Gemini 3+ models; earlier ones reject it (set GEMINI_THINKING_LEVEL=default).
+            ...(config.geminiThinkingLevel ? { thinkingConfig: { thinkingLevel: config.geminiThinkingLevel.toUpperCase() } } : {}),
             responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema } },
           },
         },

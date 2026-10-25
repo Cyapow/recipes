@@ -59,7 +59,7 @@ export async function uploadImage(file: File): Promise<string> {
 }
 
 export type AiProviderName = 'anthropic' | 'openai' | 'gemini';
-export type AiErrorCode = 'no_credit' | 'auth' | 'rate_limit' | 'unavailable' | 'timeout' | 'other';
+export type AiErrorCode = 'no_credit' | 'auth' | 'rate_limit' | 'unavailable' | 'timeout' | 'model_unavailable' | 'other';
 export type AiStatus = {
   providers: Array<{ name: AiProviderName; label: string; configured: boolean; model: string }>;
   active: AiProviderName | null;

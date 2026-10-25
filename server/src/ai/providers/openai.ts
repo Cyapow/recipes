@@ -49,6 +49,8 @@ export function createOpenAiProvider(config: Config, fetchImpl: typeof fetch = f
           messages: toMessages(req.system, req.messages),
           response_format: { type: 'json_schema', json_schema: { name: TOOL_NAME, strict: true, schema } },
           max_completion_tokens: req.maxTokens,
+          // Effort values are model-specific; an unsupported one is a 400 (surfaced as `other`).
+          ...(config.openaiReasoningEffort ? { reasoning_effort: config.openaiReasoningEffort } : {}),
         },
         req.signal,
       )) as ChatResponse | null;

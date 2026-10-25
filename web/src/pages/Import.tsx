@@ -108,7 +108,7 @@ export function Import() {
       {fetchFailed && <p className="field-error" role="alert">Couldn't fetch that page. You can still type the recipe in below.</p>}
       {result?.value.aiError && <p className="field-error" role="alert">{result.value.aiError.error}</p>}
       {result?.value.usable && draftedBy(result.value.provider) && <p className="hint">{draftedBy(result.value.provider)}</p>}
-      {result && !fetchFailed && !result.value.usable && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
+      {result && !fetchFailed && !result.value.usable && !result.value.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
         <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />
       )}

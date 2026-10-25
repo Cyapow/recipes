@@ -2,7 +2,7 @@ export type ProviderName = 'anthropic' | 'openai' | 'gemini';
 export const PROVIDER_NAMES: readonly ProviderName[] = ['anthropic', 'openai', 'gemini'];
 
 /** Why a provider call failed. Deliberately coarse: it is safe to show and never carries upstream text. */
-export type ProviderErrorCode = 'no_credit' | 'auth' | 'rate_limit' | 'unavailable' | 'timeout' | 'other';
+export type ProviderErrorCode = 'no_credit' | 'auth' | 'rate_limit' | 'unavailable' | 'timeout' | 'model_unavailable' | 'other';
 
 export class ProviderError extends Error {
   constructor(readonly code: ProviderErrorCode) {
@@ -17,6 +17,7 @@ const MESSAGES: Record<ProviderErrorCode, string> = {
   rate_limit: 'The AI is busy right now. Try again in a minute.',
   unavailable: "The AI didn't respond. Try again.",
   timeout: "The AI didn't respond. Try again.",
+  model_unavailable: "The AI model name isn't available. Check the model setting in .env.",
   other: 'AI request failed',
 };
 export const aiErrorMessage = (code: ProviderErrorCode): string => MESSAGES[code];
@@ -49,7 +50,8 @@ export interface Provider {
   complete(req: ProviderRequest): Promise<ProviderResult>;
 }
 
-const BILLING = /insufficient_quota|billing|credit|payment|prepay/i;
+const BILLING = /insufficient_quota|billing|credit|payment|prepay|spend_limit|usage_limit|credit_balance_exhausted/i;
+const NO_MODEL = /model[_ ]not[_ ]found|model\b.{0,80}(not found|does not exist|is not supported)|models\/\S+ is not found/i;
 const BAD_KEY = /api[_ ]?key (is )?(not valid|invalid)|invalid[_ ]api[_ ]key|incorrect api key|api_key_invalid|reported as leaked/i;
 
 /** Classify an HTTP failure from its status and (transiently inspected) body text. The text is never stored. */
@@ -59,7 +61,8 @@ export function classifyHttpError(status: number, text = ''): ProviderErrorCode 
   if (status === 401) return 'auth';
   if (status === 403) return BILLING.test(text) ? 'no_credit' : 'auth';
   if (status === 429) return BILLING.test(text) ? 'no_credit' : 'rate_limit';
-  if (status === 400) return BILLING.test(text) ? 'no_credit' : 'other';
+  if (status === 404) return 'model_unavailable';
+  if (status === 400) return BILLING.test(text) ? 'no_credit' : NO_MODEL.test(text) ? 'model_unavailable' : 'other';
   if (status === 408) return 'timeout';
   if (status >= 500) return 'unavailable';
   return 'other';
