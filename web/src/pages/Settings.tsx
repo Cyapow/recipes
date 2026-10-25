@@ -83,14 +83,18 @@ export function Settings() {
           <dl className="status-list">
             <dt>Last run</dt><dd>{fmt(status.lastRunAt)}</dd>
             <dt>Last success</dt><dd>{fmt(status.lastSuccessAt)}</dd>
+            <dt>Last upload</dt><dd>{fmt(status.lastUploadAt)}</dd>
             <dt>Last error</dt><dd>{status.lastError ?? 'None'}</dd>
           </dl>
+          <p className="hint">The nightly backup only uploads when something has changed; Back up now always uploads.</p>
           <button type="button" className="primary" onClick={runNow} disabled={running || !status.connected}>
             {running ? 'Backing up...' : 'Back up now'}
           </button>
           {result && (
             result.ok
-              ? <p role="status">Backup complete. {result.uploadedImages} new {result.uploadedImages === 1 ? 'image' : 'images'} uploaded.</p>
+              ? result.skipped
+                ? <p role="status">Already up to date — nothing to upload.</p>
+                : <p role="status">Backup complete. {result.uploadedImages} new {result.uploadedImages === 1 ? 'image' : 'images'} uploaded.</p>
               : <p className="field-error" role="alert">Backup failed: {result.error}</p>
           )}
         </>

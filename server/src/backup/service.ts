@@ -25,7 +25,8 @@ export function createBackupService(deps: {
   let seq = 0;
   return {
     isRunning: () => current !== 0,
-    async runNow(): Promise<RunOutcome> {
+    /** `force` skips the "nothing changed" shortcut (explicit Back up now); the nightly schedule leaves it off. */
+    async runNow(opts: { force?: boolean } = {}): Promise<RunOutcome> {
       if (current !== 0) return { status: 'busy' };
       const id = ++seq;
       current = id;
@@ -42,7 +43,7 @@ export function createBackupService(deps: {
             return { status: 'done', result };
           }
           if (!drive) return { status: 'not_connected' };
-          const result = await runBackup({ db: deps.db, dataDir: deps.dataDir, drive, now: deps.now, shouldRecord: mine });
+          const result = await runBackup({ db: deps.db, dataDir: deps.dataDir, drive, now: deps.now, shouldRecord: mine, force: opts.force === true });
           return { status: 'done', result };
         })();
         work.catch(() => {}); // an abandoned run's late rejection must not be unhandled

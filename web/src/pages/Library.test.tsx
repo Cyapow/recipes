@@ -20,14 +20,14 @@ beforeEach(() => {
   ]);
   vi.mocked(listTags).mockReset().mockResolvedValue(['Pasta']);
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
-    configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, running: false,
+    configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   });
 });
 
 describe('Library backup banner', () => {
   it('shows the banner for a non-none state, with a Settings link', async () => {
     vi.mocked(getBackupStatus).mockResolvedValue({
-      configured: true, connected: false, account: null, banner: 'not_connected', lastRunAt: null, lastSuccessAt: null, lastError: null, running: false,
+      configured: true, connected: false, account: null, banner: 'not_connected', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
     });
     render(<MemoryRouter><Library /></MemoryRouter>);
     expect(await screen.findByText(/Not backed up yet/)).toBeTruthy();

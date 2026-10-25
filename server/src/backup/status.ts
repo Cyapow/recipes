@@ -1,10 +1,20 @@
 import type { Database } from 'better-sqlite3';
 import type { BackupResult } from './run.js';
 
-export type BackupStatus = { lastRunAt: string | null; lastSuccessAt: string | null; lastError: string | null };
+export type BackupStatus = {
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  /** Last time something was actually uploaded (a skipped "already up to date" run does not count). */
+  lastUploadAt: string | null;
+};
 export type Banner = 'none' | 'not_connected' | 'failed' | 'stale';
 
-const KEYS = { lastRunAt: 'backup.lastRunAt', lastSuccessAt: 'backup.lastSuccessAt', lastError: 'backup.lastError' };
+const KEYS = {
+  lastRunAt: 'backup.lastRunAt', lastSuccessAt: 'backup.lastSuccessAt', lastError: 'backup.lastError',
+  lastUploadAt: 'backup.lastUploadAt',
+  lastFingerprint: 'backup.lastFingerprint',
+};
 const STALE_MS = 36 * 3600 * 1000;
 
 function set(db: Database, key: string, value: string): void {
@@ -18,12 +28,20 @@ function get(db: Database, key: string): string | null {
   return row ? row.value : null;
 }
 
-export function recordBackup(db: Database, result: BackupResult, now: Date): void {
+/**
+ * `fingerprint` is the data fingerprint computed at the start of the run; it is stored only for a real
+ * (non-skipped) success, atomically with the rest of the bookkeeping.
+ */
+export function recordBackup(db: Database, result: BackupResult, now: Date, fingerprint?: string): void {
   db.transaction(() => {
     set(db, KEYS.lastRunAt, now.toISOString());
     if (result.ok) {
       set(db, KEYS.lastSuccessAt, now.toISOString());
       del(db, KEYS.lastError);
+      if (!result.skipped) {
+        set(db, KEYS.lastUploadAt, now.toISOString());
+        if (fingerprint !== undefined) set(db, KEYS.lastFingerprint, fingerprint);
+      }
     } else {
       set(db, KEYS.lastError, result.error);
     }
@@ -35,7 +53,12 @@ export function getBackupStatus(db: Database): BackupStatus {
     lastRunAt: get(db, KEYS.lastRunAt),
     lastSuccessAt: get(db, KEYS.lastSuccessAt),
     lastError: get(db, KEYS.lastError),
+    lastUploadAt: get(db, KEYS.lastUploadAt),
   };
+}
+
+export function getBackupFingerprint(db: Database): string | null {
+  return get(db, KEYS.lastFingerprint);
 }
 
 /**
@@ -48,7 +71,7 @@ export type BannerInput = (
   | { connected: false; connectedSince?: Date | null }
   | { connected: true; connectedSince: Date | null } // null = unknown
 ) &
-  BackupStatus;
+  Omit<BackupStatus, 'lastUploadAt'>; // the banner never depends on lastUploadAt
 
 export function deriveBanner(s: BannerInput, now: Date): Banner {
   if (!s.connected) return 'not_connected';

@@ -7,8 +7,9 @@ import { openDb } from '../db.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { FakeDrive } from './fakeDrive.js';
+import { computeFingerprint } from './fingerprint.js';
 import { isBackupImageName, runBackup } from './run.js';
-import { deriveBanner, getBackupStatus } from './status.js';
+import { deriveBanner, getBackupFingerprint, getBackupStatus } from './status.js';
 
 const H1 = 'a'.repeat(64) + '.jpg';
 const H2 = 'b'.repeat(64) + '.jpg';
@@ -56,7 +57,7 @@ describe('runBackup', () => {
     expect(snaps().map((f) => f.name).sort()).toEqual(['recipes-20260101-030000.json', 'recipes-20260101-030000.sqlite']);
     expect(imgs().map((f) => f.name).sort()).toEqual([H1, H2, `thumb-${H1}`, `thumb-${H2}`].sort());
     const before = drive.uploadCount;
-    const r2 = await runBackup({ db, dataDir: dir, drive, now: day(0) });
+    const r2 = await runBackup({ db, dataDir: dir, drive, now: day(0), force: true });
     expect(r2).toMatchObject({ ok: true, uploadedImages: 0 });
     expect(drive.uploadCount - before).toBe(2); // only the snapshot pair
   });
@@ -103,6 +104,7 @@ describe('runBackup', () => {
     await runBackup({ db, dataDir: dir, drive, now: day(0) });
     expect(getBackupStatus(db)).toEqual({
       lastRunAt: '2026-01-01T03:00:00.000Z', lastSuccessAt: '2026-01-01T03:00:00.000Z', lastError: null,
+      lastUploadAt: '2026-01-01T03:00:00.000Z',
     });
   });
 
@@ -163,7 +165,7 @@ describe('runBackup', () => {
   });
 
   it('keeps 14 pairs after 16 successive days', async () => {
-    for (let i = 0; i < 16; i++) expect((await runBackup({ db, dataDir: dir, drive, now: day(i) })).ok).toBe(true);
+    for (let i = 0; i < 16; i++) expect((await runBackup({ db, dataDir: dir, drive, now: day(i), force: true })).ok).toBe(true);
     const names = snaps().map((f) => f.name);
     expect(names).toHaveLength(28);
     expect(names).not.toContain('recipes-20260101-030000.sqlite');
@@ -191,11 +193,11 @@ describe('runBackup', () => {
   });
 
   it('failed run does not delete older snapshots', async () => {
-    for (let i = 0; i < 3; i++) await runBackup({ db, dataDir: dir, drive, now: day(i), keep: 3 });
+    for (let i = 0; i < 3; i++) await runBackup({ db, dataDir: dir, drive, now: day(i), keep: 3, force: true });
     expect(snaps()).toHaveLength(6);
     writeFileSync(path.join(dir, 'images', 'd'.repeat(64) + '.jpg'), 'new');
     drive.failOnUpload(drive.uploadCount + 3); // snapshot x2 ok, image fails
-    const r = await runBackup({ db, dataDir: dir, drive, now: day(3), keep: 3 });
+    const r = await runBackup({ db, dataDir: dir, drive, now: day(3), keep: 3, force: true });
     expect(r.ok).toBe(false);
     const names = snaps().map((x) => x.name);
     expect(names).toContain('recipes-20260101-030000.sqlite');
@@ -208,11 +210,136 @@ describe('runBackup', () => {
       await runBackup({ db, dataDir: dir, drive, now: day(0), tmpRoot: root });
       expect(readdirSync(root)).toEqual([]);
       drive.failOnUpload(drive.uploadCount + 1);
-      expect((await runBackup({ db, dataDir: dir, drive, now: day(1), tmpRoot: root })).ok).toBe(false);
+      expect((await runBackup({ db, dataDir: dir, drive, now: day(1), tmpRoot: root, force: true })).ok).toBe(false);
       expect(readdirSync(root)).toEqual([]);
       expect(existsSync(root)).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('skip when unchanged', () => {
+  const run = (n: number, extra: { force?: boolean } = {}) => runBackup({ db, dataDir: dir, drive, now: day(n), ...extra });
+  const repo = () => createRecipeRepo(db);
+
+  it('first run uploads and stores the fingerprint and lastUploadAt', async () => {
+    const r = await run(0);
+    expect(r).toMatchObject({ ok: true, uploadedImages: 4 });
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(getBackupFingerprint(db)).toBe(await computeFingerprint(db, dir));
+    expect(getBackupStatus(db).lastUploadAt).toBe(day(0)().toISOString());
+  });
+
+  it('second unchanged run skips: no uploads, no deletes, success advances, lastUploadAt does not', async () => {
+    await run(0);
+    const uploads = drive.uploadCount;
+    const names = snaps().map((f) => f.name).sort();
+    const r = await run(1);
+    expect(r).toEqual({ ok: true, skipped: true, uploadedImages: 0, snapshot: 'recipes-20260101-030000' });
+    expect(drive.uploadCount).toBe(uploads);
+    expect(snaps().map((f) => f.name).sort()).toEqual(names);
+    expect(getBackupStatus(db)).toEqual({
+      lastRunAt: day(1)().toISOString(), lastSuccessAt: day(1)().toISOString(), lastError: null,
+      lastUploadAt: day(0)().toISOString(),
+    });
+  });
+
+  it('a skipped run clears a previous error', async () => {
+    await run(0);
+    db.prepare("INSERT INTO settings(key, value) VALUES ('backup.lastError', 'old')").run();
+    await run(1);
+    expect(getBackupStatus(db).lastError).toBeNull();
+  });
+
+  it('skipped snapshot is the newest existing one', async () => {
+    await run(0);
+    await run(1, { force: true });
+    expect(await run(2)).toMatchObject({ skipped: true, snapshot: 'recipes-20260102-030000' });
+  });
+
+  it('after editing a recipe, a full backup uploads a new pair and updates the fingerprint', async () => {
+    await run(0);
+    const id = repo().list({})[0].id;
+    repo().update(id, input('Soup v2'));
+    const before = drive.uploadCount;
+    const r = await run(1);
+    expect(r).toMatchObject({ ok: true, snapshot: 'recipes-20260102-030000' });
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(drive.uploadCount - before).toBe(2);
+    expect(getBackupFingerprint(db)).toBe(await computeFingerprint(db, dir));
+    expect(getBackupStatus(db).lastUploadAt).toBe(day(1)().toISOString());
+  });
+
+  it('a forced run on unchanged data uploads', async () => {
+    await run(0);
+    const before = drive.uploadCount;
+    const r = await run(1, { force: true });
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(drive.uploadCount - before).toBe(2);
+  });
+
+  it('unchanged but Drive lost the snapshot pair: full backup', async () => {
+    await run(0);
+    for (const f of snaps()) await drive.remove(f.id);
+    const r = await run(1);
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(snaps().map((f) => f.name).sort()).toEqual(['recipes-20260102-030000.json', 'recipes-20260102-030000.sqlite']);
+  });
+
+  it('unchanged but only a lone unrecognised file in snapshots: full backup', async () => {
+    await run(0);
+    for (const f of snaps()) await drive.remove(f.id);
+    const p = path.join(dir, 'x');
+    writeFileSync(p, 'x');
+    await drive.upload({ folderId: drive.folderId('snapshots', drive.folderId('Recipes backup'))!, name: 'notes.txt', filePath: p });
+    expect(((await run(1)) as { skipped?: true }).skipped).toBeUndefined();
+  });
+
+  it('unchanged but an image is gone from Drive: full backup re-uploads it', async () => {
+    await run(0);
+    const gone = imgs().find((f) => f.name === H1)!;
+    await drive.remove(gone.id);
+    const r = await run(1);
+    expect(r).toMatchObject({ ok: true, uploadedImages: 1 });
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(imgs().map((f) => f.name)).toContain(H1);
+  });
+
+  it('an auth error during the skip check fails the run and leaves the fingerprint', async () => {
+    await run(0);
+    const fp = getBackupFingerprint(db);
+    drive.failWith(Object.assign(new Error('invalid_grant'), { code: 401 }));
+    const r = await run(1);
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/authori[sz]ation/i) });
+    const status = getBackupStatus(db);
+    expect(deriveBanner({ connected: true, connectedSince: null, ...status }, day(1)())).toBe('failed');
+    expect(status.lastUploadAt).toBe(day(0)().toISOString());
+    expect(getBackupFingerprint(db)).toBe(fp);
+  });
+
+  it('a failed full run does not store the fingerprint', async () => {
+    drive.failOnUpload(3);
+    expect((await run(0)).ok).toBe(false);
+    expect(getBackupFingerprint(db)).toBeNull();
+    expect(getBackupStatus(db).lastUploadAt).toBeNull();
+  });
+
+  it('a recipe changed while the run is in progress is picked up by the next run', async () => {
+    drive.onUpload = () => {
+      drive.onUpload = undefined;
+      repo().create(input('Mid-run'));
+    };
+    expect((await run(0)).ok).toBe(true);
+    const r = await run(1);
+    expect(r.ok).toBe(true);
+    expect((r as { skipped?: true }).skipped).toBeUndefined();
+    expect(getBackupFingerprint(db)).toBe(await computeFingerprint(db, dir));
+    expect(((await run(2)) as { skipped?: true }).skipped).toBe(true);
+  });
+
+  it('16 unchanged nightly runs leave exactly one snapshot pair', async () => {
+    for (let i = 0; i < 16; i++) expect((await run(i)).ok).toBe(true);
+    expect(snaps().map((f) => f.name).sort()).toEqual(['recipes-20260101-030000.json', 'recipes-20260101-030000.sqlite']);
   });
 });

@@ -135,7 +135,7 @@ describe('backup status and run', () => {
     const { app } = setup({ connectedAt: null });
     expect((await app.inject('/api/backup/status')).json()).toEqual({
       configured: true, connected: false, account: null, banner: 'not_connected',
-      lastRunAt: null, lastSuccessAt: null, lastError: null, running: false,
+      lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
     });
   });
 
@@ -163,6 +163,32 @@ describe('backup status and run', () => {
     expect(st.banner).toBe('none');
     expect(st.lastSuccessAt).not.toBeNull();
     expect(drive.uploadCount).toBe(2);
+  });
+
+  it('POST /api/backup/run is forced: an explicit click uploads even when nothing changed', async () => {
+    const drive = new FakeDrive();
+    const { app } = setup({}, async () => drive);
+    expect((await app.inject({ method: 'POST', url: '/api/backup/run' })).json()).toMatchObject({ ok: true });
+    const before = drive.uploadCount;
+    const second = (await app.inject({ method: 'POST', url: '/api/backup/run' })).json();
+    expect(second.skipped).toBeUndefined();
+    expect(drive.uploadCount - before).toBe(2);
+    const st = (await app.inject('/api/backup/status')).json();
+    expect(st.lastUploadAt).not.toBeNull();
+  });
+
+  it('the unforced service path skips unchanged data; runNow({force:true}) uploads', async () => {
+    const drive = new FakeDrive();
+    const { app } = setup({}, async () => drive);
+    await app.backup.runNow();
+    const n = drive.uploadCount;
+    const skipped = await app.backup.runNow();
+    expect(skipped).toMatchObject({ status: 'done', result: { ok: true, skipped: true } });
+    expect(drive.uploadCount).toBe(n);
+    const forced = await app.backup.runNow({ force: true });
+    expect(forced).toMatchObject({ status: 'done', result: { ok: true } });
+    expect((forced as any).result.skipped).toBeUndefined();
+    expect(drive.uploadCount).toBe(n + 2);
   });
 
   it('invalid_grant from the factory records failed', async () => {

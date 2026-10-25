@@ -91,7 +91,7 @@ export function registerBackupRoutes(
   });
 
   app.post('/api/backup/run', async (_req, reply) => {
-    const out = await deps.service.runNow();
+    const out = await deps.service.runNow({ force: true });
     if (out.status === 'busy') return reply.code(409).send({ error: 'A backup is already running' });
     if (out.status === 'not_connected') return reply.code(409).send({ error: 'Google Drive is not connected' });
     return out.result;

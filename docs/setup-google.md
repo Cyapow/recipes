@@ -26,6 +26,10 @@ Nightly backups go to your own Google Drive. You create the Google OAuth client 
 
 The app asks for the `drive.file` scope, so it can only see files it created itself. It cannot read anything else in your Drive. Backups go into a "Recipes backup" folder (`snapshots/` and `images/`).
 
+## When the nightly backup uploads
+
+The nightly backup only uploads when something has changed: it fingerprints your recipes and image files, and if nothing differs from the last upload (and Drive still holds the snapshot and all images) it records "already up to date" and uploads nothing, so unchanged copies don't push older snapshots out of the 14-snapshot retention. **Back up now** in Settings always does a full upload. A Drive problem (revoked token, no connection) is still checked every night and still shows as a failed backup.
+
 ## Notes
 
 - The Google token is stored in `<DATA_DIR>/google-token.json` (mode 0600). It is not inside the database, so it is never uploaded to Drive.

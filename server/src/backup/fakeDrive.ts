@@ -12,6 +12,8 @@ export class FakeDrive implements DriveClient {
   uploadDelayMs = 0;
   inFlight = 0;
   maxInFlight = 0;
+  /** Called at the start of every upload (after counting), e.g. to mutate the DB mid-run. */
+  onUpload: (() => void) | undefined;
   private seq = 0;
   private folders = new Map<string, Folder>();
   private fileMap = new Map<string, File>();
@@ -50,6 +52,7 @@ export class FakeDrive implements DriveClient {
   async upload(a: { folderId: string; name: string; filePath: string }): Promise<string> {
     this.check();
     this.uploadCount++;
+    this.onUpload?.();
     if (this.failAt === this.uploadCount) throw this.failure;
     const bytes = readFileSync(a.filePath); // read now: caller may delete the file afterwards
     this.maxInFlight = Math.max(this.maxInFlight, ++this.inFlight);

@@ -18,6 +18,7 @@ const schedule = startBackupSchedule({
     const out = await app.backup.runNow();
     if (out.status === 'busy') console.log('scheduled backup skipped: a backup is already running');
     else if (out.status === 'not_connected') console.log('scheduled backup skipped: Google Drive not connected');
+    else if (out.result.ok && out.result.skipped) console.log('scheduled backup skipped: nothing changed since the last upload');
     else if (out.result.ok) console.log(`scheduled backup done (${out.result.uploadedImages} images)`);
     else console.error(`scheduled backup failed: ${out.result.error}`);
   },

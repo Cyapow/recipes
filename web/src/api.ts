@@ -89,9 +89,10 @@ export type BackupStatus = {
   lastRunAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
+  lastUploadAt: string | null;
   running: boolean;
 };
-export type BackupRunResult = { ok: true; uploadedImages: number; snapshot: string } | { ok: false; error: string };
+export type BackupRunResult = { ok: true; uploadedImages: number; snapshot: string; skipped?: true } | { ok: false; error: string };
 
 export const getBackupStatus = (): Promise<BackupStatus> => request('/api/backup/status');
 

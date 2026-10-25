@@ -1,20 +1,45 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
-import { deriveBanner, getBackupStatus, recordBackup } from './status.js';
+import { deriveBanner, getBackupFingerprint, getBackupStatus, recordBackup } from './status.js';
 
 const now = new Date('2026-03-10T12:00:00Z');
 const hAgo = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const base = { connected: true as const, connectedSince: null, lastRunAt: null, lastSuccessAt: null, lastError: null };
 
+describe('upload bookkeeping', () => {
+  const t = (h: number) => new Date(`2026-03-10T0${h}:00:00Z`);
+  const ok = { ok: true as const, uploadedImages: 0, snapshot: 's' };
+  it('a real success stores lastUploadAt and the fingerprint; skipped updates run/success only', () => {
+    const db = openDb(':memory:');
+    recordBackup(db, ok, t(1), 'fp1');
+    expect(getBackupStatus(db).lastUploadAt).toBe(t(1).toISOString());
+    expect(getBackupFingerprint(db)).toBe('fp1');
+    recordBackup(db, { ...ok, skipped: true }, t(2));
+    expect(getBackupStatus(db)).toMatchObject({ lastRunAt: t(2).toISOString(), lastSuccessAt: t(2).toISOString(), lastUploadAt: t(1).toISOString(), lastError: null });
+    expect(getBackupFingerprint(db)).toBe('fp1');
+  });
+  it('a failure changes neither lastUploadAt nor the fingerprint', () => {
+    const db = openDb(':memory:');
+    recordBackup(db, ok, t(1), 'fp1');
+    recordBackup(db, { ok: false, error: 'x' }, t(2), 'fp2');
+    expect(getBackupStatus(db).lastUploadAt).toBe(t(1).toISOString());
+    expect(getBackupFingerprint(db)).toBe('fp1');
+  });
+  it('deriveBanner ignores lastUploadAt', () => {
+    const s = { connected: true as const, connectedSince: null, lastRunAt: t(2).toISOString(), lastSuccessAt: t(2).toISOString(), lastError: null };
+    expect(deriveBanner({ ...s, lastUploadAt: null } as never, t(3))).toBe(deriveBanner({ ...s, lastUploadAt: '2020-01-01T00:00:00.000Z' } as never, t(3)));
+  });
+});
+
 describe('status store', () => {
   let db: ReturnType<typeof openDb>;
   beforeEach(() => { db = openDb(':memory:'); });
   it('starts empty, records failure then success (clearing the error)', () => {
-    expect(getBackupStatus(db)).toEqual({ lastRunAt: null, lastSuccessAt: null, lastError: null });
+    expect(getBackupStatus(db)).toEqual({ lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null });
     recordBackup(db, { ok: false, error: 'boom' }, new Date('2026-03-10T01:00:00Z'));
-    expect(getBackupStatus(db)).toEqual({ lastRunAt: '2026-03-10T01:00:00.000Z', lastSuccessAt: null, lastError: 'boom' });
+    expect(getBackupStatus(db)).toEqual({ lastRunAt: '2026-03-10T01:00:00.000Z', lastSuccessAt: null, lastError: 'boom', lastUploadAt: null });
     recordBackup(db, { ok: true, uploadedImages: 0, snapshot: 's' }, new Date('2026-03-10T02:00:00Z'));
-    expect(getBackupStatus(db)).toEqual({ lastRunAt: '2026-03-10T02:00:00.000Z', lastSuccessAt: '2026-03-10T02:00:00.000Z', lastError: null });
+    expect(getBackupStatus(db)).toEqual({ lastRunAt: '2026-03-10T02:00:00.000Z', lastSuccessAt: '2026-03-10T02:00:00.000Z', lastError: null, lastUploadAt: '2026-03-10T02:00:00.000Z' });
     recordBackup(db, { ok: false, error: 'again' }, new Date('2026-03-10T03:00:00Z'));
     expect(getBackupStatus(db).lastSuccessAt).toBe('2026-03-10T02:00:00.000Z');
   });

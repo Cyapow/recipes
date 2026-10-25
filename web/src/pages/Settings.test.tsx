@@ -12,7 +12,7 @@ import { disconnectGoogle, getBackupStatus, runBackupNow } from '../api';
 afterEach(cleanup);
 const connected: BackupStatus = {
   configured: true, connected: true, account: 'me@x.com', banner: 'none',
-  lastRunAt: '2026-03-10T01:00:00.000Z', lastSuccessAt: null, lastError: 'boom', running: false,
+  lastRunAt: '2026-03-10T01:00:00.000Z', lastSuccessAt: null, lastError: 'boom', lastUploadAt: '2026-03-09T01:00:00.000Z', running: false,
 };
 beforeEach(() => {
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue(connected);
@@ -27,6 +27,29 @@ describe('Settings', () => {
     expect(await screen.findByText('me@x.com')).toBeTruthy();
     expect(screen.getByText('boom')).toBeTruthy();
     expect(screen.getByText('Never')).toBeTruthy();
+  });
+
+  it('shows the Last upload row and the nightly note', async () => {
+    show();
+    expect(await screen.findByText('Last upload')).toBeTruthy();
+    expect(screen.getByText(new Date('2026-03-09T01:00:00.000Z').toLocaleString())).toBeTruthy();
+    expect(screen.getByText('The nightly backup only uploads when something has changed; Back up now always uploads.')).toBeTruthy();
+  });
+
+  it('Last upload says Never when there has been none', async () => {
+    vi.mocked(getBackupStatus).mockResolvedValue({ ...connected, lastUploadAt: null });
+    show();
+    await screen.findByText('Last upload');
+    expect(screen.getAllByText('Never')).toHaveLength(2);
+  });
+
+  it('a skipped result says it is already up to date', async () => {
+    vi.mocked(runBackupNow).mockResolvedValue({ ok: true, skipped: true, uploadedImages: 0, snapshot: 's' });
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByRole('button', { name: 'Back up now' }));
+    expect(await screen.findByText('Already up to date — nothing to upload.')).toBeTruthy();
+    expect(screen.queryByText(/Backup complete/)).toBeNull();
   });
 
   it('not connected: connect link to the start route', async () => {
