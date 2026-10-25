@@ -8,6 +8,10 @@ type File = { id: string; folderId: string; name: string; bytes: Buffer; created
 /** In-memory Drive that keeps uploaded bytes and can inject failures. */
 export class FakeDrive implements DriveClient {
   uploadCount = 0;
+  /** Optional delay per upload, to exercise concurrency. */
+  uploadDelayMs = 0;
+  inFlight = 0;
+  maxInFlight = 0;
   private seq = 0;
   private folders = new Map<string, Folder>();
   private fileMap = new Map<string, File>();
@@ -48,6 +52,12 @@ export class FakeDrive implements DriveClient {
     this.uploadCount++;
     if (this.failAt === this.uploadCount) throw this.failure;
     const bytes = readFileSync(a.filePath); // read now: caller may delete the file afterwards
+    this.maxInFlight = Math.max(this.maxInFlight, ++this.inFlight);
+    try {
+      if (this.uploadDelayMs) await new Promise((r) => setTimeout(r, this.uploadDelayMs));
+    } finally {
+      this.inFlight--;
+    }
     const id = `file-${++this.seq}`;
     this.fileMap.set(id, {
       id,

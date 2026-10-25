@@ -44,12 +44,19 @@ export function getBackupStatus(db: Database): BackupStatus {
  * stale: last success older than 36h; or never succeeded, never failed, and `connectedSince` is over 36h ago.
  * Never-run without `connectedSince` is 'none' (we cannot know how long it has been connected).
  */
-export function deriveBanner(s: { connected: boolean; connectedSince?: Date } & BackupStatus, now: Date): Banner {
+export type BannerInput = (
+  | { connected: false; connectedSince?: Date | null }
+  | { connected: true; connectedSince: Date | null } // null = unknown
+) &
+  BackupStatus;
+
+export function deriveBanner(s: BannerInput, now: Date): Banner {
   if (!s.connected) return 'not_connected';
   if (s.lastError && (!s.lastSuccessAt || !s.lastRunAt || s.lastRunAt > s.lastSuccessAt)) return 'failed';
   if (s.lastSuccessAt) {
     return now.getTime() - new Date(s.lastSuccessAt).getTime() > STALE_MS ? 'stale' : 'none';
   }
-  if (s.connectedSince && now.getTime() - s.connectedSince.getTime() > STALE_MS) return 'stale';
-  return 'none';
+  // Never succeeded: unknown connection time fails loud; otherwise give 36h grace.
+  if (!s.connectedSince) return 'stale';
+  return now.getTime() - s.connectedSince.getTime() > STALE_MS ? 'stale' : 'none';
 }

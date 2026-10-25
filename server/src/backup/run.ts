@@ -70,13 +70,22 @@ export async function runBackup(deps: {
     const have = new Set((await deps.drive.list(imagesId)).map((f) => f.name));
     const missing = entries.filter((e) => e.isFile() && isBackupImageName(e.name) && !have.has(e.name)).map((e) => e.name);
     let next = 0;
+    let aborted = false;
     const worker = async () => {
-      while (next < missing.length) {
+      while (!aborted && next < missing.length) {
         const name = missing[next++];
-        await deps.drive.upload({ folderId: imagesId, name, filePath: path.join(imagesDir, name) });
+        try {
+          await deps.drive.upload({ folderId: imagesId, name, filePath: path.join(imagesDir, name) });
+        } catch (e) {
+          aborted = true; // no worker starts another upload
+          throw e;
+        }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+    // Wait for every worker so nothing is in flight once runBackup resolves.
+    const settled = await Promise.allSettled(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+    const failed = settled.find((r) => r.status === 'rejected');
+    if (failed) throw (failed as PromiseRejectedResult).reason;
 
     await applyRetention(deps.drive, snapshotsId, keep, stamp);
     result = { ok: true, uploadedImages: missing.length, snapshot: base };

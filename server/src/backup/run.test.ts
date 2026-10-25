@@ -8,7 +8,7 @@ import { createRecipeRepo } from '../recipes/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { FakeDrive } from './fakeDrive.js';
 import { isBackupImageName, runBackup } from './run.js';
-import { getBackupStatus } from './status.js';
+import { deriveBanner, getBackupStatus } from './status.js';
 
 const H1 = 'a'.repeat(64) + '.jpg';
 const H2 = 'b'.repeat(64) + '.jpg';
@@ -129,6 +129,37 @@ describe('runBackup', () => {
     const r = await runBackup({ db, dataDir: dir, drive, now: day(0) });
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/authori[sz]ation/i) });
     expect(getBackupStatus(db).lastSuccessAt).toBeNull();
+    const status = getBackupStatus(db);
+    expect(deriveBanner({ connected: true, connectedSince: null, ...status }, day(0)())).toBe('failed');
+  });
+
+  it('invalid_grant string code also yields the failed banner', async () => {
+    drive.failWith(Object.assign(new Error('x'), { code: 'invalid_grant' }));
+    await runBackup({ db, dataDir: dir, drive, now: day(0) });
+    expect(deriveBanner({ connected: true, connectedSince: null, ...getBackupStatus(db) }, day(0)())).toBe('failed');
+  });
+
+  it('a failure aborts the run: no uploads start or continue after runBackup resolves', async () => {
+    for (let i = 0; i < 6; i++) writeFileSync(path.join(dir, 'images', String(i).repeat(64) + '.jpg'), 'x');
+    drive.uploadDelayMs = 10;
+    drive.failOnUpload(4); // 2 snapshot uploads, then the 2nd image upload
+    const r = await runBackup({ db, dataDir: dir, drive, now: day(0) });
+    expect(r.ok).toBe(false);
+    const count = drive.uploadCount;
+    expect(count).toBe(5); // 3 workers started (#3,#4,#5); nothing after the failure
+    expect(drive.inFlight).toBe(0);
+    await new Promise((res) => setTimeout(res, 60));
+    expect(drive.uploadCount).toBe(count);
+  });
+
+  it('never exceeds 3 concurrent uploads and uploads everything', async () => {
+    for (let i = 0; i < 10; i++) writeFileSync(path.join(dir, 'images', String(i).repeat(64) + '.jpg'), 'x');
+    drive.uploadDelayMs = 5;
+    const r = await runBackup({ db, dataDir: dir, drive, now: day(0) });
+    expect(r).toMatchObject({ ok: true, uploadedImages: 14 });
+    expect(drive.maxInFlight).toBeLessThanOrEqual(3);
+    expect(drive.maxInFlight).toBeGreaterThan(1);
+    expect(imgs()).toHaveLength(14);
   });
 
   it('keeps 14 pairs after 16 successive days', async () => {

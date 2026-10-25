@@ -4,7 +4,7 @@ import { deriveBanner, getBackupStatus, recordBackup } from './status.js';
 
 const now = new Date('2026-03-10T12:00:00Z');
 const hAgo = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
-const base = { connected: true, lastRunAt: null, lastSuccessAt: null, lastError: null };
+const base = { connected: true as const, connectedSince: null, lastRunAt: null, lastSuccessAt: null, lastError: null };
 
 describe('status store', () => {
   let db: ReturnType<typeof openDb>;
@@ -21,7 +21,7 @@ describe('status store', () => {
 });
 
 describe('deriveBanner', () => {
-  it('not connected', () => expect(deriveBanner({ ...base, connected: false, lastError: 'x' }, now)).toBe('not_connected'));
+  it('not connected', () => expect(deriveBanner({ ...base, connected: false as const, lastError: 'x' }, now)).toBe('not_connected'));
   it('failed last run', () =>
     expect(deriveBanner({ ...base, lastRunAt: hAgo(1), lastSuccessAt: hAgo(25), lastError: 'x' }, now)).toBe('failed'));
   it('failed with no prior success', () =>
@@ -32,9 +32,10 @@ describe('deriveBanner', () => {
     expect(deriveBanner({ ...base, lastRunAt: hAgo(2), lastSuccessAt: hAgo(2) }, now)).toBe('none'));
   it('failed outranks stale', () =>
     expect(deriveBanner({ ...base, lastRunAt: hAgo(1), lastSuccessAt: hAgo(50), lastError: 'x' }, now)).toBe('failed'));
-  it('never ran: none without connectedSince, none when recent, stale when old', () => {
-    expect(deriveBanner(base, now)).toBe('none');
-    expect(deriveBanner({ ...base, connectedSince: new Date(hAgo(5)) }, now)).toBe('none');
-    expect(deriveBanner({ ...base, connectedSince: new Date(hAgo(40)) }, now)).toBe('stale');
-  });
+  it('connected, never ran, connectedSince unknown -> stale (fail loud)', () =>
+    expect(deriveBanner(base, now)).toBe('stale'));
+  it('connected 1h ago, never ran -> none', () =>
+    expect(deriveBanner({ ...base, connectedSince: new Date(hAgo(1)) }, now)).toBe('none'));
+  it('connected 40h ago, never ran -> stale', () =>
+    expect(deriveBanner({ ...base, connectedSince: new Date(hAgo(40)) }, now)).toBe('stale'));
 });
