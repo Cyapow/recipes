@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getBackupStatus, listRecipes, listTags, type BackupStatus, type RecipeSummary } from '../api';
 import { BackupBanner } from '../components/BackupBanner';
+import { ChevronIcon, GearIcon, LinkIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { formatMinutes, originLabel } from '../lib/text';
+import { monogram, monogramColors } from '../lib/monogram';
 
 type Origin = 'mine' | 'other' | undefined;
 const CHIPS: { label: string; origin: Origin }[] = [
@@ -46,30 +48,34 @@ export function Library() {
   return (
     <main className="page">
       <header className="bar">
-        <h1>Recipes</h1>
+        <h1 className="library-title">Recipes</h1>
         <nav className="actions">
-          <Link className="btn small" to="/settings">Settings</Link>
-          <Link className="btn small" to="/import">Import</Link>
-          <Link className="btn small" to="/describe">Describe</Link>
-          <Link className="btn small primary" to="/new">New</Link>
+          <Link className="btn icon-btn" to="/new" aria-label="New recipe"><PlusIcon /></Link>
+          <Link className="btn icon-btn" to="/settings" aria-label="Settings"><GearIcon /></Link>
         </nav>
       </header>
       {backup && <BackupBanner banner={backup.banner} lastError={backup.lastError} />}
       {backupFailed && <p className="hint" role="status">Couldn't check backup status</p>}
-      <input
-        className="search"
-        type="search"
-        aria-label="Search recipes"
-        placeholder="Search recipes"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-      <div className="chips">
+      <label className="search-field">
+        <SearchIcon />
+        <input
+          type="search"
+          aria-label="Search recipes"
+          placeholder="Search recipes"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </label>
+      <div className="cta-row">
+        <Link className="btn cta primary" to="/describe"><SparklesIcon />Describe it</Link>
+        <Link className="btn cta outline" to="/import"><LinkIcon />From a link</Link>
+      </div>
+      <div className="segmented">
         {CHIPS.map((c) => (
           <button
             key={c.label}
             type="button"
-            className={`chip${origin === c.origin ? ' active' : ''}`}
+            className={origin === c.origin ? 'active' : undefined}
             aria-pressed={origin === c.origin}
             onClick={() => setOrigin(c.origin)}
           >
@@ -98,13 +104,18 @@ export function Library() {
         {rows?.map((r) => (
           <li key={r.id}>
             <Link className="row" to={`/recipe/${r.id}`}>
-              <span className="thumb">
-                {r.thumbnailId && <img src={`/api/images/${r.thumbnailId}/thumb`} alt="" />}
-              </span>
+              {r.thumbnailId ? (
+                <span className="thumb"><img src={`/api/images/${r.thumbnailId}/thumb`} alt="" /></span>
+              ) : (
+                <span className="thumb" aria-hidden="true" style={{ background: monogramColors(r.title).bg, color: monogramColors(r.title).fg }}>
+                  {monogram(r.title)}
+                </span>
+              )}
               <span className="meta">
                 <span className="title">{r.title}</span>
                 <span className="sub">{subtitle(r)}</span>
               </span>
+              <ChevronIcon />
             </Link>
           </li>
         ))}

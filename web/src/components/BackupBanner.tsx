@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Banner } from '../api';
+import { WarningIcon } from './Icons';
 
 export function BackupBanner({ banner, lastError }: { banner: Banner; lastError?: string | null }) {
   if (banner === 'none') return null;
@@ -11,7 +12,9 @@ export function BackupBanner({ banner, lastError }: { banner: Banner; lastError?
         : 'No successful backup in over 36 hours.';
   return (
     <p className={`banner ${banner}`} role={banner === 'failed' ? 'alert' : 'status'}>
-      {text} <Link to="/settings">Settings</Link>
+      <WarningIcon />
+      <span style={{ flex: 1 }}>{text}</span>
+      <Link to="/settings">Settings</Link>
     </p>
   );
 }
