@@ -57,6 +57,9 @@ export function Cook() {
         <Link className="btn" to={`/recipe/${encodeURIComponent(recipe.id)}/edit`}>Edit</Link>
       </header>
       <h1 className="cook-title">{recipe.title}</h1>
+      {recipe.imageIds[0] && (
+        <img className="cook-hero" src={`/api/images/${recipe.imageIds[0]}`} alt={recipe.title} />
+      )}
 
       {wake.supported ? (
         <label className="keep-on">

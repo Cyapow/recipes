@@ -15,12 +15,14 @@
     "dev:web": "vite"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.6",
     "@fastify/static": "^10.1.7",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
+    "sharp": "^0.35.5",
     "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },

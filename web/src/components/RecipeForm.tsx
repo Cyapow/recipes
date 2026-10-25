@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { uploadImage } from '../api';
 import type { RecipeInput } from '../../../server/src/recipes/schema';
 import { formatIngredients, parseIngredients, parseLines, parseTags } from '../lib/text';
 
@@ -32,11 +33,36 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
   const [notes, setNotes] = useState(initial.notes ?? '');
   const [tags, setTags] = useState(initial.tags.join(', '));
   const [error, setError] = useState<string | null>(null);
+  const [imageIds, setImageIds] = useState(initial.imageIds);
+  const [pending, setPending] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function onPick(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ''; // allow picking the same file again
+    if (files.length === 0) return;
+    setUploadError(null);
+    setPending((n) => n + files.length);
+    for (const file of files) {
+      try {
+        const id = await uploadImage(file);
+        setImageIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+      } catch (err) {
+        setUploadError(`Could not upload ${file.name}: ${err instanceof Error ? err.message : 'unknown error'}`);
+      } finally {
+        setPending((n) => n - 1);
+      }
+    }
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
       setError('Enter a title');
+      return;
+    }
+    if (pending > 0) {
+      setError('Wait for the photo upload to finish before saving');
       return;
     }
     setError(null);
@@ -54,6 +80,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       steps: parseLines(steps),
       notes: str(notes),
       tags: parseTags(tags),
+      imageIds,
     });
   }
 
@@ -130,6 +157,32 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
           <label htmlFor="f-tags">Tags</label>
           <input id="f-tags" aria-describedby="h-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
           <small id="h-tags">Comma-separated.</small>
+        </div>
+        <div className="field photos">
+          <label htmlFor="f-photos">Add photos</label>
+          <input id="f-photos" type="file" accept="image/*" multiple onChange={onPick} />
+          {pending > 0 && <small role="status">Uploading…</small>}
+          {uploadError && (
+            <p className="field-error" role="alert">
+              {uploadError}
+            </p>
+          )}
+          {imageIds.length > 0 && (
+            <ul className="photo-list">
+              {imageIds.map((imgId, i) => (
+                <li key={imgId}>
+                  <img src={`/api/images/${imgId}/thumb`} alt={`Photo ${i + 1}`} />
+                  <button
+                    type="button"
+                    aria-label={`Remove photo ${i + 1}`}
+                    onClick={() => setImageIds((ids) => ids.filter((x) => x !== imgId))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <button type="submit" className="primary" disabled={saving}>
           {saving ? 'Saving…' : 'Save'}

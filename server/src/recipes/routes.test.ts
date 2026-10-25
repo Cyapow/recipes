@@ -1,10 +1,13 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import type { RecipeInput } from './schema.js';
 
 function make() {
-  const config = {} as never;
+  const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
   return buildApp({ config, db: openDb(':memory:') });
 }
 

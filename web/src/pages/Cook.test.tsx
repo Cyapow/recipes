@@ -46,6 +46,18 @@ afterEach(() => {
 });
 
 describe('Cook', () => {
+  it('shows the first image as a hero with the title as alt, none when no images', async () => {
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, imageIds: ['h1.jpg', 'h2.jpg'] });
+    const { unmount } = renderCook();
+    const img = (await screen.findByAltText('Carbonara')) as HTMLImageElement;
+    expect(img.getAttribute('src')).toBe('/api/images/h1.jpg');
+    unmount();
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, imageIds: [] });
+    renderCook();
+    await screen.findByRole('heading', { name: 'Carbonara' });
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
   it('renders header, ingredients and first step', async () => {
     renderCook();
     expect(await screen.findByRole('heading', { name: 'Carbonara' })).toBeTruthy();

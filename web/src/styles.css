@@ -59,3 +59,9 @@ input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; bor
 .step-nav { display: flex; gap: 12px; }
 .step-nav button { flex: 1; min-height: 56px; font-size: 1.1rem; }
 .step-nav button:disabled { opacity: .5; cursor: default; }
+
+.photos input[type=file] { font-size: 1rem; }
+.photo-list { list-style: none; padding: 0; margin: .5rem 0 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.photo-list li { display: flex; flex-direction: column; gap: .25rem; align-items: stretch; width: 96px; }
+.photo-list img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; display: block; }
+.cook-hero { display: block; width: 100%; max-height: 30vh; object-fit: cover; border-radius: 12px; margin: .5rem 0; }

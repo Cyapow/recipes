@@ -33,3 +33,13 @@ export const deleteRecipe = (id: string): Promise<void> =>
   request(`/api/recipes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const listTags = (): Promise<string[]> => request('/api/tags');
+
+export async function uploadImage(file: File): Promise<string> {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch('/api/images', { method: 'POST', body });
+  if (res.status === 413) throw new Error('image is too large (15 MB max)');
+  if (res.status === 415) throw new Error('not a supported image');
+  if (!res.ok) throw new Error(`upload failed (${res.status})`);
+  return ((await res.json()) as { id: string }).id;
+}
