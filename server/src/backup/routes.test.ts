@@ -229,8 +229,10 @@ describe('backup status and run', () => {
   it('a hung drive times out as failed, frees the lock, and the abandoned run cannot clobber newer state', async () => {
     let unhang!: () => void;
     const gate = new Promise<void>((r) => (unhang = r));
+    let failed!: () => void;
+    const lateFailure = new Promise<void>((r) => (failed = r));
     const hung: any = {
-      ensureFolder: async () => { await gate; throw new Error('late failure'); },
+      ensureFolder: async () => { await gate; failed(); throw new Error('late failure'); },
       list: async () => [], upload: async () => 'x', remove: async () => {},
     };
     const good = new FakeDrive();
@@ -238,7 +240,7 @@ describe('backup status and run', () => {
     const g = fakeGoogle();
     const app = buildApp({
       config: { ...loadConfig({}), dataDir: mkdtempSync(path.join(tmpdir(), 'rt-')) }, db: openDb(':memory:'), google: g.g,
-      backupDeadlineMs: 30, driveFactory: async () => (n++ === 0 ? hung : good),
+      backupDeadlineMs: 250, driveFactory: async () => (n++ === 0 ? hung : good),
     });
     const t = await app.inject({ method: 'POST', url: '/api/backup/run' });
     expect(t.statusCode).toBe(200);
@@ -248,7 +250,9 @@ describe('backup status and run', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json().ok).toBe(true);
     unhang(); // abandoned run now fails late
-    await new Promise((r) => setTimeout(r, 30));
+    // Wait for the abandoned run's late failure to actually happen, then let its promise chain drain.
+    await Promise.race([lateFailure, new Promise((_, rej) => setTimeout(() => rej(new Error('late failure never ran')), 2000))]);
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
     const st = (await app.inject('/api/backup/status')).json();
     expect(st.lastError).toBeNull();
     expect(st.banner).toBe('none');
