@@ -10,7 +10,7 @@ import { canonicalJson, computeFingerprint } from './fingerprint.js';
 const H1 = 'a'.repeat(64) + '.jpg';
 const input = (title: string): RecipeInput => ({
   title, description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
-  prepMinutes: null, cookMinutes: null, ingredients: [], steps: ['x'], notes: null, tags: [], imageIds: [],
+  prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 'x', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [],
 });
 
 let dir: string;
@@ -32,6 +32,21 @@ afterEach(() => {
 const fp = () => computeFingerprint(db, dir);
 
 describe('computeFingerprint', () => {
+  it('(f) is identical for a legacy-string row and the same recipe saved in Step shape', async () => {
+    const id = repo.list({})[0].id;
+    db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run('["x"]', id);
+    const legacy = await fp();
+    const before = repo.get(id)!;
+    repo.update(id, before as never);
+    // updatedAt is part of the hashed recipe and update bumps it; pin it so only the stored step shape differs.
+    db.prepare('UPDATE recipes SET updated_at = ? WHERE id = ?').run(before.updatedAt, id);
+    expect(JSON.parse((db.prepare('SELECT steps_json FROM recipes WHERE id = ?').get(id) as { steps_json: string }).steps_json)).toEqual([
+      { text: 'x', imageId: null, ingredients: [] },
+    ]);
+    expect(await fp()).toBe(legacy);
+  });
+
+
   it('is a stable sha256 hex for identical data', async () => {
     const a = await fp();
     expect(a).toMatch(/^[0-9a-f]{64}$/);

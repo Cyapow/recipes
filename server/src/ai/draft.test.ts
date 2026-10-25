@@ -6,7 +6,7 @@ const draft = {
   title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
-  steps: ['Brown the mince'], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
+  steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
 const toolUse = (input: unknown) => ({ content: [{ type: 'tool_use', id: 't1', name: 'record_recipe', input }] });
 const config = { anthropicApiKey: 'sk-secret', anthropicModel: 'test-model' } as never;

@@ -17,14 +17,15 @@ describe('parseRecipeJsonLd', () => {
     expect(r.origin).toBe('other');
     expect(r.ingredients[0]).toEqual({ group: null, quantity: null, unit: null, item: '100g plain flour', note: null });
     expect(r.ingredients).toHaveLength(4);
-    expect(r.steps).toEqual(['Put the flour, eggs & milk in a bowl and whisk.', 'Heat the oil in a pan.', 'Pour in some batter and cook for 1 min each side.']);
+    expect(r.steps.map((x) => x.text)).toEqual(['Put the flour, eggs & milk in a bowl and whisk.', 'Heat the oil in a pan.', 'Pour in some batter and cook for 1 min each side.']);
+    expect(r.steps.every((x) => x.imageId === null && x.ingredients.length === 0)).toBe(true);
     expect(r.tags).toEqual(['breakfast', 'brunch', 'british', 'pancakes', 'shrove tuesday', 'easy']);
     expect(r.imageIds).toEqual([]);
   });
   it('handles @graph, @type arrays, HowToSection flattening, array yield, P0DT45M, and survives malformed JSON in another block', () => {
     const r = parseRecipeJsonLd(fixture('graph-wrapper.html'))!;
     expect(r.title).toBe('Beef stew');
-    expect(r.steps).toEqual(['Chop.', 'Brown.', 'Simmer.', 'Serve.']);
+    expect(r.steps.map((x) => x.text)).toEqual(['Chop.', 'Brown.', 'Simmer.', 'Serve.']);
     expect(r.servings).toBe(6);
     expect(r.prepMinutes).toBe(90);
     expect(r.cookMinutes).toBe(45);

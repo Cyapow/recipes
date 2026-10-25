@@ -29,7 +29,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
   const [prep, setPrep] = useState(initial.prepMinutes?.toString() ?? '');
   const [cook, setCook] = useState(initial.cookMinutes?.toString() ?? '');
   const [ingredients, setIngredients] = useState(formatIngredients(initial.ingredients));
-  const [steps, setSteps] = useState(initial.steps.join('\n'));
+  const [steps, setSteps] = useState(initial.steps.map((s) => s.text).join('\n'));
   const [notes, setNotes] = useState(initial.notes ?? '');
   const [tags, setTags] = useState(initial.tags.join(', '));
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,10 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       prepMinutes: num(prep),
       cookMinutes: num(cook),
       ingredients: parseIngredients(ingredients),
-      steps: parseLines(steps),
+      steps: parseLines(steps).map((text, i) => {
+        const prev = initial.steps[i];
+        return prev && prev.text === text ? prev : { text, imageId: null, ingredients: [] };
+      }),
       notes: str(notes),
       tags: parseTags(tags),
       imageIds,

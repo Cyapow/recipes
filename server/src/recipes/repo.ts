@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import crypto from 'node:crypto';
-import type { Recipe, RecipeInput, RecipeSummary } from './schema.js';
+import { normaliseSteps, type Recipe, type RecipeInput, type RecipeSummary } from './schema.js';
 
 type Row = {
   id: string;
@@ -23,7 +23,16 @@ type Row = {
 
 export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
 
+function parseJson(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
 function toRecipe(r: Row): Recipe {
+  const ingredients = JSON.parse(r.ingredients_json);
   return {
     id: r.id,
     title: r.title,
@@ -34,8 +43,8 @@ function toRecipe(r: Row): Recipe {
     servings: r.servings,
     prepMinutes: r.prep_minutes,
     cookMinutes: r.cook_minutes,
-    ingredients: JSON.parse(r.ingredients_json),
-    steps: JSON.parse(r.steps_json),
+    ingredients,
+    steps: normaliseSteps(parseJson(r.steps_json), Array.isArray(ingredients) ? ingredients.length : 0),
     notes: r.notes,
     tags: JSON.parse(r.tags_json),
     imageIds: JSON.parse(r.image_ids_json),

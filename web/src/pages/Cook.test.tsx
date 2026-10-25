@@ -17,7 +17,7 @@ const base: Recipe = {
     { group: 'Sauce', quantity: 0.3333333333333333, unit: 'cup', item: 'pecorino', note: 'grated' },
     { group: 'Sauce', quantity: null, unit: null, item: 'black pepper', note: null },
   ],
-  steps: ['Boil pasta.', 'Mix eggs.', 'Combine.'],
+  steps: [{ text: 'Boil pasta.', imageId: null, ingredients: [] }, { text: 'Mix eggs.', imageId: null, ingredients: [] }, { text: 'Combine.', imageId: null, ingredients: [] }],
   notes: 'Use guanciale.', tags: ['Pasta'], imageIds: [], createdAt: '', updatedAt: '',
 };
 

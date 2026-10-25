@@ -7,7 +7,7 @@ import { extractVisibleText, importFromUrl } from './importUrl.js';
 const fixture = (n: string) => readFileSync(new URL(`../../test-fixtures/${n}`, import.meta.url), 'utf8');
 const aiDraft: RecipeDraft = {
   title: 'Nan soup', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null, prepMinutes: null, cookMinutes: 20,
-  ingredients: [{ group: null, quantity: null, unit: null, item: 'onion', note: null }], steps: ['Fry an onion'], notes: null, tags: [], imageIds: [], gaps: ['servings'],
+  ingredients: [{ group: null, quantity: null, unit: null, item: 'onion', note: null }], steps: [{ text: 'Fry an onion', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['servings'],
 };
 const page = (name: string, finalUrl = 'https://www.bbcgoodfood.com/recipes/easy-pancakes') => vi.fn(async () => ({ html: fixture(name), finalUrl }));
 const fakeAi = (impl?: () => Promise<RecipeDraft>) => ({ extractRecipe: vi.fn(impl ?? (async () => aiDraft)) }) satisfies AiClient;

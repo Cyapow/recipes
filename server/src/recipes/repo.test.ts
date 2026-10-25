@@ -16,7 +16,10 @@ const base: RecipeInput = {
     { group: 'Sauce', quantity: 500, unit: 'g', item: 'beef mince', note: 'lean' },
     { group: null, quantity: null, unit: null, item: 'salt', note: 'to taste' },
   ],
-  steps: ['Brown the mince', 'Simmer'],
+  steps: [
+    { text: 'Brown the mince', imageId: null, ingredients: [0] },
+    { text: 'Simmer', imageId: 'b'.repeat(64) + '.jpg', ingredients: [] },
+  ],
   notes: 'Better next day',
   tags: ['pasta', 'dinner'],
   imageIds: ['img1', 'img2'],
@@ -91,5 +94,31 @@ describe('recipe repo', () => {
     repo.create(base);
     repo.create({ ...base, tags: ['pasta', 'Zesty', 'brunch'] });
     expect(repo.tags()).toEqual(['Zesty', 'brunch', 'dinner', 'pasta']);
+  });
+
+  it('repo.get never throws on malformed stored steps and always yields valid Steps', () => {
+    const db = openDb(':memory:');
+    const r = createRecipeRepo(db);
+    const c = r.create(base); // 2 ingredients
+    const H = 'd'.repeat(64) + '.jpg';
+    const stored = [
+      'legacy',
+      { text: 'ok', imageId: H, ingredients: [1, 0, 1, 2, -1, 0.5, 'x'] },
+      { text: 5 },
+      null,
+      42,
+      { text: 'badimg', imageId: '../x.jpg' },
+    ];
+    db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run(JSON.stringify(stored), c.id);
+    expect(r.get(c.id)!.steps).toEqual([
+      { text: 'legacy', imageId: null, ingredients: [] },
+      { text: 'ok', imageId: H, ingredients: [0, 1] },
+      { text: 'badimg', imageId: null, ingredients: [] },
+    ]);
+    for (const bad of ['not json', '{"a":1}', 'null']) {
+      db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run(bad, c.id);
+      expect(r.get(c.id)!.steps).toEqual([]);
+      expect(r.list({})).toHaveLength(1);
+    }
   });
 });

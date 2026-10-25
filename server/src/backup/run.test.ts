@@ -15,7 +15,7 @@ const H1 = 'a'.repeat(64) + '.jpg';
 const H2 = 'b'.repeat(64) + '.jpg';
 const input = (title: string): RecipeInput => ({
   title, description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
-  prepMinutes: null, cookMinutes: null, ingredients: [], steps: ['x'], notes: null, tags: [], imageIds: [],
+  prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 'x', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [],
 });
 
 let dir: string;
@@ -97,7 +97,7 @@ describe('runBackup', () => {
     const js = JSON.parse(drive.read(snaps().find((f) => f.name.endsWith('.json'))!.id).toString());
     expect(js.exportedAt).toBe('2026-01-01T03:00:00.000Z');
     expect(js.recipes.map((x: { title: string }) => x.title).sort()).toEqual(['Soup', 'Stew']);
-    expect(js.recipes[0].steps).toEqual(['x']);
+    expect(js.recipes[0].steps).toEqual([{ text: 'x', imageId: null, ingredients: [] }]);
   });
 
   it('records success status', async () => {

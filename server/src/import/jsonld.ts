@@ -105,7 +105,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     prepMinutes: parseDuration(r.prepTime),
     cookMinutes: parseDuration(r.cookTime),
     ingredients,
-    steps,
+    steps: steps.map((text) => ({ text, imageId: null, ingredients: [] })),
     notes: null,
     tags: tags.slice(0, 8),
     imageIds: [],

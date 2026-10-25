@@ -16,7 +16,7 @@ beforeEach(() => {
   db = openDb(path.join(dir, 'recipes.db'));
   createRecipeRepo(db).create({
     title: 'Soup', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
-    prepMinutes: null, cookMinutes: null, ingredients: [], steps: ['x'], notes: null, tags: [], imageIds: [],
+    prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 'x', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [],
   });
 });
 afterEach(() => {

@@ -9,7 +9,42 @@ export const IngredientSchema = z.object({
 });
 export type Ingredient = z.infer<typeof IngredientSchema>;
 
-export const RecipeInputSchema = z.object({
+export const StepSchema = z.object({
+  text: z.string(),
+  imageId: z.string().regex(/^[a-f0-9]{64}\.jpg$/).nullable(),
+  ingredients: z.array(z.number().int().min(0)),
+});
+export type Step = z.infer<typeof StepSchema>;
+
+/**
+ * Normalise stored or submitted steps into a valid Step[]: legacy strings become Steps, unreadable entries
+ * are dropped, links are deduped, sorted, and dropped when not an integer in [0, ingredientCount).
+ * Never throws.
+ */
+export function normaliseSteps(raw: unknown, ingredientCount: number): Step[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Step[] = [];
+  for (const entry of raw) {
+    if (typeof entry === 'string') {
+      out.push({ text: entry, imageId: null, ingredients: [] });
+    } else if (entry && typeof entry === 'object') {
+      const e = entry as Record<string, unknown>;
+      if (typeof e.text !== 'string') continue;
+      const imageId =
+        typeof e.imageId === 'string' && /^[a-f0-9]{64}\.jpg$/.test(e.imageId) ? e.imageId : null;
+      const links = Array.isArray(e.ingredients) ? e.ingredients : [];
+      const ingredients = [
+        ...new Set(
+          links.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < ingredientCount),
+        ),
+      ].sort((x, y) => x - y);
+      out.push({ text: e.text, imageId, ingredients });
+    }
+  }
+  return out;
+}
+
+export const RecipeCoreSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable(),
   origin: z.enum(['mine', 'other']),
@@ -19,21 +54,42 @@ export const RecipeInputSchema = z.object({
   prepMinutes: z.number().nullable(),
   cookMinutes: z.number().nullable(),
   ingredients: z.array(IngredientSchema),
-  steps: z.array(z.string()),
+  steps: z.array(StepSchema),
   notes: z.string().nullable(),
   tags: z.array(z.string()),
   imageIds: z.array(z.string()),
 });
+
+/** Request body: steps may be legacy strings or Steps; output always has Step[]. */
+export const RecipeInputSchema = RecipeCoreSchema.extend({
+  steps: z.array(z.union([z.string(), StepSchema])),
+})
+  .superRefine((r, ctx) => {
+    r.steps.forEach((s, i) => {
+      if (typeof s === 'string') return;
+      s.ingredients.forEach((n, j) => {
+        if (n >= r.ingredients.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['steps', i, 'ingredients', j],
+            message: 'Ingredient link out of range',
+          });
+        }
+      });
+    });
+  })
+  .transform((r) => ({ ...r, steps: normaliseSteps(r.steps, r.ingredients.length) }));
 export type RecipeInput = z.infer<typeof RecipeInputSchema>;
 
-export const RecipeSchema = RecipeInputSchema.extend({
+export const RecipeSchema = RecipeCoreSchema.extend({
   id: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 
-export const RecipeDraftSchema = RecipeInputSchema.extend({
+// No transforms here: z.toJSONSchema cannot represent them. Task 3 replaces the step schema for the AI tool.
+export const RecipeDraftSchema = RecipeCoreSchema.extend({
   gaps: z.array(z.string()),
 });
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;

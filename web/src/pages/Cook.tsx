@@ -94,7 +94,7 @@ export function Cook() {
       {total > 0 ? (
         <section className="step-card" aria-live="polite">
           <p className="step-count">Step {step + 1} of {total}</p>
-          <p className="step-text">{recipe.steps[step]}</p>
+          <p className="step-text">{recipe.steps[step].text}</p>
           <div className="step-nav">
             <button type="button" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
             <button

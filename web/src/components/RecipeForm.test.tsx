@@ -32,7 +32,7 @@ describe('RecipeForm', () => {
       { group: 'Sauce', quantity: 2, unit: 'cups', item: 'flour', note: null },
       { group: 'Sauce', quantity: null, unit: null, item: 'salt to taste', note: null },
     ]);
-    expect(out.steps).toEqual(['Boil', 'Serve']);
+    expect(out.steps.map((s) => s.text)).toEqual(['Boil', 'Serve']);
     expect(out.tags).toEqual(['Pasta', 'quick']);
   });
 
