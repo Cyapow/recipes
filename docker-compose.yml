@@ -1,0 +1,17 @@
+services:
+  recipes:
+    build: .
+    container_name: recipes-app
+    env_file: .env
+    volumes:
+      - recipes_data:/data
+    networks: [edge]
+    restart: unless-stopped
+
+volumes:
+  recipes_data:
+
+networks:
+  edge:
+    external: true
+    name: studioos-lan-edge
