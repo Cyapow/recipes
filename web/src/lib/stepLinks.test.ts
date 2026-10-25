@@ -40,4 +40,19 @@ describe('remapStepLinks', () => {
     const out = remapStepLinks([ing('a'), ing('b')], [ing('b'), ing('a')], [s]);
     expect(out[0]).toEqual({ text: 't', imageId: 'h.jpg', ingredients: [0, 1] });
   });
+  it('keeps the link when the quantity changes', () => {
+    const out = remapStepLinks([ing('flour', 2)], [ing('flour', 3)], [step([0])]);
+    expect(out[0].ingredients).toEqual([0]);
+  });
+  it('keeps the link when a note is added', () => {
+    const withNote: Ingredient = { ...ing('flour', 2), note: 'sifted' };
+    expect(remapStepLinks([ing('flour', 2)], [withNote], [step([0])])[0].ingredients).toEqual([0]);
+  });
+  it('drops the link when the item name changes, even in the same position', () => {
+    expect(remapStepLinks([ing('a'), ing('salt'), ing('c')], [ing('a'), ing('sugar'), ing('c')], [step([1])])[0].ingredients).toEqual([]);
+  });
+  it('prefers exact lines over item-only matches', () => {
+    const out = remapStepLinks([ing('egg', 1), ing('egg', 2)], [ing('egg', 2), ing('egg', 5)], [step([0]), step([1])]);
+    expect(out.map((s) => s.ingredients)).toEqual([[1], [0]]);
+  });
 });

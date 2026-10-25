@@ -92,7 +92,12 @@ describe('RecipeForm', () => {
 
     it('renders and keeps a legacy single-step recipe untouched', async () => {
       const legacy = { ...empty, title: 'T', steps: [{ text: 'Boil. Serve.', imageId: null, ingredients: [] }] };
-      expect((screen.queryAllByLabelText('Step 1'), await save(undefined, legacy))).toEqual(legacy.steps);
+      expect(await save(undefined, legacy)).toEqual(legacy.steps);
+    });
+
+    it('renders a legacy single-step recipe', () => {
+      render(<RecipeForm initial={{ ...empty, steps: [{ text: 'Boil. Serve.', imageId: null, ingredients: [] }] }} onSave={() => {}} />);
+      expect((screen.getByLabelText('Step 1') as HTMLTextAreaElement).value).toBe('Boil. Serve.');
     });
 
     it('keeps links and photo when nothing changed', async () => {
@@ -120,6 +125,40 @@ describe('RecipeForm', () => {
       fireEvent.change(screen.getByLabelText('Ingredients'), { target: { value: 'pepper' } });
       expect(screen.queryByRole('button', { name: 'salt' })).toBeNull();
       expect(screen.getByRole('button', { name: 'pepper' }).getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('keeps a photo-only step but drops a fully empty one', async () => {
+      const steps = await save(async (user) => {
+        await user.clear(screen.getByLabelText('Step 1'));
+        await user.click(screen.getByRole('button', { name: '+ Add a step' }));
+      });
+      expect(steps).toEqual([{ text: '', imageId: H, ingredients: [0, 1] }]);
+    });
+
+    it('keeps the link through keystroke edits and restores it when text is restored', async () => {
+      const one: RecipeInput = {
+        ...linked,
+        ingredients: [{ group: null, quantity: 2, unit: 'cups', item: 'flour', note: null }],
+        steps: [{ text: 'Mix', imageId: null, ingredients: [0] }],
+      };
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      render(<RecipeForm initial={one} onSave={onSave} />);
+      const ta = screen.getByLabelText('Ingredients') as HTMLTextAreaElement;
+      await user.click(ta);
+      await user.clear(ta);
+      await user.type(ta, 'cups flour');
+      await user.clear(ta);
+      await user.type(ta, '3 cups flour');
+      expect(screen.getByRole('button', { name: '3 cups flour' }).getAttribute('aria-pressed')).toBe('true');
+      await user.clear(ta);
+      await user.type(ta, 'sugar');
+      expect(screen.getByRole('button', { name: 'sugar' }).getAttribute('aria-pressed')).toBe('false');
+      await user.clear(ta);
+      await user.type(ta, '2 cups flour');
+      expect(screen.getByRole('button', { name: '2 cups flour' }).getAttribute('aria-pressed')).toBe('true');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect((onSave.mock.calls[0][0] as RecipeInput).steps[0].ingredients).toEqual([0]);
     });
 
     it('keeps text edits independent of links and drops empty steps', async () => {

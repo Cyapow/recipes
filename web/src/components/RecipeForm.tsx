@@ -1,8 +1,9 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { uploadImage } from '../api';
-import type { RecipeInput, Step } from '../../../server/src/recipes/schema';
+import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { formatIngredients, parseIngredients, parseTags } from '../lib/text';
 import { remapStepLinks } from '../lib/stepLinks';
+import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
 
 export type RecipeFormProps = {
@@ -58,8 +59,24 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
     }
   }
 
+  // Links are remapped from the state when editing began, not from the previous keystroke, so a
+  // transient state like "32 cups flour" cannot lose a link for good and restoring the text restores it.
+  const baseline = useRef<{ ingredients: Ingredient[]; steps: Step[] } | null>(null);
+  const captureBaseline = () => {
+    baseline.current = { ingredients: parseIngredients(ingredients), steps };
+  };
+
   function onIngredientsChange(next: string) {
-    setSteps((cur) => remapStepLinks(parseIngredients(ingredients), parseIngredients(next), cur));
+    const base = baseline.current ?? { ingredients: parseIngredients(ingredients), steps };
+    baseline.current = base;
+    const parsed = parseIngredients(next);
+    const remapped = new Map(remapStepLinks(base.ingredients, parsed, base.steps).map((s, i) => [stepId(base.steps[i]), s]));
+    setSteps((cur) =>
+      cur.map((s) => {
+        const links = remapped.get(stepId(s))?.ingredients ?? s.ingredients.filter((n) => n < parsed.length);
+        return derive(s, { ingredients: links });
+      }),
+    );
     setIngredients(next);
   }
 
@@ -74,6 +91,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       return;
     }
     setError(null);
+    baseline.current = null;
     const parsedIngredients = parseIngredients(ingredients);
     onSave({
       ...initial,
@@ -87,7 +105,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       cookMinutes: num(cook),
       ingredients: parsedIngredients,
       steps: steps
-        .filter((st) => st.text.trim() !== '')
+        .filter((st) => st.text.trim() !== '' || st.imageId !== null || st.ingredients.length > 0)
         .map((st) => ({
           ...st,
           text: st.text.trim(),
@@ -156,7 +174,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
         </div>
         <div className="field">
           <label htmlFor="f-ingredients">Ingredients</label>
-          <textarea id="f-ingredients" aria-describedby="h-ingredients" rows={8} value={ingredients} onChange={(e) => onIngredientsChange(e.target.value)} />
+          <textarea id="f-ingredients" aria-describedby="h-ingredients" rows={8} value={ingredients} onChange={(e) => onIngredientsChange(e.target.value)} onFocus={captureBaseline} onBlur={() => (baseline.current = null)} />
           <small id="h-ingredients">One per line, e.g. "2 cups flour (sifted)". Start a line with # for a heading.</small>
         </div>
         <section className="field steps-field" aria-labelledby="h-steps-title">

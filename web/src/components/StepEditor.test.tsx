@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StepEditor } from './StepEditor';
 import type { Ingredient, Step } from '../../../server/src/recipes/schema';
@@ -61,7 +61,7 @@ describe('StepEditor', () => {
     expect(img.getAttribute('src')).toBe('/api/images/new.jpg/thumb');
     expect(out()[0].imageId).toBe('new.jpg');
     expect(screen.getByText('Replace photo')).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Remove photo' }));
+    await user.click(screen.getByRole('button', { name: 'Remove photo for step 1' }));
     expect(out()[0].imageId).toBeNull();
   });
 
@@ -126,6 +126,32 @@ describe('StepEditor', () => {
     expect(out()[2]).toEqual(s(''));
     await user.click(screen.getByRole('button', { name: 'Delete step 1' }));
     expect(out().map((x) => x.text)).toEqual(['B', '']);
+  });
+
+  it('keeps both photos when two uploads resolve in the same tick', async () => {
+    const resolvers: ((id: string) => void)[] = [];
+    impl = () => new Promise((r) => resolvers.push(r));
+    const user = userEvent.setup();
+    render(<Harness initial={[s('A'), s('B')]} />);
+    const inputs = screen.getAllByLabelText(/Add photo for step/, { selector: 'input' });
+    await user.upload(inputs[0], file());
+    await user.upload(inputs[1], file());
+    await act(async () => {
+      resolvers[0]('one.jpg');
+      resolvers[1]('two.jpg');
+    });
+    expect(out().map((x) => x.imageId)).toEqual(['one.jpg', 'two.jpg']);
+  });
+
+  it('lands the photo on the right step when it was moved mid-upload', async () => {
+    let resolve!: (id: string) => void;
+    impl = () => new Promise((r) => (resolve = r));
+    const user = userEvent.setup();
+    render(<Harness initial={[s('A'), s('B')]} />);
+    await user.upload(screen.getByLabelText('Add photo for step 1', { selector: 'input' }), file());
+    await user.click(screen.getByRole('button', { name: 'Move step 1 down' }));
+    await act(async () => resolve('moved.jpg'));
+    expect(out()).toEqual([s('B'), s('A', [], 'moved.jpg')]);
   });
 
   it('disables move up on first and move down on last', () => {
