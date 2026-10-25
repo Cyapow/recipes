@@ -23,7 +23,7 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
    docker compose run --rm --no-deps -v /path/to/downloaded/backup:/restore:ro recipes npm run restore -- /restore --force
    ```
 
-   - It restores the NEWEST snapshot. If that file is damaged or from a newer app version it stops with a message and changes nothing; it will not silently use an older one. Pick one explicitly with `--snapshot recipes-20260101-030000.sqlite`.
+   - By default it restores the NEWEST snapshot in the folder. If that file is damaged or from a newer app version it stops with a message and changes nothing; it will not silently use an older one. Pick one explicitly with `--snapshot recipes-20260101-030000.sqlite` (add it after `/restore`). When you need a specific older state, such as the rollback below, always pass `--snapshot`: the default would pick a newer one.
    - `--force` is needed when a database already exists. The old one is moved to `recipes.sqlite.pre-restore-<timestamp>` in the data volume (never deleted). Without `--force` the restore refuses to touch an existing database.
    - Images already present are skipped. Recipes referencing images missing from the backup are counted in a warning.
    - Distinct step photos that are missing are counted in a second warning. They are counted against the images on the volume after the restore (the backup's images plus any already there), so a photo missing in both places shows in both counts.
@@ -43,14 +43,15 @@ Release: shopping list and step slides
 
 Before upgrading:
 
-- In the running app open Settings, press "Back up now" and confirm it reports success. This is your pre-upgrade snapshot, and the rollback below depends on it.
+- In the running app open Settings, press "Back up now" and confirm it reports success.
+- In Drive open "Recipes backup/snapshots" and note the exact file name of that backup (`recipes-<stamp>.sqlite`, the newest one). Download it and keep a copy somewhere safe, with the name written down. The rollback below needs exactly this file, and Drive retention keeps only the newest 14 snapshots, so Drive will eventually delete it.
 
 What changed:
 
 - New pages: `/recipe/:id` is an overview with a "what do we already have?" ingredient checklist, `/recipe/:id/cook` is a step-by-step slideshow, and `/shopping` is the shopping list.
 - The shopping list lives in the SQLite file, so every snapshot includes it. The backup fingerprint ignores it, so a shopping-only change does not trigger a nightly upload; "Back up now" always uploads.
 - Step photos are stored with the other photos and ride in the existing images backup.
-- Step data changed shape, so the first nightly backup after upgrading uploads once even if nothing else changed.
+- Step data changed shape, so the first nightly backup after upgrading uploads once even if nothing else changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
 - Old recipes keep working: their steps just have no photos or ingredient links until you edit them. Old backups restore fine and migrate on next start.
 
 After deploying:
@@ -60,14 +61,27 @@ After deploying:
 Rolling back:
 
 - Rebuilding the old commit is NOT enough once any recipe has been edited under the new version, because the old version cannot read the new step format.
-- Roll back by checking out the old commit AND restoring the pre-upgrade snapshot with the restore command above (stop the app, run the restore with `--force`, rebuild and start the old version). Recipe edits made after the upgrade are lost.
+- Roll back by checking out the old commit AND restoring the pre-upgrade snapshot you noted and downloaded before upgrading. Recipe edits made after the upgrade are lost.
+- NEVER roll back with the restore command's default. It restores the NEWEST snapshot, which after the upgrade is a new-format one; the old version's editor would then corrupt its steps into `[object Object]`.
+
+Steps:
+
+1. Put the downloaded pre-upgrade `recipes-<stamp>.sqlite` in a folder (for example `/path/to/downloaded/backup`) together with the `images/` folder from Drive. Ideally the folder holds only that one snapshot.
+2. Check out the old commit and stop the app: `docker compose stop recipes`.
+3. Restore that exact file, with `--snapshot` and `--force`:
+
+   ```sh
+   docker compose run --rm --no-deps -v /path/to/downloaded/backup:/restore:ro recipes npm run restore -- /restore --snapshot recipes-<stamp>.sqlite --force
+   ```
+
+4. Rebuild and start the old version: `docker compose up -d --build`.
 
 Checks after deploying:
 
 1. Open a recipe's slideshow on a phone and a tablet.
 2. Add recipe ingredients to the list and share the list from a phone.
 3. Press "Back up now" and confirm step photos appear in the Drive images folder.
-4. Do a restore drill (see above).
+4. Do a restore drill (see above). Note it restores the newest snapshot by default and replaces the live database, so only do it when you are happy to go back to that backup.
 5. Run the live AI test once with a key: `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real API, and the AI step-link schema changed.
 
 ## Installing as an app
