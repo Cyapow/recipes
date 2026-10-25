@@ -25,6 +25,23 @@ describe('shopping repo', () => {
     expect(items[0]!.sources).toEqual([{ recipeId: 'a', title: 'Bolognese' }, { recipeId: 'b', title: 'Chilli' }]);
   });
 
+  it('merges count units across singular and plural spellings', () => {
+    const units: [string, string][] = [
+      ['bunch', 'bunches'], ['can', 'cans'], ['pack', 'packs'], ['packet', 'packets'], ['jar', 'jars'], ['bag', 'bags'],
+      ['bottle', 'bottles'], ['slice', 'slices'], ['piece', 'pieces'], ['stick', 'sticks'], ['sprig', 'sprigs'],
+      ['head', 'heads'], ['pinch', 'pinches'], ['clove', 'cloves'], ['tin', 'tins'],
+    ];
+    for (const [one, many] of units) {
+      const r = make();
+      r.add(A, [ing(2, one, 'thing')]);
+      r.add(B, [ing(1, many, 'thing')]);
+      const items = r.list();
+      expect(items, one).toHaveLength(1);
+      expect(items[0]!.quantity).toBe(3);
+      expect(items[0]!.text).toBe(`3 ${many} thing`);
+    }
+  });
+
   it('never merges across different units', () => {
     const r = make();
     r.add(A, [ing(500, 'g', 'beef mince')]);
