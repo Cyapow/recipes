@@ -28,12 +28,40 @@ describe('linkIngredients', () => {
   });
 });
 
+describe('linkIngredients longest match wins', () => {
+  it('drops an ingredient whose words are a strict subset of another match', () => {
+    expect(linkIngredients('Add the red wine vinegar', ['red wine', 'red wine vinegar'].map(ing))).toEqual([1]);
+    expect(linkIngredients('Add the chicken stock', ['chicken', '500ml chicken stock'].map(ing))).toEqual([1]);
+    expect(linkIngredients('Add the spring onions', ['spring onions', 'onion'].map(ing))).toEqual([0]);
+  });
+  it('still links the shorter one alone, and keeps identical lines', () => {
+    expect(linkIngredients('Add the red wine', ['red wine', 'red wine vinegar'].map(ing))).toEqual([0]);
+    expect(linkIngredients('Add the egg', ['egg', 'egg'].map(ing))).toEqual([0, 1]);
+  });
+  it('is conservative when a step names both: the shorter link is dropped (missing is safer than false)', () => {
+    expect(linkIngredients('add the wine and the red wine vinegar', ['wine', 'red wine vinegar'].map(ing))).toEqual([1]);
+  });
+  it('matches across accents', () => {
+    expect(linkIngredients('Stir in the creme fraiche', ['crème fraîche'].map(ing))).toEqual([0]);
+    expect(linkIngredients('Stir in the crème fraîche', ['creme fraiche'].map(ing))).toEqual([0]);
+  });
+});
+
 describe('foldPlural', () => {
   it('folds regular plurals', () => {
     expect([foldPlural('onions'), foldPlural('tomatoes'), foldPlural('berries'), foldPlural('peaches')]).toEqual(['onion', 'tomato', 'berry', 'peach']);
   });
+  it('folds trickier plurals', () => {
+    expect(foldPlural('chillies')).toBe(foldPlural('chilli'));
+    expect(foldPlural('chilis')).toBe(foldPlural('chilli'));
+    expect(foldPlural('leaves')).toBe(foldPlural('leaf'));
+    expect(foldPlural('cherries')).toBe(foldPlural('cherry'));
+    expect(foldPlural('glasses')).toBe(foldPlural('glass'));
+    expect(foldPlural('cookies')).toBe('cookie');
+  });
   it('leaves non-plurals alone', () => {
     for (const w of ['hummus', 'couscous', 'asparagus', 'molasses', 'glass', 'gas']) expect(foldPlural(w)).toBe(w);
-    expect(foldPlural('lentils')).toBe(foldPlural('lentils'));
+    expect(foldPlural('lentils')).toBe('lentil');
+    expect(foldPlural('swiss')).toBe('swiss');
   });
 });

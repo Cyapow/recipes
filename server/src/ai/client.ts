@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Config } from '../config.js';
 import type { RecipeDraft } from '../recipes/schema.js';
-import { AiDraftSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, TOOL_NAME, toRecipeDraft } from './draft.js';
+import { AiDraftParseSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, TOOL_NAME, toRecipeDraft } from './draft.js';
 
 export interface AiClient {
   extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<RecipeDraft>;
@@ -93,7 +93,7 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike, opts: { att
         }
         const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
         if (block && block.type === 'tool_use') {
-          const parsed = AiDraftSchema.safeParse(block.input);
+          const parsed = AiDraftParseSchema.safeParse(block.input);
           if (parsed.success) return toRecipeDraft(parsed.data);
           lastError = parsed.error.message;
           messages.push(

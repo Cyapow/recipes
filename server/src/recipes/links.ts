@@ -20,10 +20,14 @@ function significantWords(item: string): string[] {
  */
 export function linkIngredients(stepText: string, ingredients: Ingredient[]): number[] {
   const stepWords = new Set(tokenize(stepText).map(foldPlural));
-  const out: number[] = [];
+  const matched: Array<{ i: number; words: string[] }> = [];
   ingredients.forEach((ing, i) => {
     const words = significantWords(ing.item);
-    if (words.length > 0 && words.every((w) => stepWords.has(w))) out.push(i);
+    if (words.length > 0 && words.every((w) => stepWords.has(w))) matched.push({ i, words });
   });
-  return out;
+  // Longest match wins: drop an ingredient whose words are a strict subset of another match's
+  // ("red wine" under "red wine vinegar"). A missing link is safer than a false one.
+  return matched
+    .filter((a) => !matched.some((b) => b.words.length > a.words.length && a.words.every((w) => b.words.includes(w))))
+    .map((m) => m.i);
 }

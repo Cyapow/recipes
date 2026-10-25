@@ -257,14 +257,17 @@ describe('step normalisation of AI drafts', () => {
     ...draft,
     ingredients: [draft.ingredients[0], { ...draft.ingredients[0], item: 'onion' }],
   };
+  let called: ReturnType<typeof fake>['create'];
   const run = async (steps: unknown[]) => {
-    const { sdk } = fake(toolUse({ ...two, steps }));
+    const { sdk, create } = fake(toolUse({ ...two, steps }));
+    called = create;
     const client = createAnthropicClient(config, sdk);
     return (await client.extractRecipe({ kind: 'description', text: 'x' })).steps;
   };
   it('drops out-of-range and non-integer links', async () => {
-    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1] }]);
-    expect(steps).toEqual([{ text: 'a', imageId: null, ingredients: [0] }]);
+    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1, 1.5, 1] }]);
+    expect(steps).toEqual([{ text: 'a', imageId: null, ingredients: [0, 1] }]);
+    expect(called).toHaveBeenCalledTimes(1); // no retry
   });
   it('dedupes and sorts links', async () => {
     expect(await run([{ text: 'a', imageId: null, ingredients: [1, 1, 0] }])).toEqual([

@@ -7,11 +7,15 @@ export const AiDraftSchema = RecipeCoreSchema.extend({
   steps: z.array(AiStepSchema),
   gaps: z.array(z.string()),
 });
-export type AiDraft = z.infer<typeof AiDraftSchema>;
+/** Validates the model's output: links may be any numbers; toRecipeDraft drops the unusable ones. */
+export const AiDraftParseSchema = AiDraftSchema.extend({
+  steps: z.array(AiStepSchema.extend({ ingredients: z.array(z.number()) })),
+});
+export type AiDraft = z.infer<typeof AiDraftParseSchema>;
 
 /** Map the model's draft to the app's: Steps get imageId null; links are range-checked, deduped and sorted. */
 export function toRecipeDraft(ai: AiDraft): RecipeDraft {
-  return { ...ai, steps: normaliseSteps(ai.steps, ai.ingredients.length) };
+  return { ...ai, steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({ ...s, imageId: null })) };
 }
 
 export const TOOL_NAME = 'record_recipe';
