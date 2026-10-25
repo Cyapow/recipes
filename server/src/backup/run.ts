@@ -6,7 +6,7 @@ import { IMAGE_ID_RE } from '../images/store.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import type { DriveClient } from './drive.js';
 import { computeFingerprint } from './fingerprint.js';
-import { getBackupFingerprint, recordBackup } from './status.js';
+import { getBackupFingerprint, getBackupSnapshot, recordBackup } from './status.js';
 
 export type BackupResult = { ok: true; uploadedImages: number; snapshot: string; skipped?: true } | { ok: false; error: string };
 
@@ -148,8 +148,8 @@ export async function runBackup(deps: {
 }
 
 /**
- * Returns the newest existing snapshot base name when the last upload already covers the current data
- * and Drive still holds everything (a snapshot pair and every local image); null means "do a full backup".
+ * Returns the base name of the snapshot from the last real upload when it already covers the current data
+ * and Drive still holds exactly that pair and every local image; null means "do a full backup".
  * Drive errors propagate so a revoked token or dead connection still fails the run.
  */
 async function checkUpToDate(
@@ -160,16 +160,13 @@ async function checkUpToDate(
   const root = await deps.drive.ensureFolder('Recipes backup');
   const snapshotsId = await deps.drive.ensureFolder('snapshots', root);
   const imagesId = await deps.drive.ensureFolder('images', root);
-  const kinds = new Map<string, Set<string>>();
-  for (const f of await deps.drive.list(snapshotsId)) {
-    const m = SNAPSHOT_RE.exec(f.name);
-    if (m) kinds.set(m[1], (kinds.get(m[1]) ?? new Set()).add(m[2]));
-  }
-  const stamps = [...kinds.entries()].filter(([, k]) => k.has('sqlite') && k.has('json')).map(([s]) => s).sort();
-  if (stamps.length === 0) return null;
+  const last = getBackupSnapshot(deps.db);
+  if (!last) return null; // no record of which snapshot holds this data: never skip
+  const names = new Set((await deps.drive.list(snapshotsId)).map((f) => f.name));
+  if (!names.has(`${last}.sqlite`) || !names.has(`${last}.json`)) return null;
   const have = new Set((await deps.drive.list(imagesId)).map((f) => f.name));
   for (const name of await listBackupImageNames(deps.dataDir)) if (!have.has(name)) return null;
-  return `recipes-${stamps[stamps.length - 1]}`;
+  return last;
 }
 
 async function applyRetention(drive: DriveClient, folderId: string, keep: number, currentStamp: string): Promise<void> {

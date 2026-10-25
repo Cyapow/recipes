@@ -55,6 +55,30 @@ const snapDir = () => path.join(backupDir, 'Recipes backup', 'snapshots');
 const open = () => openDb(path.join(dataDir, 'recipes.sqlite'));
 
 describe('restoreFromDirectory', () => {
+  it('clears the backup fingerprint keys so the first run after a restore uploads, keeping the recipes', async () => {
+    // Source DB carries backup bookkeeping; take a forced backup of it, then restore that snapshot.
+    for (const [k, v] of [['backup.lastFingerprint', 'fp'], ['backup.lastSnapshot', 'recipes-20260101-030000'], ['backup.lastUploadAt', '2026-01-01T03:00:00.000Z'], ['backup.lastRunAt', 'r']]) {
+      db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, v);
+    }
+    const drive = new FakeDrive();
+    await runBackup({ db, dataDir: src, drive, now: () => new Date(Date.UTC(2026, 0, 3, 3, 0, 0)), force: true });
+    const dir2 = path.join(root, 'backup2');
+    drive.dumpTo(dir2);
+    await restoreFromDirectory(dir2, dataDir);
+    const restored = open();
+    const keys = (restored.prepare("SELECT key FROM settings WHERE key LIKE 'backup.%' ORDER BY key").all() as { key: string }[]).map((r) => r.key);
+    expect(keys).not.toContain('backup.lastFingerprint');
+    expect(keys).not.toContain('backup.lastSnapshot');
+    expect(keys).not.toContain('backup.lastUploadAt');
+    expect(createRecipeRepo(restored).list({})).toEqual(createRecipeRepo(db).list({}));
+    // first run after the restore does a full backup
+    const drive2 = new FakeDrive();
+    const r = await runBackup({ db: restored, dataDir, drive: drive2 });
+    expect(r.ok && r.skipped).toBeFalsy();
+    expect(drive2.uploadCount).toBeGreaterThanOrEqual(2);
+    restored.close();
+  });
+
   it('round-trips recipes and images (Drive layout nested in "Recipes backup")', async () => {
     const out = await restoreFromDirectory(backupDir, dataDir);
     const restored = open();

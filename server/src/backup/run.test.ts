@@ -9,7 +9,7 @@ import type { RecipeInput } from '../recipes/schema.js';
 import { FakeDrive } from './fakeDrive.js';
 import { computeFingerprint } from './fingerprint.js';
 import { isBackupImageName, runBackup } from './run.js';
-import { deriveBanner, getBackupFingerprint, getBackupStatus } from './status.js';
+import { deriveBanner, getBackupFingerprint, getBackupSnapshot, getBackupStatus } from './status.js';
 
 const H1 = 'a'.repeat(64) + '.jpg';
 const H2 = 'b'.repeat(64) + '.jpg';
@@ -336,6 +336,71 @@ describe('skip when unchanged', () => {
     expect((r as { skipped?: true }).skipped).toBeUndefined();
     expect(getBackupFingerprint(db)).toBe(await computeFingerprint(db, dir));
     expect(((await run(2)) as { skipped?: true }).skipped).toBe(true);
+  });
+
+  const putSnap = async (name: string) => {
+    const p = path.join(dir, 'x');
+    writeFileSync(p, name);
+    const folderId = await drive.ensureFolder('snapshots', await drive.ensureFolder('Recipes backup'));
+    await drive.upload({ folderId, name, filePath: p });
+  };
+  const removeSnap = async (name: string) => {
+    for (const f of snaps()) if (f.name === name) await drive.remove(f.id);
+  };
+  const notSkipped = (r: unknown) => expect((r as { skipped?: true }).skipped).toBeUndefined();
+
+  it('stores the snapshot base name with the fingerprint', async () => {
+    await run(0);
+    expect(getBackupSnapshot(db)).toBe('recipes-20260101-030000');
+  });
+
+  it('exact last pair deleted but an OLDER pair remains: full backup', async () => {
+    await putSnap('recipes-20251201-030000.sqlite');
+    await putSnap('recipes-20251201-030000.json');
+    await run(0);
+    await removeSnap('recipes-20260101-030000.sqlite');
+    await removeSnap('recipes-20260101-030000.json');
+    const r = await run(1);
+    notSkipped(r);
+    expect(snaps().map((f) => f.name)).toContain('recipes-20260102-030000.sqlite');
+  });
+
+  it('a lone .sqlite or lone .json for the last stamp: full backup', async () => {
+    await run(0);
+    await removeSnap('recipes-20260101-030000.json');
+    notSkipped(await run(1));
+    await removeSnap('recipes-20260102-030000.sqlite');
+    notSkipped(await run(2));
+  });
+
+  it('shared folder: another newer pair present but ours gone: full backup', async () => {
+    await run(0);
+    await removeSnap('recipes-20260101-030000.sqlite');
+    await removeSnap('recipes-20260101-030000.json');
+    await putSnap('recipes-20260301-030000.sqlite');
+    await putSnap('recipes-20260301-030000.json');
+    notSkipped(await run(1));
+  });
+
+  it('stored fingerprint but no lastSnapshot: full backup', async () => {
+    await run(0);
+    db.prepare("DELETE FROM settings WHERE key = 'backup.lastSnapshot'").run();
+    notSkipped(await run(1));
+    expect(getBackupSnapshot(db)).toBe('recipes-20260102-030000');
+  });
+
+  it('recipe changed after the fingerprint but before the snapshot: next run is not skipped', async () => {
+    const orig = db.backup.bind(db);
+    let armed = true;
+    (db as unknown as { backup: typeof db.backup }).backup = ((...a: Parameters<typeof db.backup>) => {
+      if (armed) {
+        armed = false;
+        repo().create(input('Between fingerprint and snapshot'));
+      }
+      return orig(...a);
+    }) as typeof db.backup;
+    expect((await run(0)).ok).toBe(true);
+    notSkipped(await run(1));
   });
 
   it('16 unchanged nightly runs leave exactly one snapshot pair', async () => {

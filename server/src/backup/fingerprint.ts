@@ -18,6 +18,9 @@ export function canonicalJson(v: unknown): string {
 }
 
 /**
+ * Settings are excluded on purpose (backup status rows change every run); anything user-meaningful added
+ * to settings later must be added to this fingerprint.
+ *
  * sha256 over every full recipe (ordered by id, no export timestamp) and the sorted backup-eligible
  * image names. Deliberately excludes the settings table: backup status rows change on every run.
  */

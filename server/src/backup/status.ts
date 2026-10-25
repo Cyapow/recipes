@@ -14,6 +14,7 @@ const KEYS = {
   lastRunAt: 'backup.lastRunAt', lastSuccessAt: 'backup.lastSuccessAt', lastError: 'backup.lastError',
   lastUploadAt: 'backup.lastUploadAt',
   lastFingerprint: 'backup.lastFingerprint',
+  lastSnapshot: 'backup.lastSnapshot',
 };
 const STALE_MS = 36 * 3600 * 1000;
 
@@ -40,7 +41,11 @@ export function recordBackup(db: Database, result: BackupResult, now: Date, fing
       del(db, KEYS.lastError);
       if (!result.skipped) {
         set(db, KEYS.lastUploadAt, now.toISOString());
-        if (fingerprint !== undefined) set(db, KEYS.lastFingerprint, fingerprint);
+        // Fingerprint and snapshot go together: a skip needs both to be trustworthy.
+        if (fingerprint !== undefined) {
+          set(db, KEYS.lastFingerprint, fingerprint);
+          set(db, KEYS.lastSnapshot, result.snapshot);
+        }
       }
     } else {
       set(db, KEYS.lastError, result.error);
@@ -55,6 +60,10 @@ export function getBackupStatus(db: Database): BackupStatus {
     lastError: get(db, KEYS.lastError),
     lastUploadAt: get(db, KEYS.lastUploadAt),
   };
+}
+
+export function getBackupSnapshot(db: Database): string | null {
+  return get(db, KEYS.lastSnapshot);
 }
 
 export function getBackupFingerprint(db: Database): string | null {

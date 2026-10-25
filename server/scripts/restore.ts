@@ -107,6 +107,19 @@ function check(file: string, migrationsDir: string | undefined): Checked {
   }
 }
 
+/** Forget which snapshot/fingerprint the previous install last uploaded; they describe another database. */
+function clearBackupBookkeeping(file: string): void {
+  const db = new Database(file);
+  try {
+    const has = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get();
+    if (has) {
+      db.prepare("DELETE FROM settings WHERE key IN ('backup.lastFingerprint', 'backup.lastSnapshot', 'backup.lastUploadAt')").run();
+    }
+  } finally {
+    db.close();
+  }
+}
+
 type Rename = (from: string, to: string) => Promise<void>;
 
 /**
@@ -204,6 +217,7 @@ export async function restoreFromDirectory(dir: string, dataDir: string, opts: R
     let imagesSkipped = 0;
     try {
       await copyFile(validated, staged);
+      clearBackupBookkeeping(staged); // so the first run after a restore always does a full backup
 
       // 3. Images (additive, atomic per file; same content-hash name means same content).
       await mkdir(imagesDir, { recursive: true });
