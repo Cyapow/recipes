@@ -58,7 +58,18 @@ export async function uploadImage(file: File): Promise<string> {
   return ((await res.json()) as { id: string }).id;
 }
 
-export async function describeRecipe(text: string): Promise<RecipeDraft> {
+export type AiProviderName = 'anthropic' | 'openai' | 'gemini';
+export type AiErrorCode = 'no_credit' | 'auth' | 'rate_limit' | 'unavailable' | 'timeout' | 'other';
+export type AiStatus = {
+  providers: Array<{ name: AiProviderName; label: string; configured: boolean; model: string }>;
+  active: AiProviderName | null;
+};
+export const getAiStatus = (): Promise<AiStatus> => request('/api/ai/status');
+
+/** A draft from the AI, plus who answered. provider/model are display-only and must never be saved. */
+export type AiDraft = RecipeDraft & { provider?: AiProviderName; model?: string };
+
+export async function describeRecipe(text: string): Promise<AiDraft> {
   const res = await fetch('/api/ai/describe', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -66,12 +77,19 @@ export async function describeRecipe(text: string): Promise<RecipeDraft> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Request failed (${res.status})`);
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body ?? undefined);
   }
-  return (await res.json()) as RecipeDraft;
+  return (await res.json()) as AiDraft;
 }
 
-export type ImportResult = { draft: RecipeDraft; usedAi: boolean; usable: boolean };
+export type ImportResult = {
+  draft: RecipeDraft;
+  usedAi: boolean;
+  usable: boolean;
+  provider?: AiProviderName;
+  model?: string;
+  aiError?: { error: string; code: AiErrorCode };
+};
 
 export async function importRecipe(url: string): Promise<ImportResult> {
   const res = await fetch('/api/import', {

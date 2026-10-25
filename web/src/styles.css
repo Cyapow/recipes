@@ -215,6 +215,8 @@ body.cook-scroll-lock { overflow: hidden; }
 .banner.failed { border-color: var(--danger); }
 .banner a { color: inherit; font-weight: 700; display: inline-flex; align-items: center; min-height: 44px; }
 .status-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 4px 0; padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.ai-list { list-style: none; display: grid; gap: 6px; margin: 4px 0; padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.ai-list .ok { color: var(--herb); }
 .status-list dt { color: var(--muted); }
 .status-list dd { margin: 0; overflow-wrap: anywhere; }
 

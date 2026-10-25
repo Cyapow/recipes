@@ -82,7 +82,17 @@ Checks after deploying:
 2. Add recipe ingredients to the list and share the list from a phone.
 3. Press "Back up now" and confirm step photos appear in the Drive images folder.
 4. Do a restore drill (see above). Note it restores the newest snapshot by default and replaces the live database, so only do it when you are happy to go back to that backup.
-5. Run the live AI test once with a key: `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real API, and the AI step-link schema changed.
+5. Run the live AI test once per provider key you have (see AI providers below): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real APIs, and the AI step-link schema changed.
+
+## AI providers
+
+"Describe a recipe" and the page-reading fallback in import can use Claude, ChatGPT (OpenAI) or Gemini. Set any one or more of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY` in `.env` (models are `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`; the defaults in `.env.example` are cheap ones and can be changed), then restart.
+
+- The first provider with a key is used, in the order Claude, ChatGPT, Gemini. Set `AI_PROVIDER=anthropic|openai|gemini` to try a different one first. An unknown value is ignored with a warning in the log.
+- Fallback: if the provider fails because of the provider (key rejected, no credit, rate limit, overloaded or down, timeout) the next provider with a key is tried. A refusal, a recipe that is still invalid after the one retry, or a request error of our own is shown rather than passed on.
+- Settings shows which providers have a key and which is in use (never the keys). Drafts say "Drafted by ..." above the form; that is never saved with the recipe.
+- If every provider fails, the page shows a plain message: "The AI account is out of credit. Add credit or switch provider." (no credit), "The AI key was rejected. Check the key in .env." (bad key), "The AI is busy right now. Try again in a minute." (rate limit), or "The AI didn't respond. Try again.". The message follows the first provider tried.
+- Quality and the no-invention behaviour can differ by provider, so run the live test for each one you set a key for (it runs once per key present and skips the rest): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`.
 
 ## Installing as an app
 

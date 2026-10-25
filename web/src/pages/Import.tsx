@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, importRecipe, saveRecipe, type ImportResult, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 
 const hostOf = (u: string) => {
@@ -105,6 +106,8 @@ export function Import() {
       </form>
       {error && <p className="field-error" role="alert">{error}</p>}
       {fetchFailed && <p className="field-error" role="alert">Couldn't fetch that page. You can still type the recipe in below.</p>}
+      {result?.value.aiError && <p className="field-error" role="alert">{result.value.aiError.error}</p>}
+      {result?.value.usable && draftedBy(result.value.provider) && <p className="hint">{draftedBy(result.value.provider)}</p>}
       {result && !fetchFailed && !result.value.usable && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
         <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />

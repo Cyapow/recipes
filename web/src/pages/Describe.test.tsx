@@ -6,8 +6,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Describe } from './Describe';
 import type { RecipeDraft } from '../api';
 
-vi.mock('../api', () => ({ describeRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
-import { describeRecipe, saveRecipe } from '../api';
+vi.mock('../api', async () => ({ ...(await vi.importActual<typeof import('../api')>('../api')), describeRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
+import { ApiError, describeRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -84,5 +84,39 @@ describe('Describe', () => {
     await user.click(screen.getByRole('button', { name: /create draft/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/not configured/i));
     expect(screen.queryByRole('button', { name: /^save/i })).toBeNull();
+  });
+
+  it('says which AI drafted it, and never saves that with the recipe', async () => {
+    vi.mocked(describeRecipe).mockResolvedValue({ ...draft, provider: 'openai', model: 'gpt-x' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByRole('textbox'), 'x');
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    expect(await screen.findByText('Drafted by ChatGPT')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /^save/i }));
+    await screen.findByText('cook page');
+    const saved = vi.mocked(saveRecipe).mock.calls[0]![1] as Record<string, unknown>;
+    expect(saved).not.toHaveProperty('provider');
+    expect(saved).not.toHaveProperty('model');
+  });
+
+  it.each([['anthropic', 'Claude'], ['gemini', 'Gemini']])('labels %s as %s', async (provider, label) => {
+    vi.mocked(describeRecipe).mockResolvedValue({ ...draft, provider: provider as 'gemini', model: 'm' });
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByRole('textbox'), 'x');
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    expect(await screen.findByText(`Drafted by ${label}`)).toBeTruthy();
+  });
+
+  it('shows the API message for a coded provider failure, not the generic text', async () => {
+    const msg = 'The AI account is out of credit. Add credit or switch provider.';
+    vi.mocked(describeRecipe).mockRejectedValue(new ApiError(msg, 502, { error: msg, code: 'no_credit' }));
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByRole('textbox'), 'x');
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(msg));
   });
 });

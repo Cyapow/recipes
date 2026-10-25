@@ -4,12 +4,20 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Settings } from './Settings';
-import type { BackupStatus } from '../api';
+import type { AiStatus, BackupStatus } from '../api';
 
-vi.mock('../api', () => ({ getBackupStatus: vi.fn(), runBackupNow: vi.fn(), disconnectGoogle: vi.fn() }));
-import { disconnectGoogle, getBackupStatus, runBackupNow } from '../api';
+vi.mock('../api', () => ({ getBackupStatus: vi.fn(), runBackupNow: vi.fn(), disconnectGoogle: vi.fn(), getAiStatus: vi.fn() }));
+import { disconnectGoogle, getAiStatus, getBackupStatus, runBackupNow } from '../api';
 
 afterEach(cleanup);
+const aiStatus: AiStatus = {
+  providers: [
+    { name: 'anthropic', label: 'Claude', configured: false, model: 'claude-x' },
+    { name: 'openai', label: 'ChatGPT', configured: true, model: 'gpt-x' },
+    { name: 'gemini', label: 'Gemini', configured: true, model: 'g-1' },
+  ],
+  active: 'openai',
+};
 const connected: BackupStatus = {
   configured: true, connected: true, account: 'me@x.com', banner: 'none',
   lastRunAt: '2026-03-10T01:00:00.000Z', lastSuccessAt: null, lastError: 'boom', lastUploadAt: '2026-03-09T01:00:00.000Z', running: false,
@@ -18,6 +26,7 @@ beforeEach(() => {
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue(connected);
   vi.mocked(runBackupNow).mockReset();
   vi.mocked(disconnectGoogle).mockReset();
+  vi.mocked(getAiStatus).mockReset().mockResolvedValue(aiStatus);
 });
 const show = () => render(<MemoryRouter><Settings /></MemoryRouter>);
 
@@ -99,5 +108,30 @@ describe('Settings', () => {
     await user.click(screen.getByRole('button', { name: 'Disconnect' }));
     await waitFor(() => expect(disconnectGoogle).toHaveBeenCalledTimes(1));
     confirm.mockRestore();
+  });
+
+  it('lists which AI providers have a key and which is active', async () => {
+    show();
+    expect(await screen.findByRole('heading', { name: 'AI' })).toBeTruthy();
+    const rows = (await screen.findAllByTestId('ai-provider')).map((r) => r.textContent);
+    expect(rows).toEqual([
+      expect.stringMatching(/Claude.*not set/),
+      expect.stringMatching(/ChatGPT.*key set.*in use/),
+      expect.stringMatching(/Gemini.*key set/),
+    ]);
+    expect(rows[2]).not.toMatch(/in use/);
+    expect(screen.getByText(/\.env/)).toBeTruthy();
+  });
+
+  it('says so when no AI key is set', async () => {
+    vi.mocked(getAiStatus).mockResolvedValue({ ...aiStatus, providers: aiStatus.providers.map((p) => ({ ...p, configured: false })), active: null });
+    show();
+    expect(await screen.findByText(/No AI key is set/)).toBeTruthy();
+  });
+
+  it('still shows backup settings if the AI status cannot be loaded', async () => {
+    vi.mocked(getAiStatus).mockRejectedValue(new Error('x'));
+    show();
+    expect(await screen.findByText('me@x.com')).toBeTruthy();
   });
 });

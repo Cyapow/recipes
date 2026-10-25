@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { disconnectGoogle, getBackupStatus, runBackupNow, type BackupRunResult, type BackupStatus } from '../api';
+import { disconnectGoogle, getAiStatus, getBackupStatus, runBackupNow, type AiStatus, type BackupRunResult, type BackupStatus } from '../api';
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'Never');
 
@@ -8,6 +8,7 @@ export function Settings() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [ai, setAi] = useState<AiStatus | null>(null);
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
   const [result, setResult] = useState<BackupRunResult | null>(null);
@@ -24,6 +25,9 @@ export function Settings() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    getAiStatus().then(setAi, () => setAi(null)); // the AI section is informational; the page works without it
+  }, []);
 
   async function runNow() {
     if (runningRef.current) return;
@@ -97,6 +101,24 @@ export function Settings() {
                 : <p role="status">Backup complete. {result.uploadedImages} new {result.uploadedImages === 1 ? 'image' : 'images'} uploaded.</p>
               : <p className="field-error" role="alert">Backup failed: {result.error}</p>
           )}
+        </>
+      )}
+      {ai && (
+        <>
+          <h2>AI</h2>
+          <ul className="ai-list" aria-label="AI providers">
+            {ai.providers.map((p) => (
+              <li key={p.name} data-testid="ai-provider">
+                {p.label}: {p.configured ? <strong className="ok">key set</strong> : <span className="hint">not set</span>}
+                {p.name === ai.active && <> (in use)</>}
+              </li>
+            ))}
+          </ul>
+          {ai.active === null && <p className="hint">No AI key is set, so Describe and the page-reading fallback are off.</p>}
+          <p className="hint">
+            To add or change a key, set ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in the server's .env file and restart.
+            If the one in use fails, the next one with a key is tried.
+          </p>
         </>
       )}
     </main>

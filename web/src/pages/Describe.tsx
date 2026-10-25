@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { describeRecipe, saveRecipe, type RecipeDraft, type RecipeInput } from '../api';
+import { ApiError, describeRecipe, saveRecipe, type AiDraft, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 
 export function Describe() {
   const nav = useNavigate();
   const [text, setText] = useState('');
-  const [draft, setDraft] = useState<{ n: number; value: RecipeDraft } | null>(null);
+  const [draft, setDraft] = useState<{ n: number; value: AiDraft } | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,10 +25,13 @@ export function Describe() {
       setDraft((d) => ({ n: (d?.n ?? 0) + 1, value }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
+      const code = e instanceof ApiError ? (e.body as { code?: string } | undefined)?.code : undefined;
       setError(
         msg === 'AI not configured'
-          ? 'AI is not configured on this server (no Anthropic API key set).'
-          : `Could not create a draft${msg ? `: ${msg}` : ''}`,
+          ? 'AI is not configured on this server (no AI key set in .env).'
+          : code && code !== 'other'
+            ? msg // already a plain-language sentence from the server
+            : `Could not create a draft${msg ? `: ${msg}` : ''}`,
       );
     } finally {
       busyRef.current = false;
@@ -49,7 +53,7 @@ export function Describe() {
     }
   }
 
-  const { gaps, ...initial } = draft?.value ?? ({} as RecipeDraft);
+  const { gaps, provider, model: _model, ...initial } = draft?.value ?? ({} as AiDraft);
 
   return (
     <main className="page">
@@ -71,6 +75,7 @@ export function Describe() {
         {busy ? (<><span className="spinner" aria-hidden="true" /> Creating…</>) : 'Create draft'}
       </button>
       {error && <p className="field-error" role="alert">{error}</p>}
+      {draft && draftedBy(provider) && <p className="hint">{draftedBy(provider)}</p>}
       {draft && (
         <RecipeForm key={draft.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} />
       )}

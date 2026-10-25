@@ -118,4 +118,23 @@ describe('Import', () => {
     resolve({ draft, usedAi: false, usable: true });
     await screen.findByDisplayValue('Easy pancakes');
   });
+
+  it('shows which AI read the page and the provider failure message', async () => {
+    vi.mocked(importRecipe).mockResolvedValueOnce({ draft, usedAi: true, usable: true, provider: 'gemini', model: 'g-1' });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/import']}><Routes><Route path="/import" element={<Import />} /><Route path="/recipe/:id" element={<p>cook page</p>} /></Routes></MemoryRouter>);
+    await user.type(screen.getByLabelText(/recipe page address/i), 'https://nan.example/x');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByText('Drafted by Gemini')).toBeTruthy();
+  });
+
+  it('shows the AI error message when the AI fallback failed', async () => {
+    const msg = 'The AI key was rejected. Check the key in .env.';
+    vi.mocked(importRecipe).mockResolvedValueOnce({ draft, usedAi: false, usable: false, aiError: { error: msg, code: 'auth' } });
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/import']}><Routes><Route path="/import" element={<Import />} /></Routes></MemoryRouter>);
+    await user.type(screen.getByLabelText(/recipe page address/i), 'https://nan.example/x');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByText(msg)).toBeTruthy();
+  });
 });
