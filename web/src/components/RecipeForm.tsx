@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { uploadImage } from '../api';
 import type { RecipeInput } from '../../../server/src/recipes/schema';
-import { formatIngredients, parseIngredients, parseLines, parseTags } from '../lib/text';
+import { formatIngredientLine, formatIngredients, parseIngredients, parseLines, parseTags } from '../lib/text';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
@@ -66,6 +66,11 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       return;
     }
     setError(null);
+    const parsedIngredients = parseIngredients(ingredients);
+    // Interim: links index into the ingredient list, so they only survive while that list is unchanged.
+    const sameIngredients =
+      parsedIngredients.length === initial.ingredients.length &&
+      parsedIngredients.every((ing, i) => formatIngredientLine(ing) === formatIngredientLine(initial.ingredients[i]));
     onSave({
       ...initial,
       title: title.trim(),
@@ -76,10 +81,14 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       servings: num(servings),
       prepMinutes: num(prep),
       cookMinutes: num(cook),
-      ingredients: parseIngredients(ingredients),
+      ingredients: parsedIngredients,
       steps: parseLines(steps).map((text, i) => {
         const prev = initial.steps[i];
-        return prev && prev.text === text ? prev : { text, imageId: null, ingredients: [] };
+        if (!prev || prev.text !== text) return { text, imageId: null, ingredients: [] };
+        return {
+          ...prev,
+          ingredients: sameIngredients ? prev.ingredients.filter((n) => n < parsedIngredients.length) : [],
+        };
       }),
       notes: str(notes),
       tags: parseTags(tags),

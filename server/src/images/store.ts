@@ -3,8 +3,9 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { rename, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
+import { IMAGE_ID_RE } from './ids.js';
 
-export const IMAGE_ID_RE = /^[a-f0-9]{64}\.jpg$/;
+export { IMAGE_ID_RE };
 const MAX_WIDTH = 1600;
 const THUMB_WIDTH = 400;
 

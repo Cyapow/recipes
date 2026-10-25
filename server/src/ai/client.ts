@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Config } from '../config.js';
-import { RecipeDraftSchema, type RecipeDraft } from '../recipes/schema.js';
+import { RecipeDraftSchema, normaliseSteps, type RecipeDraft } from '../recipes/schema.js';
 import { buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, TOOL_NAME } from './draft.js';
 
 export interface AiClient {
@@ -94,7 +94,14 @@ export function createAnthropicClient(config: Config, sdk?: SdkLike, opts: { att
         const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
         if (block && block.type === 'tool_use') {
           const parsed = RecipeDraftSchema.safeParse(block.input);
-          if (parsed.success) return parsed.data;
+          if (parsed.success) {
+            const d = parsed.data;
+            // The model can never set a photo, and its links must index its own ingredients.
+            return {
+              ...d,
+              steps: normaliseSteps(d.steps, d.ingredients.length).map((s) => ({ ...s, imageId: null })),
+            };
+          }
           lastError = parsed.error.message;
           messages.push(
             { role: 'assistant', content: res.content },

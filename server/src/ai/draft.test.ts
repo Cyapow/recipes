@@ -222,3 +222,29 @@ describe('per-attempt timeout', () => {
     expect(results.every((r) => r.is_error)).toBe(true);
   });
 });
+
+describe('step normalisation of AI drafts', () => {
+  const two = {
+    ...draft,
+    ingredients: [draft.ingredients[0], { ...draft.ingredients[0], item: 'onion' }],
+  };
+  const run = async (steps: unknown[]) => {
+    const { sdk } = fake(toolUse({ ...two, steps }));
+    const client = createAnthropicClient(config, sdk);
+    return (await client.extractRecipe({ kind: 'description', text: 'x' })).steps;
+  };
+  it('drops out-of-range and non-integer links', async () => {
+    const steps = await run([{ text: 'a', imageId: null, ingredients: [0, 99, -1, 1.5] }]);
+    expect(steps).toEqual([{ text: 'a', imageId: null, ingredients: [0] }]);
+  });
+  it('dedupes and sorts links', async () => {
+    expect(await run([{ text: 'a', imageId: null, ingredients: [1, 1, 0] }])).toEqual([
+      { text: 'a', imageId: null, ingredients: [0, 1] },
+    ]);
+  });
+  it('always nulls imageId', async () => {
+    expect(await run([{ text: 'a', imageId: 'e'.repeat(64) + '.jpg', ingredients: [] }])).toEqual([
+      { text: 'a', imageId: null, ingredients: [] },
+    ]);
+  });
+});

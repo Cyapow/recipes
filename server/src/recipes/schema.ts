@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IMAGE_ID_RE } from '../images/ids.js';
 
 export const IngredientSchema = z.object({
   group: z.string().nullable(),
@@ -11,7 +12,7 @@ export type Ingredient = z.infer<typeof IngredientSchema>;
 
 export const StepSchema = z.object({
   text: z.string(),
-  imageId: z.string().regex(/^[a-f0-9]{64}\.jpg$/).nullable(),
+  imageId: z.string().regex(IMAGE_ID_RE).nullable(),
   ingredients: z.array(z.number().int().min(0)),
 });
 export type Step = z.infer<typeof StepSchema>;
@@ -31,7 +32,7 @@ export function normaliseSteps(raw: unknown, ingredientCount: number): Step[] {
       const e = entry as Record<string, unknown>;
       if (typeof e.text !== 'string') continue;
       const imageId =
-        typeof e.imageId === 'string' && /^[a-f0-9]{64}\.jpg$/.test(e.imageId) ? e.imageId : null;
+        typeof e.imageId === 'string' && IMAGE_ID_RE.test(e.imageId) ? e.imageId : null;
       const links = Array.isArray(e.ingredients) ? e.ingredients : [];
       const ingredients = [
         ...new Set(
@@ -89,7 +90,14 @@ export const RecipeSchema = RecipeCoreSchema.extend({
 export type Recipe = z.infer<typeof RecipeSchema>;
 
 // No transforms here: z.toJSONSchema cannot represent them. Task 3 replaces the step schema for the AI tool.
+// Lenient on links/imageId: the AI client normalises them (range-filter, null imageId) instead of retrying.
+const DraftStepSchema = z.object({
+  text: z.string(),
+  imageId: z.string().nullable(),
+  ingredients: z.array(z.number()),
+});
 export const RecipeDraftSchema = RecipeCoreSchema.extend({
+  steps: z.array(DraftStepSchema),
   gaps: z.array(z.string()),
 });
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;

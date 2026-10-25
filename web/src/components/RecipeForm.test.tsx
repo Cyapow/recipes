@@ -65,4 +65,44 @@ describe('RecipeForm', () => {
     const ta = screen.getByLabelText('Ingredients') as HTMLTextAreaElement;
     expect(ta.value).toBe('1.5 tsp salt (fine)\n# Sauce\nbasil');
   });
+
+  describe('interim step links', () => {
+    const H = 'f'.repeat(64) + '.jpg';
+    const linked: RecipeInput = {
+      ...empty,
+      title: 'T',
+      ingredients: [
+        { group: null, quantity: null, unit: null, item: 'salt', note: null },
+        { group: null, quantity: null, unit: null, item: 'pepper', note: null },
+      ],
+      steps: [{ text: 'Season', imageId: H, ingredients: [0, 1] }],
+    };
+    const save = async (edit?: (user: ReturnType<typeof userEvent.setup>) => Promise<void>) => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      render(<RecipeForm initial={linked} onSave={onSave} />);
+      await edit?.(user);
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      return (onSave.mock.calls[0][0] as RecipeInput).steps;
+    };
+
+    it('keeps links and photo when nothing changed', async () => {
+      expect(await save()).toEqual(linked.steps);
+    });
+
+    it('drops links but keeps the photo when an ingredient line is removed', async () => {
+      const steps = await save(async (user) => {
+        await user.clear(screen.getByLabelText('Ingredients'));
+        await user.type(screen.getByLabelText('Ingredients'), 'salt');
+      });
+      expect(steps).toEqual([{ text: 'Season', imageId: H, ingredients: [] }]);
+    });
+
+    it('drops both when the step text is edited', async () => {
+      const steps = await save(async (user) => {
+        await user.type(screen.getByLabelText('Steps'), '!');
+      });
+      expect(steps).toEqual([{ text: 'Season!', imageId: null, ingredients: [] }]);
+    });
+  });
 });
