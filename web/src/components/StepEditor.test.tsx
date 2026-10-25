@@ -103,15 +103,20 @@ describe('StepEditor', () => {
     expect(out()).toEqual([s('B')]);
   });
 
-  it('does not crash when the upload resolves after unmount', async () => {
+  it('does not call back or log after unmount when the upload resolves', async () => {
     let resolve!: (id: string) => void;
     impl = () => new Promise((r) => (resolve = r));
+    const onChange = vi.fn();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
-    const { unmount } = render(<Harness initial={[s('A')]} />);
+    const { unmount } = render(<StepEditor steps={[s('A')]} ingredients={ings} onChange={onChange} onBusyChange={() => {}} />);
     await user.upload(screen.getByLabelText('Add photo', { selector: 'input' }), file());
     unmount();
     resolve('x.jpg');
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it('adds, deletes and moves steps; links and photo travel', async () => {

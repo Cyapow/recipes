@@ -127,12 +127,63 @@ describe('RecipeForm', () => {
       expect(screen.getByRole('button', { name: 'pepper' }).getAttribute('aria-pressed')).toBe('true');
     });
 
-    it('keeps a photo-only step but drops a fully empty one', async () => {
+    it('keeps a step with blank text and a photo but no links', async () => {
       const steps = await save(async (user) => {
         await user.clear(screen.getByLabelText('Step 1'));
-        await user.click(screen.getByRole('button', { name: '+ Add a step' }));
+        await user.click(screen.getByRole('button', { name: 'salt' }));
+        await user.click(screen.getByRole('button', { name: 'pepper' }));
       });
-      expect(steps).toEqual([{ text: '', imageId: H, ingredients: [0, 1] }]);
+      expect(steps).toEqual([{ text: '', imageId: H, ingredients: [] }]);
+    });
+
+    it('keeps a step with blank text and links but no photo', async () => {
+      const steps = await save(async (user) => {
+        await user.clear(screen.getByLabelText('Step 1'));
+        await user.click(screen.getByRole('button', { name: 'Remove photo for step 1' }));
+      });
+      expect(steps).toEqual([{ text: '', imageId: null, ingredients: [0, 1] }]);
+    });
+
+    it('drops a step with blank text, no photo and no links', async () => {
+      const steps = await save(async (user) => {
+        await user.clear(screen.getByLabelText('Step 1'));
+        await user.click(screen.getByRole('button', { name: 'Remove photo for step 1' }));
+        await user.click(screen.getByRole('button', { name: 'salt' }));
+        await user.click(screen.getByRole('button', { name: 'pepper' }));
+      });
+      expect(steps).toEqual([]);
+    });
+
+    it('drops a text-less step whose links are all out of range', async () => {
+      const steps = await save(undefined, {
+        ...linked,
+        steps: [{ text: '', imageId: null, ingredients: [5] }],
+      });
+      expect(steps).toEqual([]);
+    });
+
+    it('a chip toggled after an ingredient edit survives the next ingredient edit (no focus events)', async () => {
+      const user = userEvent.setup();
+      render(<RecipeForm initial={linked} onSave={() => {}} />);
+      const ta = screen.getByLabelText('Ingredients');
+      fireEvent.change(ta, { target: { value: 'salt\npepper\nsugar' } });
+      await user.click(screen.getByRole('button', { name: 'sugar' }));
+      fireEvent.change(ta, { target: { value: 'salt\npepper\nsugar\nbasil' } });
+      expect(screen.getByRole('button', { name: 'sugar' }).getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('a step added after an ingredient edit keeps correct links on the next edit', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      render(<RecipeForm initial={linked} onSave={onSave} />);
+      const ta = screen.getByLabelText('Ingredients');
+      fireEvent.change(ta, { target: { value: 'pepper\nsalt' } });
+      await user.click(screen.getByRole('button', { name: '+ Add a step' }));
+      await user.type(screen.getByLabelText('Step 2'), 'New');
+      await user.click(screen.getAllByRole('button', { name: 'salt' })[1]);
+      fireEvent.change(ta, { target: { value: 'basil\npepper\nsalt' } });
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect((onSave.mock.calls[0][0] as RecipeInput).steps.map((x) => x.ingredients)).toEqual([[1, 2], [2]]);
     });
 
     it('keeps the link through keystroke edits and restores it when text is restored', async () => {

@@ -105,12 +105,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
       cookMinutes: num(cook),
       ingredients: parsedIngredients,
       steps: steps
-        .filter((st) => st.text.trim() !== '' || st.imageId !== null || st.ingredients.length > 0)
         .map((st) => ({
           ...st,
           text: st.text.trim(),
           ingredients: st.ingredients.filter((n) => n < parsedIngredients.length),
-        })),
+        }))
+        .filter((st) => st.text !== '' || st.imageId !== null || st.ingredients.length > 0),
       notes: str(notes),
       tags: parseTags(tags),
       imageIds,
@@ -179,7 +179,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false }: RecipeForm
         </div>
         <section className="field steps-field" aria-labelledby="h-steps-title">
           <h2 id="h-steps-title">Method</h2>
-          <StepEditor steps={steps} ingredients={parseIngredients(ingredients)} onChange={setSteps} onBusyChange={setStepsBusy} />
+          <StepEditor steps={steps} ingredients={parseIngredients(ingredients)} onChange={(next) => { baseline.current = null; setSteps(next); }} onBusyChange={setStepsBusy} />
         </section>
         <label>
           Notes
