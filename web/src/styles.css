@@ -15,7 +15,8 @@
   --font-head: 'Fraunces', Georgia, serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #17140f; --fg: #f1ebe4; --muted: #a89d93; --card: #221e19; --line: #3a332b;
     --chip: #2d2720; --border-strong: #4a4137;
     --accent: #e08a5e; --accent-fg: #1a120d; --danger: #f2877f; --danger-fg: #1a120d;
@@ -29,6 +30,21 @@
     --tile-4-bg: #55501a; --tile-4-fg: #f5ebb5;
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #17140f; --fg: #f1ebe4; --muted: #a89d93; --card: #221e19; --line: #3a332b;
+  --chip: #2d2720; --border-strong: #4a4137;
+  --accent: #e08a5e; --accent-fg: #1a120d; --danger: #f2877f; --danger-fg: #1a120d;
+  --herb: #9fcf92; --herb-tint: #24331f;
+  --amber-bg: #3a2d14; --amber-line: #6b5326; --amber-fg: #f5dfb0; --amber-strong: #d9a441;
+  --ink-soft: #cfc3b7;
+  --tile-0-bg: #5a2a18; --tile-0-fg: #f3d9c6;
+  --tile-1-bg: #5a4310; --tile-1-fg: #f6e3b8;
+  --tile-2-bg: #2f4a29; --tile-2-fg: #d6e4cf;
+  --tile-3-bg: #54422a; --tile-3-fg: #ebdcc8;
+  --tile-4-bg: #55501a; --tile-4-fg: #f5ebb5;
+}
+:root[data-theme="light"] { color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.4 var(--font-body); }
 a { color: inherit; }

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { disconnectGoogle, getAiStatus, getBackupStatus, runBackupNow, type AiStatus, type BackupRunResult, type BackupStatus } from '../api';
 
+import { getTheme, setTheme, type Theme } from '../lib/theme';
+
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'Never');
 
 export function Settings() {
@@ -9,6 +11,7 @@ export function Settings() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [ai, setAi] = useState<AiStatus | null>(null);
+  const [theme, setThemeState] = useState<Theme>(getTheme);
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
   const [result, setResult] = useState<BackupRunResult | null>(null);
@@ -64,6 +67,24 @@ export function Settings() {
         <h1>Settings</h1>
         <nav className="actions"><Link className="btn small" to="/">Recipes</Link></nav>
       </header>
+      <h2>Appearance</h2>
+      <div className="segmented" role="group" aria-label="Colour theme">
+        {(['system', 'light', 'dark'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={theme === t ? 'active' : undefined}
+            aria-pressed={theme === t}
+            onClick={() => {
+              setTheme(t);
+              setThemeState(t);
+            }}
+          >
+            {t === 'system' ? 'Match device' : t === 'light' ? 'Light' : 'Dark'}
+          </button>
+        ))}
+      </div>
+      <p className="hint">Remembered on this browser only.</p>
       <h2>Google Drive backup</h2>
       {g === 'denied' && <p className="field-error" role="alert">Google access was not granted.</p>}
       {g === 'failed' && (
