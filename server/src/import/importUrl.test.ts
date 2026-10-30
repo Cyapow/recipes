@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { AiRefusedError, AiRequestError, type AiClient } from '../ai/client.js';
 import { RecipeDraftSchema, RecipeInputSchema, type RecipeDraft } from '../recipes/schema.js';
-import { extractVisibleText, importFromUrl } from './importUrl.js';
+import { extractMetaText, extractVisibleText, importFromUrl } from './importUrl.js';
 
 const fixture = (n: string) => readFileSync(new URL(`../../test-fixtures/${n}`, import.meta.url), 'utf8');
 const aiDraft: RecipeDraft = {
@@ -102,5 +102,57 @@ describe('extractVisibleText', () => {
   });
   it('caps at 20k chars', () => {
     expect(extractVisibleText(`<p>${'a '.repeat(30_000)}</p>`).length).toBeLessThanOrEqual(20_000);
+  });
+});
+
+describe('extractMetaText', () => {
+  const social = (caption: string, short = caption.slice(0, 40)) => `<html><head>
+    <link rel="alternate" type="application/json+oembed" href="/o" title="${caption}" />
+    <meta property="og:title" content="706K views · ${short}" />
+    <meta property="og:description" content="${short}" />
+    </head><body><div id="root"></div></body></html>`;
+
+  it('takes the caption a JS-rendered post keeps in its tags, newlines and all', () => {
+    const caption = 'Mini pizzas\n\n330g plain flour\n1 tbsp olive oil\n\nPlace the flour in a bowl. Add the oil.';
+    const t = extractMetaText(social(caption));
+    expect(t).toContain('330g plain flour');
+    expect(t).toContain('\n');
+    expect(t.split('330g plain flour').length - 1, 'the truncated copies are dropped').toBe(1);
+  });
+
+  it('keeps a title and a description that say different things', () => {
+    const t = extractMetaText('<html><head><meta property="og:title" content="Nan soup" /><meta name="description" content="Fry an onion." /></head></html>');
+    expect(t).toBe('Nan soup\n\nFry an onion.');
+  });
+
+  it('is empty for a page with no metadata, and capped', () => {
+    expect(extractMetaText('<html><body><p>hi</p></body></html>')).toBe('');
+    expect(extractMetaText(`<html><head><meta property="og:description" content="${'a '.repeat(30_000)}" /></head></html>`).length).toBeLessThanOrEqual(20_000);
+  });
+});
+
+describe('a page that renders in the browser', () => {
+  const html = `<html><head>
+    <link rel="alternate" type="application/json+oembed" href="/o" title="Mini pizzas\n\n330g plain flour\n\nPlace the flour in a bowl." />
+    <meta property="og:image" content="https://cdn.test/thumb.jpg" />
+    </head><body><div id="root"></div></body></html>`;
+
+  it('sends the metadata caption to the AI and imports it', async () => {
+    const ai = fakeAi();
+    const b = img();
+    const r = await importFromUrl('https://social.test/r/1', { fetchPage: vi.fn(async () => ({ html, finalUrl: 'https://social.test/reel/1' })), fetchBytes: b.fetchBytes, ai, images: images() });
+    expect(ai.extractRecipe).toHaveBeenCalledOnce();
+    const sent = ai.extractRecipe.mock.calls[0][0] as { kind: string; text: string };
+    expect(sent.kind).toBe('page');
+    expect(sent.text).toContain('330g plain flour');
+    expect(r).toMatchObject({ usedAi: true, usable: true });
+    expect(r.draft.sourceName).toBe('social.test');
+  });
+
+  it('still prefers the page body when there is one', async () => {
+    const ai = fakeAi();
+    await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html'), fetchBytes: img().fetchBytes, ai, images: images() });
+    const sent = ai.extractRecipe.mock.calls[0][0] as { text: string };
+    expect(sent.text).toContain('Fry an onion, add stock and simmer for 20 minutes.');
   });
 });

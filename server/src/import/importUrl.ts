@@ -32,6 +32,31 @@ export function extractVisibleText(html: string): string {
   return root.text().replace(/\s+/g, ' ').trim().slice(0, MAX_PAGE_TEXT_CHARS);
 }
 
+/**
+ * Text the page carries in its own metadata (og:/twitter: tags, the oembed link's title). Social video posts render
+ * the recipe with JavaScript, so the fetched HTML has no visible text, but the caption is in these tags.
+ * Newlines are kept: a caption's line breaks usually separate the ingredients and the steps.
+ */
+export function extractMetaText(html: string): string {
+  const $ = cheerio.load(html);
+  const candidates = [
+    $('link[type="application/json+oembed"], link[type="text/xml+oembed"]').attr('title'),
+    $('meta[property="og:title"]').attr('content') ?? $('meta[name="twitter:title"]').attr('content'),
+    $('meta[property="og:description"]').attr('content') ??
+      $('meta[name="description"]').attr('content') ??
+      $('meta[name="twitter:description"]').attr('content'),
+  ]
+    .map((t) => t?.replace(/[ \t ]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() ?? '')
+    .filter((t) => t !== '');
+  // Social posts repeat the caption across tags, each cut short and some with a "706K views ·" prefix, so a copy is
+  // recognised by a run from its middle appearing in a longer candidate rather than by the whole string matching.
+  const flat = (t: string) => t.replace(/\s+/g, ' ');
+  // The probe is the tail, since a prefix is only ever added at the front and the cut is only ever at the end.
+  const core = (t: string) => flat(t).replace(/(\.{3}|…)\s*$/, '').trim().slice(-25);
+  const kept = candidates.filter((t, i) => !candidates.some((o, j) => j !== i && o.length > t.length && flat(o).includes(core(t))));
+  return [...new Set(kept)].join('\n\n').slice(0, MAX_PAGE_TEXT_CHARS);
+}
+
 const hostName = (u: string) => {
   try {
     return new URL(u).hostname.replace(/^www\./i, '');
@@ -62,7 +87,10 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
     return { draft: { ...ld, ...source, imageIds, gaps: [] }, usedAi: false, usable: true };
   }
 
-  const text = extractVisibleText(html);
+  // A page whose body renders in the browser gives no visible text; its metadata may still hold the whole recipe.
+  const visible = extractVisibleText(html);
+  const meta = extractMetaText(html);
+  const text = meta.length > visible.length ? meta : visible;
   let aiError: ImportResult['aiError'];
   if (deps.ai && text !== '') {
     try {
