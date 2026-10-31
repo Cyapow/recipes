@@ -5,6 +5,7 @@ import { Describe } from './pages/Describe';
 import { Import } from './pages/Import';
 import { Cook } from './pages/Cook';
 import { RecipeOverview } from './pages/RecipeOverview';
+import { PrintCard } from './pages/PrintCard';
 import { Settings } from './pages/Settings';
 import { Shopping } from './pages/Shopping';
 import { NotFound } from './pages/NotFound';
@@ -21,6 +22,7 @@ export function App() {
       <Route path="/recipe/:id" element={<RecipeOverview />} />
       <Route path="/recipe/:id/cook" element={<Cook />} />
       <Route path="/recipe/:id/edit" element={<Editor />} />
+      <Route path="/recipe/:id/print" element={<PrintCard />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

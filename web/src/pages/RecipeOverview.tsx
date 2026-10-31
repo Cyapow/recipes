@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addToShopping, ApiError, getRecipe, type Recipe } from '../api';
-import { BackIcon, CartIcon } from '../components/Icons';
+import { BackIcon, CartIcon, PlayIcon, PrinterIcon } from '../components/Icons';
+import { sourceLink } from '../lib/source';
 import { formatAmount, formatIngredientLine, formatMinutes, formatQuantity, originLabel } from '../lib/text';
 
 type Notice =
@@ -16,6 +17,35 @@ function LoadFailure({ message }: { message: string }) {
       <p className="field-error" role="alert">{message}</p>
       <Link className="btn" to="/">Back to library</Link>
     </main>
+  );
+}
+
+/**
+ * The photo, and where the recipe came from. A recipe imported from a video post shows its thumbnail as the
+ * link itself, so the photo is not repeated: one tap goes to the post rather than opening a player here.
+ */
+function SourceBlock({ recipe }: { recipe: Recipe }) {
+  const source = sourceLink(recipe);
+  const image = recipe.imageIds[0];
+  const photo = image ? <img className="cook-hero" src={`/api/images/${image}`} alt={recipe.title} /> : null;
+  if (source?.video && photo) {
+    return (
+      <a className="video-source" href={source.href} target="_blank" rel="noopener noreferrer" aria-label={source.label}>
+        {photo}
+        <span className="video-play" aria-hidden="true"><PlayIcon /></span>
+        <span className="video-caption" aria-hidden="true">{source.label}</span>
+      </a>
+    );
+  }
+  return (
+    <>
+      {photo}
+      {source && (
+        <p className="source-line">
+          <a href={source.href} target="_blank" rel="noopener noreferrer">{source.label}</a>
+        </p>
+      )}
+    </>
   );
 }
 
@@ -103,13 +133,12 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
         <Link className="btn round-btn" to="/" aria-label="Back to library"><BackIcon /></Link>
         <span className="cook-label">{originLabel(recipe)}{recipe.tags[0] ? ` · ${recipe.tags[0]}` : ''}</span>
         <Link className="btn" to={`/recipe/${encodeURIComponent(recipe.id)}/edit`}>Edit</Link>
+        <Link className="btn round-btn" to={`/recipe/${encodeURIComponent(recipe.id)}/print`} aria-label="Print recipe card"><PrinterIcon /></Link>
         <Link className="btn round-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>
       </header>
       <h1>{recipe.title}</h1>
       <p className="sub">{meta}</p>
-      {recipe.imageIds[0] && (
-        <img className="cook-hero" src={`/api/images/${recipe.imageIds[0]}`} alt={recipe.title} />
-      )}
+      <SourceBlock recipe={recipe} />
 
       {total === 0 ? (
         <p className="empty">No ingredients listed.</p>

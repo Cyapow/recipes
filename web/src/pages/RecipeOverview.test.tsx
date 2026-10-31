@@ -59,6 +59,7 @@ describe('RecipeOverview', () => {
     expect(screen.getByRole('link', { name: 'Edit' }).getAttribute('href')).toBe('/recipe/a/edit');
     expect(screen.getByRole('link', { name: 'Shopping list' }).getAttribute('href')).toBe('/shopping');
     expect(screen.getByRole('link', { name: 'Start cooking' }).getAttribute('href')).toBe('/recipe/a/cook');
+    expect(screen.getByRole('link', { name: 'Print recipe card' }).getAttribute('href')).toBe('/recipe/a/print');
     expect(screen.getByText('0 of 3 ticked')).toBeTruthy();
   });
 

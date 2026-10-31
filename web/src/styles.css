@@ -318,3 +318,62 @@ body.cook-scroll-lock { overflow: hidden; }
 .draft-actions { display: flex; gap: 8px; }
 .draft-actions .btn.small { min-height: 44px; }
 .draft-actions .primary { flex: 1; }
+
+/* Where an imported recipe came from */
+.source-line { margin: 6px 0 0; font-size: 0.9375rem; }
+.source-line a { color: var(--accent); }
+.video-source { position: relative; display: block; margin: .5rem 0; border-radius: 14px; overflow: hidden; }
+.video-source .cook-hero { margin: 0; border-radius: 0; }
+.video-play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.video-play svg { color: #fff; background: rgba(20, 16, 12, .55); border-radius: 50%; padding: 12px; box-sizing: content-box; }
+.video-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 14px 10px; color: #fff; font-size: .9375rem; font-weight: 600;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, .72)); }
+
+/* Printable recipe card. The sheets are paper in both themes, and sized in cqw so the preview and the print match. */
+.print-view { padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.print-bar { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 1040px; }
+.print-bar .hint { flex: 1; margin: 0; }
+.sheet { container-type: inline-size; box-sizing: border-box; width: 100%; max-width: 1040px; aspect-ratio: 297 / 210;
+  background: #fff; color: #1a1a1a; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 12px rgba(0, 0, 0, .14);
+  overflow: hidden; font-family: var(--font-body); font-size: 1.15cqw; line-height: 1.4; }
+.sheet h1 { font-family: var(--font-head); font-size: 2.3em; line-height: 1.1; margin: 0 0 .15em; color: #1a1a1a; }
+.sheet h2 { font-size: 1em; letter-spacing: .06em; text-transform: uppercase; color: #2f5a2a; margin: 0 0 .5em; }
+.sheet .card-meta { font-size: .85em; letter-spacing: .09em; text-transform: uppercase; color: #6b6b6b; margin: 0; }
+.sheet .card-desc { font-style: italic; color: #4a4a4a; margin: .5em 0 0; }
+.photo-sheet { display: flex; flex-direction: column; }
+.photo-sheet > img { flex: 1; width: 100%; object-fit: cover; min-height: 0; }
+.photo-band { display: flex; align-items: flex-end; gap: 1.5em; padding: 1.2em 1.6em; border-top: 3px solid #2f5a2a; }
+.photo-band > div:first-child { flex: 1; }
+.qr-block { display: flex; align-items: center; gap: .6em; font-size: .8em; color: #6b6b6b; line-height: 1.3; }
+.qr { width: 5em; height: 5em; flex: none; color: #1a1a1a; }
+.recipe-sheet { display: flex; flex-direction: column; padding: 1.4em 1.8em; }
+.recipe-sheet > header { display: flex; align-items: baseline; justify-content: space-between; gap: 1em;
+  border-bottom: 1px solid #ddd; padding-bottom: .5em; margin-bottom: .9em; }
+.recipe-sheet > header h1 { font-size: 1.9em; margin: 0; }
+.card-body { display: flex; gap: 1.6em; flex: 1; min-height: 0; }
+.card-left { width: 30%; display: flex; flex-direction: column; }
+.card-left h2 + * { margin-top: 0; }
+.card-left .qr-block { margin-top: auto; padding-top: 1em; }
+.card-right { flex: 1; }
+.card-ingredients { list-style: none; margin: 0 0 1em; padding: 0; }
+.card-ingredients li { display: flex; justify-content: space-between; gap: .6em; padding: .2em 0; border-bottom: 1px dotted #d8d8d8; }
+.card-ingredients li.card-group { display: block; border: 0; padding: .8em 0 .1em; font-size: .8em; letter-spacing: .09em;
+  text-transform: uppercase; color: #8a8a8a; }
+.card-ingredients b { font-weight: 700; white-space: nowrap; order: 1; }
+.card-notes { margin: 0; color: #444; }
+.card-steps { list-style: none; margin: 0; padding: 0; column-count: 2; column-gap: 1.6em; }
+.card-steps li { break-inside: avoid; margin: 0 0 .7em; }
+.card-steps b { color: #2f5a2a; margin-right: .4em; }
+.card-steps img { display: block; width: 100%; border-radius: .3em; margin: .3em 0; }
+.recipe-sheet > footer { display: flex; justify-content: space-between; border-top: 1px solid #ddd; margin-top: .8em; padding-top: .5em;
+  font-size: .75em; letter-spacing: .08em; text-transform: uppercase; color: #8a8a8a; }
+
+@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+  body { background: #fff; }
+  .print-view { display: block; padding: 0; }
+  .print-bar { display: none; }
+  .sheet { width: 100%; max-width: none; height: 194mm; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none;
+    break-after: page; }
+  .sheet:last-child { break-after: auto; }
+}
