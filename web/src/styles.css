@@ -335,18 +335,20 @@ body.cook-scroll-lock { overflow: hidden; }
 .print-bar .hint { flex: 1; margin: 0; }
 .sheet { container-type: inline-size; box-sizing: border-box; width: 100%; max-width: 1040px; aspect-ratio: 297 / 210;
   background: #fff; color: #1a1a1a; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 12px rgba(0, 0, 0, .14);
-  overflow: hidden; font-family: var(--font-body); font-size: 1.15cqw; line-height: 1.4; }
+  font-family: var(--font-body); font-size: 1.15cqw; line-height: 1.4; }
 .sheet h1 { font-family: var(--font-head); font-size: 2.3em; line-height: 1.1; margin: 0 0 .15em; color: #1a1a1a; }
 .sheet h2 { font-size: 1em; letter-spacing: .06em; text-transform: uppercase; color: #2f5a2a; margin: 0 0 .5em; }
 .sheet .card-meta { font-size: .85em; letter-spacing: .09em; text-transform: uppercase; color: #6b6b6b; margin: 0; }
 .sheet .card-desc { font-style: italic; color: #4a4a4a; margin: .5em 0 0; }
-.photo-sheet { display: flex; flex-direction: column; }
+.photo-sheet { display: flex; flex-direction: column; overflow: hidden; }
 .photo-sheet > img { flex: 1; width: 100%; object-fit: cover; min-height: 0; }
 .photo-band { display: flex; align-items: flex-end; gap: 1.5em; padding: 1.2em 1.6em; border-top: 3px solid #2f5a2a; }
 .photo-band > div:first-child { flex: 1; }
 .qr-block { display: flex; align-items: center; gap: .6em; font-size: .8em; color: #6b6b6b; line-height: 1.3; }
 .qr { width: 5em; height: 5em; flex: none; color: #1a1a1a; }
-.recipe-sheet { display: flex; flex-direction: column; padding: 1.4em 1.8em; }
+/* A page of paper at the top, but it grows rather than clipping: a long recipe runs onto a second sheet.
+   The min-height is the A4 landscape ratio of the 1040px maximum width, so a short recipe still fills a page. */
+.recipe-sheet { display: flex; flex-direction: column; padding: 1.4em 1.8em; aspect-ratio: auto; min-height: 735px; }
 .recipe-sheet > header { display: flex; align-items: baseline; justify-content: space-between; gap: 1em;
   border-bottom: 1px solid #ddd; padding-bottom: .5em; margin-bottom: .9em; }
 .recipe-sheet > header h1 { font-size: 1.9em; margin: 0; }
@@ -373,7 +375,9 @@ body.cook-scroll-lock { overflow: hidden; }
   body { background: #fff; }
   .print-view { display: block; padding: 0; }
   .print-bar { display: none; }
-  .sheet { width: 100%; max-width: none; height: 194mm; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none;
+  .sheet { width: 100%; max-width: none; min-height: 194mm; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none;
     break-after: page; }
+  .photo-sheet { height: 194mm; }
+  .recipe-sheet { height: auto; }
   .sheet:last-child { break-after: auto; }
 }
