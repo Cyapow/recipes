@@ -166,7 +166,7 @@ describe('Cook slides', () => {
     });
     const { container } = renderCook();
     await screen.findByText('Step 1 of 1');
-    expect(within(uses()!).getByText(chip(/^0\.33 cup red wine \(dry\)$/))).toBeTruthy();
+    expect(within(uses()!).getByText(chip(/^⅓ cup red wine \(dry\)$/))).toBeTruthy();
     expect(container.querySelector('.cook-text')).toBeNull();
     expect(container.querySelectorAll('p').length).toBe(0);
   });
@@ -327,7 +327,7 @@ describe('Cook ingredients sheet', () => {
     expect(d.getByText(/1 onion/)).toBeTruthy();
     expect(d.getByText(/500g beef mince/)).toBeTruthy();
     expect(d.getByText(/2 tbsp olive oil/)).toBeTruthy();
-    expect(d.getByText(/0\.33 cup red wine \(dry\)/)).toBeTruthy();
+    expect(d.getByText(/⅓ cup red wine \(dry\)/)).toBeTruthy();
     expect(dialog.contains(document.activeElement)).toBe(true);
     await user.click(d.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();

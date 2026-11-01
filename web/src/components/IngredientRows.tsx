@@ -5,7 +5,7 @@ import { moveIngredient, removeIngredient } from '../lib/ingredientEdits';
 import {
   ingredientIndexes, newHeadingRow, newIngredientRow, toIngredients, toRows, type Row,
 } from '../lib/ingredientRows';
-import { formatQuantity } from '../lib/text';
+import { formatIngredientQuantity } from '../lib/text';
 
 export type IngredientRowsProps = {
   ingredients: Ingredient[];
@@ -94,7 +94,7 @@ export function IngredientRows({ ingredients, steps, onChange }: IngredientRowsP
             <div className="ing-line">
               <input
                 className="ing-qty" inputMode="decimal" aria-label={`Quantity for row ${n}`} placeholder="–"
-                value={typing[row.id] ?? (quantity != null ? formatQuantity(quantity) : '')}
+                value={typing[row.id] ?? (quantity != null ? formatIngredientQuantity(quantity, unit) : '')}
                 onChange={(e) => {
                   setTyping((t) => ({ ...t, [row.id]: e.target.value }));
                   patch(i, { quantity: asQuantity(e.target.value) });

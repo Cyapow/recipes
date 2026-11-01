@@ -31,16 +31,15 @@ const QUANTITY = new RegExp(`^(\\d+(?:\\.\\d+)?)?\\s*([${GLYPHS}])\\s+|^(\\d+\\s
 // "500g flour": a compact metric unit written against the number, which no other unit is.
 const ATTACHED = /^(\d+(?:\.\d+)?)(g|kg|ml|l)\s+(.+)$/i;
 
-/** Two decimals, so a third of a teaspoon is stored as 0.33 rather than 0.3333333333333333. */
-const round = (n: number): number => Math.round(n * 100) / 100;
-
+// A third is stored as a third. It is displayed as ⅓, so the recurring decimal is never shown, and keeping the
+// true value means three of them still make one.
 function fractionValue(whole: string | undefined, glyph: string): number {
-  return round((whole ? Number(whole) : 0) + FRACTIONS[glyph]!);
+  return (whole ? Number(whole) : 0) + FRACTIONS[glyph]!;
 }
 
 function mixedValue(s: string): number | null {
   const m = /^(?:(\d+)\s+)?(\d+)\/(\d+)$/.exec(s);
-  if (m) return round(Number(m[1] ?? 0) + Number(m[2]!) / Number(m[3]!));
+  if (m) return Number(m[1] ?? 0) + Number(m[2]!) / Number(m[3]!);
   return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
 }
 
@@ -129,3 +128,14 @@ export function canonicalUnit(unit: string | null): string | null {
   if (u === '') return null;
   return SAME_UNIT[u] ?? (UNIT_CHOICES.includes(u) ? u : unit.trim());
 }
+
+/**
+ * The fractions worth writing back as characters: the ones recipes are actually written in. Fifths, sevenths and
+ * tenths are left out on purpose — nobody writes 1⅕ for 1.2, and reading it back as a fifth would be a surprise.
+ */
+const WRITTEN = ['½', '⅓', '⅔', '¼', '¾', '⅙', '⅚', '⅛', '⅜', '⅝', '⅞'];
+export const FRACTION_GLYPHS: [number, string][] = WRITTEN.map((g) => [FRACTIONS[g]!, g] as [number, string])
+  .sort((a, b) => a[0] - b[0]);
+
+/** Units a recipe writes in decimals rather than fractions: 1.5kg, never 1½kg. */
+export const DECIMAL_UNITS = new Set(['g', 'kg', 'mg', 'ml', 'l']);

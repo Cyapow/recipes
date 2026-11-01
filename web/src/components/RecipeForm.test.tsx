@@ -73,7 +73,7 @@ describe('RecipeForm', () => {
     };
     const onSave = vi.fn();
     render(<RecipeForm initial={initial} onSave={onSave} />);
-    expect((screen.getByLabelText('Quantity for row 1') as HTMLInputElement).value).toBe('1.5');
+    expect((screen.getByLabelText('Quantity for row 1') as HTMLInputElement).value).toBe('1½');
     expect((screen.getByLabelText('Unit for row 1') as HTMLSelectElement).value).toBe('tsp');
     expect((screen.getByLabelText('Ingredient 1') as HTMLInputElement).value).toBe('salt (fine)');
     expect((screen.getByLabelText('Heading 2') as HTMLInputElement).value).toBe('Sauce');
