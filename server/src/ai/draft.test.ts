@@ -366,3 +366,33 @@ describe('step normalisation of AI drafts', () => {
     ]);
   });
 });
+
+describe('toRecipeDraft repairs a stranded unit', () => {
+  const withIngredients = (ingredients: unknown[]) =>
+    AiDraftSchema.parse({ ...draft, ingredients, steps: [] });
+  const ing = (quantity: number | null, unit: string | null, item: string, note: string | null = null) =>
+    ({ group: null, quantity, unit, item, note });
+
+  it('recovers the amount the model left in the note', () => {
+    // What a real import produced: the model met "2-3 tablespoons", recorded no quantity, and left the unit
+    // at the front of the item with the range in the note.
+    const out = toRecipeDraft(withIngredients([
+      ing(null, null, 'tablespoons neutral oil', '2–3 tablespoons (30–45 ml), divided'),
+    ]));
+    expect(out.ingredients[0]).toEqual(
+      { group: null, quantity: 2, unit: 'tablespoons', item: 'neutral oil', note: '2–3 tablespoons (30–45 ml), divided' },
+    );
+  });
+  it('recovers an amount the model left in the item itself', () => {
+    const out = toRecipeDraft(withIngredients([ing(null, null, '2-3 tbsp hoisin sauce')]));
+    expect(out.ingredients[0]).toMatchObject({ quantity: 2, unit: 'tbsp', item: 'hoisin sauce' });
+  });
+  it('leaves a stranded unit alone when no number can be found, rather than inventing one', () => {
+    const out = toRecipeDraft(withIngredients([ing(null, null, 'tbsp vegetable oil')]));
+    expect(out.ingredients[0]).toEqual(ing(null, null, 'tbsp vegetable oil'));
+  });
+  it('does not touch an ingredient the model got right', () => {
+    const out = toRecipeDraft(withIngredients([ing(1, 'lb', 'ground beef'), ing(null, null, 'salt')]));
+    expect(out.ingredients).toEqual([ing(1, 'lb', 'ground beef'), ing(null, null, 'salt')]);
+  });
+});

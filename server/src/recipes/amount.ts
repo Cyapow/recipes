@@ -46,6 +46,31 @@ function mixedValue(s: string): number | null {
 
 export type SplitAmount = { quantity: number | null; unit: string | null; item: string; note: string | null };
 
+/** The unit at the front of what is left, and the item after it. */
+function splitUnit(rest: string): { unit: string | null; item: string } {
+  const words = rest.split(/\s+/);
+  const two = words.slice(0, 2).join(' ').toLowerCase();
+  if (words.length > 2 && TWO_WORD_UNITS.has(two)) {
+    return { unit: words.slice(0, 2).join(' '), item: words.slice(2).join(' ') };
+  }
+  // A unit only counts when a word is left over to name the item: "2 cups" on its own is two cups of something.
+  if (words.length > 1 && UNITS.has(words[0]!.toLowerCase())) {
+    return { unit: words[0]!, item: words.slice(1).join(' ') };
+  }
+  return { unit: null, item: rest };
+}
+
+// "2-3 tablespoons", "1–1½ lb", "2 to 3 tsp". A range is still a number: we cook to the lower end and keep the
+// range in the note, rather than storing no quantity at all and stranding the unit at the front of the item.
+const NUMBER = `\\d+(?:\\.\\d+)?[${GLYPHS}]?|[${GLYPHS}]`;
+const RANGE = new RegExp(`^(${NUMBER})\\s*(?:-|–|—|to)\\s*(?:${NUMBER})\\s+`);
+
+function numberValue(s: string): number | null {
+  const m = new RegExp(`^(\\d+(?:\\.\\d+)?)?([${GLYPHS}])$`).exec(s);
+  if (m) return fractionValue(m[1], m[2]!);
+  return mixedValue(s);
+}
+
 export function splitAmount(line: string): SplitAmount {
   let rest = line.trim();
   let note: string | null = null;
@@ -58,22 +83,22 @@ export function splitAmount(line: string): SplitAmount {
   const att = ATTACHED.exec(rest);
   if (att) return { quantity: Number(att[1]), unit: att[2]!, item: att[3]!.trim(), note };
 
+  const range = RANGE.exec(rest);
+  if (range) {
+    const low = numberValue(range[1]!);
+    if (low != null) {
+      const { unit, item } = splitUnit(rest.slice(range[0].length).trim());
+      const asWritten = [range[0].trim(), unit].filter(Boolean).join(' ');
+      return { quantity: low, unit, item, note: note ?? asWritten };
+    }
+  }
+
   const q = QUANTITY.exec(rest);
   if (!q) return { quantity: null, unit: null, item: rest.trim(), note };
   const quantity = q[2] ? fractionValue(q[1], q[2]) : mixedValue(q[3]!);
   rest = rest.slice(q[0].length).trim();
   if (quantity == null) return { quantity: null, unit: null, item: line.trim(), note };
-
-  const words = rest.split(/\s+/);
-  const two = words.slice(0, 2).join(' ').toLowerCase();
-  if (words.length > 2 && TWO_WORD_UNITS.has(two)) {
-    return { quantity, unit: words.slice(0, 2).join(' '), item: words.slice(2).join(' '), note };
-  }
-  // A unit only counts when a word is left over to name the item: "2 cups" on its own is two cups of something.
-  if (words.length > 1 && UNITS.has(words[0]!.toLowerCase())) {
-    return { quantity, unit: words[0]!, item: words.slice(1).join(' '), note };
-  }
-  return { quantity, unit: null, item: rest, note };
+  return { quantity, ...splitUnit(rest), note };
 }
 
 /**

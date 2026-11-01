@@ -56,3 +56,22 @@ describe('canonicalUnit', () => {
     expect(canonicalUnit(null)).toBeNull();
   });
 });
+
+describe('splitAmount with a range', () => {
+  it('takes the lower end as the quantity and keeps the range in the note', () => {
+    expect(splitAmount('2-3 tablespoons neutral oil'))
+      .toEqual({ quantity: 2, unit: 'tablespoons', item: 'neutral oil', note: '2-3 tablespoons' });
+    expect(splitAmount('1–1½ lb beef'))
+      .toEqual({ quantity: 1, unit: 'lb', item: 'beef', note: '1–1½ lb' });
+    expect(splitAmount('2 to 3 tsp salt'))
+      .toEqual({ quantity: 2, unit: 'tsp', item: 'salt', note: '2 to 3 tsp' });
+  });
+  it('leaves a note that is already there, which usually says it better', () => {
+    expect(splitAmount('2-3 tbsp oil (to taste)'))
+      .toEqual({ quantity: 2, unit: 'tbsp', item: 'oil', note: 'to taste' });
+  });
+  it('is not fooled by a number that is not a range', () => {
+    expect(splitAmount('1 lb ground beef')).toMatchObject({ quantity: 1, note: null });
+    expect(splitAmount('9-inch pie crust')).toMatchObject({ quantity: null, item: '9-inch pie crust' });
+  });
+});
