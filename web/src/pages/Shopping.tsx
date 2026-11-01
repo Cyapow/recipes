@@ -1,3 +1,4 @@
+import { formatLine } from '../lib/text';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { clearShopping, listShopping, removeShoppingItem, type ShoppingItem } from '../api';
@@ -205,7 +206,7 @@ export function Shopping() {
             {items.map((it) => (
               <li key={it.id} className="shopping-row">
                 <span className="shopping-meta">
-                  <span className="shopping-text">{it.text}</span>
+                  <span className="shopping-text">{formatLine(it.text)}</span>
                   {it.sources.length > 0 && (
                     <span className="sub">{it.sources.map((s) => s.title).join(', ')}</span>
                   )}
@@ -213,7 +214,7 @@ export function Shopping() {
                 <button
                   type="button"
                   className="round-btn remove-btn"
-                  aria-label={`Remove ${it.text}`}
+                  aria-label={`Remove ${formatLine(it.text)}`}
                   aria-busy={removing.has(it.id) || undefined}
                   ref={(el) => { if (el) removeBtns.current.set(it.id, el); else removeBtns.current.delete(it.id); }}
                   onClick={() => void remove(it)}

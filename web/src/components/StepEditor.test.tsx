@@ -43,8 +43,8 @@ describe('StepEditor', () => {
   it('toggles ingredient chips with aria-pressed', async () => {
     const user = userEvent.setup();
     render(<Harness initial={[s('Mix', [1])]} />);
-    const flour = screen.getByRole('button', { name: '2 cups flour' });
-    const salt = screen.getByRole('button', { name: 'salt' });
+    const flour = screen.getByRole('button', { name: '2 cups Flour' });
+    const salt = screen.getByRole('button', { name: 'Salt' });
     expect(flour.getAttribute('aria-pressed')).toBe('false');
     expect(salt.getAttribute('aria-pressed')).toBe('true');
     await user.click(flour);

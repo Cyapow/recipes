@@ -72,7 +72,7 @@ describe('RecipeOverview recipe_changed', () => {
   it('shows the message and Reload, never auto-adds, and Reload refetches and resets ticks', async () => {
     const user = userEvent.setup();
     renderOverview();
-    await user.click(await screen.findByRole('checkbox', { name: /spaghetti/ }));
+    await user.click(await screen.findByRole('checkbox', { name: /spaghetti/i }));
     vi.mocked(addToShopping).mockRejectedValueOnce(changed());
     await user.click(screen.getByRole('button', { name: 'Add 1 to shopping list' }));
     const alert = await screen.findByRole('alert');
@@ -84,7 +84,7 @@ describe('RecipeOverview recipe_changed', () => {
       ingredients: [{ group: null, quantity: 1, unit: null, item: 'pancetta', note: null }],
     });
     await user.click(screen.getByRole('button', { name: 'Reload' }));
-    await screen.findByRole('checkbox', { name: /pancetta/ });
+    await screen.findByRole('checkbox', { name: /pancetta/i });
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText('0 of 1 ticked')).toBeTruthy();
     expect(addToShopping).toHaveBeenCalledTimes(1);

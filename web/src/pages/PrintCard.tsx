@@ -4,7 +4,7 @@ import { getRecipe, type Recipe } from '../api';
 import { qrModules, qrPathData } from '../lib/qr';
 import { sourceLink } from '../lib/source';
 import { useMetric } from '../lib/metric';
-import { formatAmount, formatMinutes, formatQuantity } from '../lib/text';
+import { formatAmount, formatItem, formatMinutes, formatQuantity } from '../lib/text';
 import { metricRecipe } from '../lib/units';
 
 /** A QR code drawn as one path, sized by CSS. The label is what a scanner would open. */
@@ -105,7 +105,7 @@ export function PrintCard() {
                     {heading && <li className="card-group">{heading}</li>}
                     <li>
                       {amount && <b>{amount}</b>}
-                      <span>{ing.item}{ing.note ? ` (${ing.note})` : ''}</span>
+                      <span>{formatItem(ing.item)}{ing.note ? ` (${ing.note})` : ''}</span>
                     </li>
                   </Fragment>
                 );

@@ -66,7 +66,7 @@ describe('RecipeOverview', () => {
   it('sends only the unticked indexes', async () => {
     const user = userEvent.setup();
     renderAt();
-    await user.click(await box('3 eggs (large)'));
+    await user.click(await box('3 Eggs (large)'));
     expect(screen.getByText('1 of 3 ticked')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Add 2 to shopping list' }));
     expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined, '');
@@ -95,7 +95,7 @@ describe('RecipeOverview', () => {
   it('marks ticked rows Have it', async () => {
     const user = userEvent.setup();
     renderAt();
-    await user.click(await box('200g spaghetti'));
+    await user.click(await box('200g Spaghetti'));
     expect(screen.getAllByText('Have it')).toHaveLength(1);
   });
 
@@ -163,11 +163,11 @@ describe('RecipeOverview', () => {
   it('resets ticks when navigating to another recipe', async () => {
     const user = userEvent.setup();
     renderAt();
-    await user.click(await box('200g spaghetti'));
+    await user.click(await box('200g Spaghetti'));
     await user.click(screen.getByRole('link', { name: 'to-b' }));
     await screen.findByRole('heading', { name: 'Soup' });
     expect(screen.getByText('0 of 1 ticked')).toBeTruthy();
-    expect((await box('1 leek') as HTMLInputElement).checked).toBe(false);
+    expect((await box('1 Leek') as HTMLInputElement).checked).toBe(false);
   });
 
   it('shows a message instead of the checklist when there are no ingredients', async () => {
@@ -242,8 +242,8 @@ describe('RecipeOverview stale add results and polish', () => {
       ingredients: ['a', 'b', 'c', 'd'].map((item) => ({ group: null, quantity: null, unit: null, item, note: null })),
     });
     renderAt();
-    await user.click(await box('b'));
-    await user.click(await box('d'));
+    await user.click(await box('B'));
+    await user.click(await box('D'));
     await user.click(screen.getByRole('button', { name: 'Add 2 to shopping list' }));
     expect(addToShopping).toHaveBeenCalledWith('a', [0, 2], undefined, '');
   });
@@ -253,7 +253,7 @@ describe('RecipeOverview stale add results and polish', () => {
     renderAt();
     await user.click(await screen.findByRole('button', { name: 'Add 3 to shopping list' }));
     await screen.findByText(/Added 2 items/);
-    await user.click(await box('200g spaghetti'));
+    await user.click(await box('200g Spaghetti'));
     expect(screen.queryByText(/Added 2 items/)).toBeNull();
   });
 

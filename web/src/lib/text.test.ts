@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAmount, formatIngredientLine, formatQuantity } from './text';
+import { formatAmount, formatIngredientLine, formatItem, formatLine, formatQuantity } from './text';
 import { splitAmount } from '../../../server/src/recipes/amount';
 
 const ing = (quantity: number | null, unit: string | null, item: string, note: string | null = null) =>
@@ -7,14 +7,14 @@ const ing = (quantity: number | null, unit: string | null, item: string, note: s
 
 describe('quantity spacing', () => {
   it.each([
-    [ing(500, 'g', 'beef mince'), '500g beef mince'],
-    [ing(1.5, 'kg', 'potatoes'), '1.5kg potatoes'],
-    [ing(250, 'ml', 'milk'), '250ml milk'],
-    [ing(2, 'l', 'stock'), '2l stock'],
-    [ing(2, 'tins', 'chopped tomatoes'), '2 tins chopped tomatoes'],
-    [ing(3, 'tbsp', 'olive oil'), '3 tbsp olive oil'],
-    [ing(1, 'tsp', 'salt', 'flaky'), '1 tsp salt (flaky)'],
-    [ing(2, null, 'eggs'), '2 eggs'],
+    [ing(500, 'g', 'beef mince'), '500g Beef mince'],
+    [ing(1.5, 'kg', 'potatoes'), '1.5kg Potatoes'],
+    [ing(250, 'ml', 'milk'), '250ml Milk'],
+    [ing(2, 'l', 'stock'), '2l Stock'],
+    [ing(2, 'tins', 'chopped tomatoes'), '2 tins Chopped tomatoes'],
+    [ing(3, 'tbsp', 'olive oil'), '3 tbsp Olive oil'],
+    [ing(1, 'tsp', 'salt', 'flaky'), '1 tsp Salt (flaky)'],
+    [ing(2, null, 'eggs'), '2 Eggs'],
   ])('formats %j', (i, text) => expect(formatIngredientLine(i)).toBe(text));
 
   it('formatAmount gives quantity and unit only', () => {
@@ -54,5 +54,38 @@ describe('quantities as fractions', () => {
     for (const n of [0.5, 1 / 3, 1 + 2 / 3, 2.25, 0.125]) {
       expect(splitAmount(`${q(n)} tsp salt`).quantity).toBeCloseTo(n, 2);
     }
+  });
+});
+
+describe('capitalising an ingredient', () => {
+  const line = (item: string, note: string | null = null) =>
+    formatIngredientLine({ group: null, quantity: 1, unit: 'tsp', item, note });
+  it('starts the name with a capital', () => {
+    expect(line('ground beef')).toBe('1 tsp Ground beef');
+    expect(formatItem('olive oil')).toBe('Olive oil');
+  });
+  it('capitalises the first word only, leaving the rest as written', () => {
+    expect(formatItem('extra virgin olive oil')).toBe('Extra virgin olive oil');
+    expect(formatItem('Tesco Finest diced beef')).toBe('Tesco Finest diced beef');
+    expect(formatItem('pak choi')).toBe('Pak choi');
+  });
+  it('leaves a name that does not start with a letter alone', () => {
+    expect(formatItem('400g packs beef')).toBe('400g packs beef');
+    expect(formatItem('')).toBe('');
+  });
+  it('does not touch the note', () => {
+    expect(line('beef mince', 'thinly sliced')).toBe('1 tsp Beef mince (thinly sliced)');
+  });
+});
+
+describe('formatLine', () => {
+  it('capitalises the ingredient in a written line, not its amount', () => {
+    expect(formatLine('500g beef mince')).toBe('500g Beef mince');
+    expect(formatLine('2 tbsp olive oil')).toBe('2 tbsp Olive oil');
+    expect(formatLine('milk')).toBe('Milk');
+  });
+  it('leaves a line it cannot read alone, apart from its first letter', () => {
+    expect(formatLine('salt and pepper to taste')).toBe('Salt and pepper to taste');
+    expect(formatLine('')).toBe('');
   });
 });

@@ -53,9 +53,9 @@ describe('the printable card', () => {
     ]);
     const ingredients = screen.getByRole('list', { name: 'Ingredients' });
     expect(within(ingredients).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      '500gbeef mince',
+      '500gBeef mince',
       'To serve',
-      '400gspaghetti',
+      '400gSpaghetti',
     ]);
   });
 

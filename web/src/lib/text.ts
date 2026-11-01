@@ -1,4 +1,5 @@
 import { DECIMAL_UNITS, FRACTION_GLYPHS } from '../../../server/src/recipes/amount';
+import { splitAmount } from '../../../server/src/recipes/amount';
 import type { Ingredient } from '../../../server/src/recipes/schema';
 
 const ATTACHED_UNITS = new Set(['g', 'kg', 'ml', 'l']);
@@ -9,8 +10,17 @@ function amount(qty: string | null, unit: string | null): string {
   return [qty, unit].filter(Boolean).join(' ');
 }
 
+/**
+ * An ingredient's name as it is shown: starting with a capital, however it was typed or imported. Only the first
+ * letter is touched, so "extra virgin olive oil" does not become title case and "Tesco Finest" keeps its capitals.
+ * The stored name is left as written; this is for reading, and the editor still shows what is there.
+ */
+export function formatItem(item: string): string {
+  return item.charAt(0).toUpperCase() + item.slice(1);
+}
+
 function joinIngredient(i: Ingredient, qty: string | null): string {
-  return [amount(qty, i.unit), i.item].filter(Boolean).join(' ') + (i.note ? ` (${i.note})` : '');
+  return [amount(qty, i.unit), formatItem(i.item)].filter(Boolean).join(' ') + (i.note ? ` (${i.note})` : '');
 }
 
 /** Quantity and unit only, e.g. "500g" or "2 tins" (empty string when neither is set). */
@@ -61,4 +71,14 @@ export function formatIngredientQuantity(q: number, unit: string | null): string
 
 export function formatIngredientLine(i: Ingredient): string {
   return joinIngredient(i, i.quantity != null ? formatIngredientQuantity(i.quantity, i.unit) : null);
+}
+
+/**
+ * A written line, such as a shopping list entry, with its ingredient capitalised: "500g beef mince" reads
+ * "500g Beef mince". The amount is left exactly as it is, so the g of 500g is not what gets the capital.
+ */
+export function formatLine(text: string): string {
+  const { item } = splitAmount(text);
+  const at = item ? text.indexOf(item) : -1;
+  return at < 0 ? formatItem(text) : text.slice(0, at) + formatItem(item) + text.slice(at + item.length);
 }

@@ -80,7 +80,7 @@ describe('Cook slides', () => {
     expect(screen.getByText('Dice the onion.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Leave cook mode' }).getAttribute('href')).toBe('/recipe/a');
     const u = within(uses()!);
-    expect(u.getByText(/onion/)).toBeTruthy();
+    expect(u.getByText(/onion/i)).toBeTruthy();
     expect(u.queryByText(/mince/)).toBeNull();
   });
 
@@ -90,9 +90,9 @@ describe('Cook slides', () => {
     await screen.findByText('Dice the onion.');
     await user.click(screen.getByRole('button', { name: 'Next step' }));
     const u = within(uses()!);
-    expect(u.getByText(chip(/^500g beef mince$/))).toBeTruthy();
-    expect(u.getByText(chip(/^2 tbsp olive oil$/))).toBeTruthy();
-    expect(u.queryByText(/onion/)).toBeNull();
+    expect(u.getByText(chip(/^500g Beef mince$/))).toBeTruthy();
+    expect(u.getByText(chip(/^2 tbsp Olive oil$/))).toBeTruthy();
+    expect(u.queryByText(/onion/i)).toBeNull();
     expect(screen.queryByText(/red wine/)).toBeNull();
   });
 
@@ -116,7 +116,7 @@ describe('Cook slides', () => {
     await screen.findByText('Odd.');
     const u = within(uses()!);
     expect(u.getAllByRole('listitem')).toHaveLength(1);
-    expect(u.getByText(/onion/)).toBeTruthy();
+    expect(u.getByText(/onion/i)).toBeTruthy();
   });
 
   it('shows no Uses strip when every link is invalid', async () => {
@@ -166,7 +166,7 @@ describe('Cook slides', () => {
     });
     const { container } = renderCook();
     await screen.findByText('Step 1 of 1');
-    expect(within(uses()!).getByText(chip(/^⅓ cup red wine \(dry\)$/))).toBeTruthy();
+    expect(within(uses()!).getByText(chip(/^⅓ cup Red wine \(dry\)$/))).toBeTruthy();
     expect(container.querySelector('.cook-text')).toBeNull();
     expect(container.querySelectorAll('p').length).toBe(0);
   });
@@ -324,10 +324,10 @@ describe('Cook ingredients sheet', () => {
     expect(d.getByText('Base')).toBeTruthy();
     expect(d.getByText('Sauce')).toBeTruthy();
     expect(d.getAllByRole('listitem')).toHaveLength(4);
-    expect(d.getByText(/1 onion/)).toBeTruthy();
-    expect(d.getByText(/500g beef mince/)).toBeTruthy();
-    expect(d.getByText(/2 tbsp olive oil/)).toBeTruthy();
-    expect(d.getByText(/⅓ cup red wine \(dry\)/)).toBeTruthy();
+    expect(d.getByText(/1 Onion/)).toBeTruthy();
+    expect(d.getByText(/500g Beef mince/)).toBeTruthy();
+    expect(d.getByText(/2 tbsp Olive oil/)).toBeTruthy();
+    expect(d.getByText(/⅓ cup Red wine \(dry\)/)).toBeTruthy();
     expect(dialog.contains(document.activeElement)).toBe(true);
     await user.click(d.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();

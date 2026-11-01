@@ -135,15 +135,15 @@ describe('RecipeForm', () => {
       const user = userEvent.setup();
       render(<RecipeForm initial={linked} onSave={() => {}} />);
       await user.click(screen.getByRole('button', { name: 'Delete row 1' }));
-      expect(screen.queryByRole('button', { name: 'salt' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'pepper' }).getAttribute('aria-pressed')).toBe('true');
+      expect(screen.queryByRole('button', { name: 'Salt' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Pepper' }).getAttribute('aria-pressed')).toBe('true');
     });
 
     it('keeps a step with blank text and a photo but no links', async () => {
       const steps = await save(async (user) => {
         await user.clear(screen.getByLabelText('Step 1'));
-        await user.click(screen.getByRole('button', { name: 'salt' }));
-        await user.click(screen.getByRole('button', { name: 'pepper' }));
+        await user.click(screen.getByRole('button', { name: 'Salt' }));
+        await user.click(screen.getByRole('button', { name: 'Pepper' }));
       });
       expect(steps).toEqual([{ text: '', imageId: H, ingredients: [] }]);
     });
@@ -160,8 +160,8 @@ describe('RecipeForm', () => {
       const steps = await save(async (user) => {
         await user.clear(screen.getByLabelText('Step 1'));
         await user.click(screen.getByRole('button', { name: 'Remove photo for step 1' }));
-        await user.click(screen.getByRole('button', { name: 'salt' }));
-        await user.click(screen.getByRole('button', { name: 'pepper' }));
+        await user.click(screen.getByRole('button', { name: 'Salt' }));
+        await user.click(screen.getByRole('button', { name: 'Pepper' }));
       });
       expect(steps).toEqual([]);
     });
@@ -179,10 +179,10 @@ describe('RecipeForm', () => {
       render(<RecipeForm initial={linked} onSave={() => {}} />);
       await user.click(screen.getByRole('button', { name: '+ Ingredient' }));
       await user.type(screen.getByLabelText('Ingredient 3'), 'sugar');
-      await user.click(screen.getByRole('button', { name: 'sugar' }));
+      await user.click(screen.getByRole('button', { name: 'Sugar' }));
       await user.click(screen.getByRole('button', { name: '+ Ingredient' }));
       await user.type(screen.getByLabelText('Ingredient 4'), 'basil');
-      expect(screen.getByRole('button', { name: 'sugar' }).getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByRole('button', { name: 'Sugar' }).getAttribute('aria-pressed')).toBe('true');
     });
 
     it('a step added after a reorder keeps the right links when the list changes again', async () => {
@@ -192,7 +192,7 @@ describe('RecipeForm', () => {
       await user.click(screen.getByRole('button', { name: 'Move row 2 up' })); // pepper, salt
       await user.click(screen.getByRole('button', { name: '+ Add a step' }));
       await user.type(screen.getByLabelText('Step 2'), 'New');
-      await user.click(screen.getAllByRole('button', { name: 'salt' })[1]!);
+      await user.click(screen.getAllByRole('button', { name: 'Salt' })[1]!);
       await user.click(screen.getByRole('button', { name: '+ Ingredient' }));
       await user.type(screen.getByLabelText('Ingredient 3'), 'basil');
       await user.click(screen.getByRole('button', { name: 'Save' }));

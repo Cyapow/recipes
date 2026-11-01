@@ -6,7 +6,7 @@ import { MetricToggle } from '../components/MetricToggle';
 import { useMetric } from '../lib/metric';
 import { sourceLink } from '../lib/source';
 import { hasImperial, metricIngredient } from '../lib/units';
-import { formatAmount, formatIngredientLine, formatMinutes, formatQuantity, originLabel } from '../lib/text';
+import { formatAmount, formatIngredientLine, formatItem, formatMinutes, formatQuantity, originLabel } from '../lib/text';
 
 type Notice =
   | { kind: 'added'; count: number }
@@ -168,7 +168,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
                     <input type="checkbox" checked={ticked} onChange={() => toggle(i)} aria-label={`We have this: ${formatIngredientLine(ing)}`} />
                     <span className="have-text">
                       {qty && <b>{qty}</b>}
-                      <span>{ing.item}{ing.note ? ` (${ing.note})` : ''}</span>
+                      <span>{formatItem(ing.item)}{ing.note ? ` (${ing.note})` : ''}</span>
                     </span>
                     <span className="have-tag">{ticked ? 'Have it' : 'Need'}</span>
                   </label>

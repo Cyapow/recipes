@@ -6,7 +6,7 @@ import { useSwipe } from '../hooks/useSwipe';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { MetricToggle } from '../components/MetricToggle';
 import { useMetric } from '../lib/metric';
-import { formatAmount, formatIngredientLine } from '../lib/text';
+import { formatAmount, formatIngredientLine, formatItem } from '../lib/text';
 import { hasImperial, metricRecipe } from '../lib/units';
 
 type Ingredient = Recipe['ingredients'][number];
@@ -66,7 +66,7 @@ const isTyping = (t: EventTarget | null) =>
 
 function UseChip({ ing }: { ing: Ingredient }) {
   const qty = formatAmount(ing);
-  const item = ing.item + (ing.note ? ` (${ing.note})` : '');
+  const item = formatItem(ing.item) + (ing.note ? ` (${ing.note})` : '');
   return <li>{qty && <><b>{qty}</b>{' '}</>}{item}</li>;
 }
 
