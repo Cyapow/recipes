@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addToShopping, ApiError, getRecipe, type Recipe } from '../api';
 import { BackIcon, CartIcon, PlayIcon, PrinterIcon } from '../components/Icons';
+import { MetricToggle } from '../components/MetricToggle';
+import { useMetric } from '../lib/metric';
 import { sourceLink } from '../lib/source';
+import { hasImperial, metricIngredient } from '../lib/units';
 import { formatAmount, formatIngredientLine, formatMinutes, formatQuantity, originLabel } from '../lib/text';
 
 type Notice =
@@ -62,6 +65,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
   const [have, setHave] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [metric] = useMetric();
   const inFlight = useRef(false);
   const addAgainRef = useRef<HTMLButtonElement>(null);
   const duplicate = notice?.kind === 'duplicate';
@@ -148,12 +152,14 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
           <p className="hint">Tick the ingredients that are already in the cupboard. We'll list the rest.</p>
           <div className="have-bar">
             <span className="have-count">{have.size} of {total} ticked</span>
+            {hasImperial(recipe.ingredients, recipe.steps) && <MetricToggle />}
             <button type="button" className="link-btn" onClick={() => setAll(!allTicked)}>
               {allTicked ? 'Untick all' : 'Tick all'}
             </button>
           </div>
           <ul className="have-list">
-            {recipe.ingredients.map((ing, i) => {
+            {recipe.ingredients.map((raw, i) => {
+              const ing = metric ? metricIngredient(raw) : raw;
               const ticked = have.has(i);
               const qty = formatAmount(ing);
               return (

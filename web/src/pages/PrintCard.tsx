@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { getRecipe, type Recipe } from '../api';
 import { qrModules, qrPathData } from '../lib/qr';
 import { sourceLink } from '../lib/source';
+import { useMetric } from '../lib/metric';
 import { formatAmount, formatMinutes, formatQuantity } from '../lib/text';
+import { metricRecipe } from '../lib/units';
 
 /** A QR code drawn as one path, sized by CSS. The label is what a scanner would open. */
 function Qr({ url }: { url: string }) {
@@ -30,7 +32,8 @@ function metaLine(r: Recipe): string {
  */
 export function PrintCard() {
   const { id = '' } = useParams();
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [raw, setRecipe] = useState<Recipe | null>(null);
+  const [metric] = useMetric();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,7 +54,10 @@ export function PrintCard() {
       </main>
     );
   }
-  if (!recipe) return <main className="page"><p className="empty">Loading…</p></main>;
+  if (!raw) return <main className="page"><p className="empty">Loading…</p></main>;
+
+  // Paper cannot be toggled, so the card prints whichever way the switch was left on the recipe page.
+  const recipe = metric ? metricRecipe(raw) : raw;
 
   const url = `${window.location.origin}/recipe/${encodeURIComponent(recipe.id)}`;
   const meta = metaLine(recipe);

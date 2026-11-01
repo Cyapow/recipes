@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { splitAmount } from '../recipes/amount.js';
 import { linkIngredients } from '../recipes/links.js';
 import type { RecipeInput } from '../recipes/schema.js';
 
@@ -106,7 +107,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
   const ingredients = (Array.isArray(r.recipeIngredient) ? r.recipeIngredient : [])
     .map(clean)
     .filter(Boolean)
-    .map((item) => ({ group: null, quantity: null, unit: null, item, note: null }));
+    .map((line) => ({ group: null, ...splitAmount(line) }));
   const tags: string[] = [];
   for (const t of [...asList(r.recipeCategory), ...asList(r.recipeCuisine), ...asList(r.keywords)]) {
     const tag = clean(t).toLowerCase();

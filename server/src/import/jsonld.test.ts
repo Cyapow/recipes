@@ -32,7 +32,7 @@ describe('parseRecipeJsonLd', () => {
     expect(r.cookMinutes).toBe(20);
     expect(r.servings).toBe(4);
     expect(r.origin).toBe('other');
-    expect(r.ingredients[0]).toEqual({ group: null, quantity: null, unit: null, item: '100g plain flour', note: null });
+    expect(r.ingredients[0]).toEqual({ group: null, quantity: 100, unit: 'g', item: 'plain flour', note: null });
     expect(r.ingredients).toHaveLength(4);
     expect(r.steps.map((x) => x.text)).toEqual(['Put the flour, eggs & milk in a bowl and whisk.', 'Heat the oil in a pan.', 'Pour in some batter and cook for 1 min each side.']);
     expect(r.steps.every((x) => x.imageId === null)).toBe(true);
@@ -93,6 +93,28 @@ describe('findImageUrl', () => {
   it('falls back to og:image and resolves relative urls', () => {
     expect(findImageUrl('<meta property="og:image" content="/img/p.jpg">', 'https://x.test/a/b')).toBe('https://x.test/img/p.jpg');
     expect(findImageUrl('<p/>', 'https://x.test')).toBeNull();
+  });
+});
+
+describe('parseRecipeJsonLd amounts', () => {
+  it('splits each ingredient line into a quantity, a unit and an item', () => {
+    const r = parseRecipeJsonLd(ld(recipe({
+      recipeIngredient: ['1 lb ground beef', '1½ tbsp olive oil', '⅓ cup diced green bell pepper', 'large flour tortillas', '500g spaghetti'],
+    })))!;
+    expect(r.ingredients).toEqual([
+      { group: null, quantity: 1, unit: 'lb', item: 'ground beef', note: null },
+      { group: null, quantity: 1.5, unit: 'tbsp', item: 'olive oil', note: null },
+      { group: null, quantity: 1 / 3, unit: 'cup', item: 'diced green bell pepper', note: null },
+      { group: null, quantity: null, unit: null, item: 'large flour tortillas', note: null },
+      { group: null, quantity: 500, unit: 'g', item: 'spaghetti', note: null },
+    ]);
+  });
+  it('links a step to an ingredient by the item, now that the quantity is not part of it', () => {
+    const r = parseRecipeJsonLd(ld(recipe({
+      recipeIngredient: ['1 lb ground beef', '3 tbsp tomato sauce'],
+      recipeInstructions: ['Brown the ground beef.', 'Stir in the tomato sauce.'],
+    })))!;
+    expect(r.steps.map((s) => s.ingredients)).toEqual([[0], [1]]);
   });
 });
 

@@ -270,7 +270,14 @@ body.cook-scroll-lock { overflow: hidden; }
 .overview .sub { margin: -6px 0 0; }
 .have-section { display: flex; flex-direction: column; gap: 10px; }
 .have-section h2 { margin: 8px 0 0; font-size: 1.5rem; }
-.have-bar { display: flex; align-items: center; justify-content: space-between; }
+.have-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Shown only on a recipe written in pounds or Fahrenheit, so it never sits there doing nothing. */
+.metric-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 4px 10px; border-radius: 12px; background: var(--chip); border: 1.5px solid var(--line); color: var(--muted); font-size: .875rem; font-weight: 700; cursor: pointer; }
+.metric-toggle input { width: 20px; min-height: 20px; height: 20px; padding: 0; margin: 0; accent-color: var(--herb); }
+.metric-toggle:has(input:checked) { background: var(--herb-tint); border-color: var(--herb); color: var(--herb); }
+.have-bar .metric-toggle { margin-left: auto; }
+@media print { .metric-toggle { display: none; } }
 .have-count { font-size: .875rem; font-weight: 700; color: var(--ink-soft); }
 .link-btn { border: 0; background: transparent; color: var(--accent); font-size: .9375rem; padding: 0 14px; }
 .have-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

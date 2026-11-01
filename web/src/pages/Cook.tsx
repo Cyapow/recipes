@@ -4,7 +4,10 @@ import { getRecipe, type Recipe } from '../api';
 import { CameraIcon, CloseIcon, ListIcon, SunIcon } from '../components/Icons';
 import { useSwipe } from '../hooks/useSwipe';
 import { useWakeLock } from '../hooks/useWakeLock';
+import { MetricToggle } from '../components/MetricToggle';
+import { useMetric } from '../lib/metric';
 import { formatAmount, formatIngredientLine } from '../lib/text';
+import { hasImperial, metricRecipe } from '../lib/units';
 
 type Ingredient = Recipe['ingredients'][number];
 
@@ -145,7 +148,8 @@ function IngredientsSheet({ ingredients, onClose }: { ingredients: Ingredient[];
 function CookSlides({ id }: { id: string }) {
   const navigate = useNavigate();
   const wake = useWakeLock();
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [raw, setRecipe] = useState<Recipe | null>(null);
+  const [metric] = useMetric();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [sheet, setSheet] = useState(false);
@@ -165,7 +169,7 @@ function CookSlides({ id }: { id: string }) {
     };
   }, [id]);
 
-  const total = recipe?.steps.length ?? 0;
+  const total = raw?.steps.length ?? 0;
   const cur = Math.max(0, Math.min(step, total - 1));
   const last = cur >= total - 1;
   const overview = `/recipe/${encodeURIComponent(id)}`;
@@ -195,7 +199,11 @@ function CookSlides({ id }: { id: string }) {
   const swipe = useSwipe({ onLeft: () => !sheet && go(1), onRight: () => !sheet && go(-1) });
 
   if (error) return <LoadFailure message={error} />;
-  if (!recipe) return <main className="page"><p className="empty">Loading…</p></main>;
+  if (!raw) return <main className="page"><p className="empty">Loading…</p></main>;
+
+  // Everything below shows the recipe; converting here covers the step text, the Uses chips and the sheet at once.
+  const recipe = metric ? metricRecipe(raw) : raw;
+  const offerMetric = hasImperial(raw.ingredients, raw.steps);
 
   if (total === 0) {
     return (
@@ -203,6 +211,7 @@ function CookSlides({ id }: { id: string }) {
         <h1>{recipe.title}</h1>
         {recipe.description && <p>{recipe.description}</p>}
         {recipe.notes && <p>{recipe.notes}</p>}
+        {offerMetric && <MetricToggle />}
         <KeepOn wake={wake} />
         <Link className="btn" to={overview}>Back to recipe</Link>
       </main>
@@ -231,6 +240,7 @@ function CookSlides({ id }: { id: string }) {
           >
             <ListIcon />
           </button>
+          {offerMetric && <MetricToggle />}
           <KeepOn wake={wake} />
         </header>
 
