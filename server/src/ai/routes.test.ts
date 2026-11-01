@@ -10,8 +10,8 @@ const draft = {
   steps: [], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
 const extraction = { draft, provider: 'openai' as const, model: 'gpt-x' };
-const make = (ai?: AiClient, config: Record<string, unknown> = {}) =>
-  buildApp({ config: { dataDir: '/nonexistent', ...config } as never, db: openDb(':memory:'), ai });
+const make = (ai?: AiClient, config: Record<string, unknown> = {}, web: Record<string, unknown> = {}) =>
+  buildApp({ config: { dataDir: '/nonexistent', ...config } as never, db: openDb(':memory:'), ai, ...web });
 const post = (app: ReturnType<typeof make>, payload: unknown) =>
   app.inject({ method: 'POST', url: '/api/ai/describe', payload: payload as never });
 
@@ -98,5 +98,36 @@ describe('GET /api/ai/status', () => {
   it('reports no active provider when nothing is configured', async () => {
     const res = await make(undefined, { anthropicModel: 'm', openaiModel: 'm', geminiModel: 'm' }).inject({ method: 'GET', url: '/api/ai/status' });
     expect(res.json().active).toBeNull();
+  });
+});
+
+describe('POST /api/ai/describe with a link in the text', () => {
+  const PHOTO = 'a'.repeat(64) + '.jpg';
+  const web = (html: string) => ({
+    fetchPage: vi.fn(async () => ({ html, finalUrl: 'https://www.facebook.com/reel/99/' })),
+    fetchBytes: vi.fn(async () => ({ bytes: Buffer.from('img'), contentType: 'image/jpeg', finalUrl: 'x' })),
+    images: { save: vi.fn(async () => PHOTO), path: vi.fn(), dir: '/x' },
+  });
+  const pasted = 'From URL\nhttps://www.facebook.com/share/r/1CXPhAtkLT/\n\n3lb chuck roast, seared';
+
+  it('takes the photo and the source from the page the description links to', async () => {
+    const w = web('<meta property="og:image" content="https://x.test/pot.jpg">');
+    const res = await post(make({ extractRecipe: vi.fn().mockResolvedValue(extraction) }, {}, w), { text: pasted });
+    expect(res.json()).toMatchObject({ imageIds: [PHOTO], sourceUrl: 'https://www.facebook.com/reel/99/', sourceName: 'facebook.com' });
+    expect(w.fetchPage).toHaveBeenCalledWith('https://www.facebook.com/share/r/1CXPhAtkLT/');
+  });
+
+  it('reads the recipe from the text, never from the page', async () => {
+    const extractRecipe = vi.fn().mockResolvedValue(extraction);
+    const w = web('<meta property="og:image" content="https://x.test/pot.jpg">');
+    await post(make({ extractRecipe }, {}, w), { text: pasted });
+    expect(extractRecipe).toHaveBeenCalledWith({ kind: 'description', text: pasted });
+  });
+
+  it('still returns the recipe when the page will not load', async () => {
+    const w = { ...web(''), fetchPage: vi.fn(async () => { throw new Error('blocked'); }) };
+    const res = await post(make({ extractRecipe: vi.fn().mockResolvedValue(extraction) }, {}, w), { text: pasted });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ imageIds: [], sourceUrl: null, sourceName: null });
   });
 });

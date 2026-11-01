@@ -59,13 +59,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerImageRoutes(app, images);
 
   const ai = deps.ai ?? (providerOrder(deps.config).length > 0 ? createAiClient(deps.config) : undefined);
-  registerAiRoutes(app, ai, deps.config);
-  registerImportRoutes(app, {
-    fetchPage: deps.fetchPage ?? ((url) => fetchPage(url)),
-    fetchBytes: deps.fetchBytes ?? ((url) => fetchBytes(url)),
-    ai,
+  const web = {
+    fetchPage: deps.fetchPage ?? ((url: string) => fetchPage(url)),
+    fetchBytes: deps.fetchBytes ?? ((url: string) => fetchBytes(url)),
     images,
-  });
+  };
+  registerAiRoutes(app, ai, deps.config, web);
+  registerImportRoutes(app, { ...web, ai });
 
   const google = deps.google ?? createGoogleAuth(deps.config, path.join(deps.config.dataDir, 'google-token.json'));
   const service = createBackupService({
