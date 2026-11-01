@@ -22,7 +22,7 @@ describe('splitAmount', () => {
   });
   it('reads the fraction characters those recipes are written in', () => {
     expect(q('1½ tbsp olive oil')).toEqual({ quantity: 1.5, unit: 'tbsp', item: 'olive oil' });
-    expect(q('⅓ tsp black pepper')).toEqual({ quantity: 1 / 3, unit: 'tsp', item: 'black pepper' });
+    expect(q('⅓ tsp black pepper')).toEqual({ quantity: 0.33, unit: 'tsp', item: 'black pepper' });
     expect(q('1 ½ lb beef')).toEqual({ quantity: 1.5, unit: 'lb', item: 'beef' });
     expect(q('¾ cup milk')).toEqual({ quantity: 0.75, unit: 'cup', item: 'milk' });
     expect(q('1/2 tsp salt')).toEqual({ quantity: 0.5, unit: 'tsp', item: 'salt' });

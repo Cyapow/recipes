@@ -40,3 +40,14 @@ describe('ingredient text round trip', () => {
     expect(formatIngredients(parseIngredients('500 g beef mince'))).toBe('500g beef mince');
   });
 });
+
+describe('quantities that do not divide', () => {
+  it('writes a third as a short decimal, not a recurring one', () => {
+    expect(formatIngredients(parseIngredients('1⅔ tsp paprika'))).toBe('1.67 tsp paprika');
+    expect(formatIngredients(parseIngredients('⅓ cup diced green bell pepper'))).toBe('0.33 cup diced green bell pepper');
+  });
+  it('still round trips, since what it wrote is what it reads back', () => {
+    const once = formatIngredients(parseIngredients('1⅔ tsp paprika'));
+    expect(formatIngredients(parseIngredients(once))).toBe(once);
+  });
+});

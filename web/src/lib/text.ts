@@ -41,7 +41,8 @@ export function formatIngredients(list: Ingredient[]): string {
       lines.push(i.group ? `# ${i.group}` : '#');
       group = i.group;
     }
-    lines.push(joinIngredient(i, i.quantity != null ? String(i.quantity) : null));
+    // Rounded like everywhere else: a third of a teaspoon is 0.33, never 0.3333333333333333.
+    lines.push(joinIngredient(i, i.quantity != null ? formatQuantity(i.quantity) : null));
   }
   return lines.join('\n');
 }

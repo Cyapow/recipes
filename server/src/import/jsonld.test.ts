@@ -104,7 +104,7 @@ describe('parseRecipeJsonLd amounts', () => {
     expect(r.ingredients).toEqual([
       { group: null, quantity: 1, unit: 'lb', item: 'ground beef', note: null },
       { group: null, quantity: 1.5, unit: 'tbsp', item: 'olive oil', note: null },
-      { group: null, quantity: 1 / 3, unit: 'cup', item: 'diced green bell pepper', note: null },
+      { group: null, quantity: 0.33, unit: 'cup', item: 'diced green bell pepper', note: null },
       { group: null, quantity: null, unit: null, item: 'large flour tortillas', note: null },
       { group: null, quantity: 500, unit: 'g', item: 'spaghetti', note: null },
     ]);

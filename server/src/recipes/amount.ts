@@ -31,13 +31,16 @@ const QUANTITY = new RegExp(`^(\\d+(?:\\.\\d+)?)?\\s*([${GLYPHS}])\\s+|^(\\d+\\s
 // "500g flour": a compact metric unit written against the number, which no other unit is.
 const ATTACHED = /^(\d+(?:\.\d+)?)(g|kg|ml|l)\s+(.+)$/i;
 
+/** Two decimals, so a third of a teaspoon is stored as 0.33 rather than 0.3333333333333333. */
+const round = (n: number): number => Math.round(n * 100) / 100;
+
 function fractionValue(whole: string | undefined, glyph: string): number {
-  return (whole ? Number(whole) : 0) + FRACTIONS[glyph]!;
+  return round((whole ? Number(whole) : 0) + FRACTIONS[glyph]!);
 }
 
 function mixedValue(s: string): number | null {
   const m = /^(?:(\d+)\s+)?(\d+)\/(\d+)$/.exec(s);
-  if (m) return Number(m[1] ?? 0) + Number(m[2]!) / Number(m[3]!);
+  if (m) return round(Number(m[1] ?? 0) + Number(m[2]!) / Number(m[3]!));
   return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
 }
 
