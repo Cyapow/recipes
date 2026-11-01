@@ -391,7 +391,9 @@ body.cook-scroll-lock { overflow: hidden; }
   .sheet:last-child { break-after: auto; }
 }
 
-/* Ingredient rows: an amount, a unit and the name on one line, with headings as rows between them. */
+/* Ingredient rows: an amount, a unit and the name on one line, with headings as rows between them.
+   On a phone the name drops to a line of its own. One line only leaves it about 34px there, because the row also
+   carries move-up, move-down and delete, and the name is the part you read down the list. */
 .ing-rows { display: flex; flex-direction: column; gap: 8px; }
 .ing-row { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
 .ing-line { display: flex; gap: 6px; align-items: center; }
@@ -402,7 +404,12 @@ body.cook-scroll-lock { overflow: hidden; }
 .ing-head { background: var(--chip); border: 1px dashed var(--line); border-radius: 12px; padding: 8px; margin-top: 6px; }
 .ing-head-tag { display: block; margin: 0 0 6px 2px; font-size: .6875rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .ing-head input { flex: 1; font-weight: 700; }
-.ing-tools { display: flex; flex: 0 0 auto; }
+.ing-tools { display: flex; flex: 0 0 auto; margin-left: auto; }
+.ing-tools .icon-btn { width: 34px; min-width: 34px; padding: 0; }
+@media (max-width: 560px) {
+  .ing-row .ing-line { flex-wrap: wrap; }
+  .ing-row .ing-item { flex: 1 0 100%; order: 3; }
+}
 .ing-adds { display: flex; gap: 8px; margin-top: 4px; }
 .ing-add { flex: 1; padding: 11px 6px; border: 1.5px dashed var(--line); border-radius: 11px; background: none; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer; }
 .ing-add:hover { border-color: var(--herb); color: var(--herb); }
