@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAmount, formatIngredientLine, formatIngredients, parseIngredients } from './text';
+import { formatAmount, formatIngredientLine } from './text';
 
 const ing = (quantity: number | null, unit: string | null, item: string, note: string | null = null) =>
   ({ group: null, quantity, unit, item, note });
@@ -20,34 +20,5 @@ describe('quantity spacing', () => {
     expect(formatAmount(ing(500, 'g', 'x'))).toBe('500g');
     expect(formatAmount(ing(2, 'tins', 'x'))).toBe('2 tins');
     expect(formatAmount(ing(null, null, 'x'))).toBe('');
-  });
-});
-
-describe('ingredient text round trip', () => {
-  it('parses attached and spaced compact units identically', () => {
-    expect(parseIngredients('500g beef mince')).toEqual(parseIngredients('500 g beef mince'));
-    expect(parseIngredients('500g beef mince')[0]).toMatchObject({ quantity: 500, unit: 'g', item: 'beef mince' });
-    expect(parseIngredients('1.5kg potatoes')[0]).toMatchObject({ quantity: 1.5, unit: 'kg', item: 'potatoes' });
-  });
-  it('does not treat a bare number-letter word as a unit', () => {
-    expect(parseIngredients('2glasses wine')[0]).toMatchObject({ quantity: null, item: '2glasses wine' });
-  });
-  it('is stable through format -> parse -> format', () => {
-    const text = '# Sauce\n500g beef mince\n2 tins chopped tomatoes\n3 tbsp olive oil (good)\n250ml milk\n1/2 tsp salt';
-    const once = formatIngredients(parseIngredients(text));
-    expect(once).toBe(text.replace('1/2 tsp', '0.5 tsp'));
-    expect(formatIngredients(parseIngredients(once))).toBe(once);
-    expect(formatIngredients(parseIngredients('500 g beef mince'))).toBe('500g beef mince');
-  });
-});
-
-describe('quantities that do not divide', () => {
-  it('writes a third as a short decimal, not a recurring one', () => {
-    expect(formatIngredients(parseIngredients('1⅔ tsp paprika'))).toBe('1.67 tsp paprika');
-    expect(formatIngredients(parseIngredients('⅓ cup diced green bell pepper'))).toBe('0.33 cup diced green bell pepper');
-  });
-  it('still round trips, since what it wrote is what it reads back', () => {
-    const once = formatIngredients(parseIngredients('1⅔ tsp paprika'));
-    expect(formatIngredients(parseIngredients(once))).toBe(once);
   });
 });

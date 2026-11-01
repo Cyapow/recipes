@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { uploadImage } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
-import { formatIngredients, parseIngredients, parseTags } from '../lib/text';
-import { remapStepLinks } from '../lib/stepLinks';
+import { canonicalUnit } from '../../../server/src/recipes/amount';
+import { IngredientRows } from './IngredientRows';
+import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
 
@@ -33,7 +34,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
   const [servings, setServings] = useState(initial.servings?.toString() ?? '');
   const [prep, setPrep] = useState(initial.prepMinutes?.toString() ?? '');
   const [cook, setCook] = useState(initial.cookMinutes?.toString() ?? '');
-  const [ingredients, setIngredients] = useState(formatIngredients(initial.ingredients));
+  const [ingredients, setIngredients] = useState<Ingredient[]>(initial.ingredients);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [stepsBusy, setStepsBusy] = useState(false);
   const [notes, setNotes] = useState(initial.notes ?? '');
@@ -61,29 +62,17 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
     }
   }
 
-  // Links are remapped from the state when editing began, not from the previous keystroke, so a
-  // transient state like "32 cups flour" cannot lose a link for good and restoring the text restores it.
-  const baseline = useRef<{ ingredients: Ingredient[]; steps: Step[] } | null>(null);
-  const captureBaseline = () => {
-    baseline.current = { ingredients: parseIngredients(ingredients), steps };
-  };
-
-  function onIngredientsChange(next: string) {
-    const base = baseline.current ?? { ingredients: parseIngredients(ingredients), steps };
-    baseline.current = base;
-    const parsed = parseIngredients(next);
-    const remapped = new Map(remapStepLinks(base.ingredients, parsed, base.steps).map((s, i) => [stepId(base.steps[i]), s]));
-    setSteps((cur) =>
-      cur.map((s) => {
-        const links = remapped.get(stepId(s))?.ingredients ?? s.ingredients.filter((n) => n < parsed.length);
-        return derive(s, { ingredients: links });
-      }),
-    );
-    setIngredients(next);
+  // A row edit never moves an ingredient, and a move or a delete says exactly which one, so the rows hand back
+  // steps whose links have already followed them. Nothing has to be matched up by text.
+  function onIngredientsChange(next: { ingredients: Ingredient[]; steps: Step[] }) {
+    setIngredients(next.ingredients);
+    setSteps((cur) => cur.map((s, i) => derive(s, { ingredients: next.steps[i]?.ingredients ?? s.ingredients })));
   }
 
   function build(): RecipeInput {
-    const parsedIngredients = parseIngredients(ingredients);
+    const parsedIngredients = ingredients
+      .map((i) => ({ ...i, item: i.item.trim(), unit: canonicalUnit(i.unit) }))
+      .filter((i) => i.item !== '');
     return {
       ...initial,
       title: title.trim(),
@@ -143,7 +132,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
       return;
     }
     setError(null);
-    baseline.current = null;
+   
     onSave(build());
   }
 
@@ -203,13 +192,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
           </label>
         </div>
         <div className="field">
-          <label htmlFor="f-ingredients">Ingredients</label>
-          <textarea id="f-ingredients" aria-describedby="h-ingredients" rows={8} value={ingredients} onChange={(e) => onIngredientsChange(e.target.value)} onFocus={captureBaseline} onBlur={() => (baseline.current = null)} />
-          <small id="h-ingredients">One per line, e.g. "2 cups flour (sifted)". Start a line with # for a heading.</small>
+          <span className="label-text">Ingredients</span>
+          <IngredientRows ingredients={ingredients} steps={steps} onChange={onIngredientsChange} />
         </div>
         <section className="field steps-field" aria-labelledby="h-steps-title">
           <h2 id="h-steps-title">Method</h2>
-          <StepEditor steps={steps} ingredients={parseIngredients(ingredients)} onChange={(next) => { baseline.current = null; setSteps(next); }} onBusyChange={setStepsBusy} />
+          <StepEditor steps={steps} ingredients={ingredients} onChange={(next) => { setSteps(next); }} onBusyChange={setStepsBusy} />
         </section>
         <label>
           Notes

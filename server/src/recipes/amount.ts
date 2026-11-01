@@ -75,3 +75,32 @@ export function splitAmount(line: string): SplitAmount {
   }
   return { quantity, unit: null, item: rest, note };
 }
+
+/**
+ * The units the editor offers, in the order it offers them. No unit comes first: most ingredients have none
+ * ("1 small yellow onion", "0.5 beef bouillon cube").
+ */
+export const UNIT_CHOICES = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'lb', 'oz', 'fl oz', 'pint', 'quart',
+  'pinch', 'clove', 'slice', 'tin', 'can', 'bunch', 'sprig', 'stick', 'handful'];
+
+// The same unit written another way. Imports arrive with all of these, which is why one recipe can hold "tsp",
+// "teaspoon" and "teaspoons" at once; picking from the list settles on one spelling.
+const SAME_UNIT: Record<string, string> = {
+  teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
+  tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp', tbs: 'tbsp',
+  cups: 'cup', grams: 'g', gram: 'g', gs: 'g', kilograms: 'kg', kilogram: 'kg',
+  millilitres: 'ml', millilitre: 'ml', milliliters: 'ml', milliliter: 'ml',
+  litre: 'l', litres: 'l', liter: 'l', liters: 'l',
+  pounds: 'lb', lbs: 'lb', ounce: 'oz', ounces: 'oz',
+  'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz', floz: 'fl oz',
+  pints: 'pint', quarts: 'quart', pinches: 'pinch', cloves: 'clove', slices: 'slice',
+  tins: 'tin', cans: 'can', bunches: 'bunch', sprigs: 'sprig', sticks: 'stick', handfuls: 'handful',
+};
+
+/** The listed spelling of a unit, or the unit as written when it is not one we know. */
+export function canonicalUnit(unit: string | null): string | null {
+  if (unit == null) return null;
+  const u = unit.trim().toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
+  if (u === '') return null;
+  return SAME_UNIT[u] ?? (UNIT_CHOICES.includes(u) ? u : unit.trim());
+}

@@ -1,4 +1,3 @@
-import { splitAmount } from '../../../server/src/recipes/amount';
 import type { Ingredient } from '../../../server/src/recipes/schema';
 
 const ATTACHED_UNITS = new Set(['g', 'kg', 'ml', 'l']);
@@ -16,35 +15,6 @@ function joinIngredient(i: Ingredient, qty: string | null): string {
 /** Quantity and unit only, e.g. "500g" or "2 tins" (empty string when neither is set). */
 export function formatAmount(i: Pick<Ingredient, 'quantity' | 'unit'>): string {
   return amount(i.quantity != null ? formatQuantity(i.quantity) : null, i.unit);
-}
-
-export function parseIngredients(text: string): Ingredient[] {
-  const out: Ingredient[] = [];
-  let group: string | null = null;
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith('#')) {
-      group = line.replace(/^#+\s*/, '') || null;
-      continue;
-    }
-    out.push({ group, ...splitAmount(line) });
-  }
-  return out;
-}
-
-export function formatIngredients(list: Ingredient[]): string {
-  const lines: string[] = [];
-  let group: string | null = null;
-  for (const i of list) {
-    if (i.group !== group) {
-      lines.push(i.group ? `# ${i.group}` : '#');
-      group = i.group;
-    }
-    // Rounded like everywhere else: a third of a teaspoon is 0.33, never 0.3333333333333333.
-    lines.push(joinIngredient(i, i.quantity != null ? formatQuantity(i.quantity) : null));
-  }
-  return lines.join('\n');
 }
 
 export const parseLines = (text: string): string[] =>

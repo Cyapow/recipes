@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitAmount } from './amount.js';
+import { canonicalUnit, splitAmount } from './amount.js';
 
 const q = (line: string) => {
   const { quantity, unit, item } = splitAmount(line);
@@ -39,5 +39,20 @@ describe('splitAmount', () => {
   it('takes a trailing parenthesis as the note', () => {
     expect(splitAmount('3 tbsp olive oil (good stuff)')).toEqual({ quantity: 3, unit: 'tbsp', item: 'olive oil', note: 'good stuff' });
     expect(splitAmount('(optional) sprinkles')).toMatchObject({ note: null, item: '(optional) sprinkles' });
+  });
+});
+
+describe('canonicalUnit', () => {
+  it('settles the spellings one recipe can arrive with', () => {
+    for (const u of ['teaspoon', 'teaspoons', 'TSP', 'tsp.']) expect(canonicalUnit(u)).toBe('tsp');
+    for (const u of ['tablespoon', 'Tablespoons', 'tbsp']) expect(canonicalUnit(u)).toBe('tbsp');
+    expect(canonicalUnit('cloves')).toBe('clove');
+    expect(canonicalUnit('pounds')).toBe('lb');
+    expect(canonicalUnit('litres')).toBe('l');
+  });
+  it('keeps a unit it does not know rather than dropping it', () => {
+    expect(canonicalUnit('packs')).toBe('packs');
+    expect(canonicalUnit('  ')).toBeNull();
+    expect(canonicalUnit(null)).toBeNull();
   });
 });
