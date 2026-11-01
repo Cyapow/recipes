@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { addToShopping, ApiError, getRecipe, type Recipe } from '../api';
 import { BackIcon, CartIcon, PlayIcon, PrinterIcon } from '../components/Icons';
@@ -157,22 +157,28 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
               {allTicked ? 'Untick all' : 'Tick all'}
             </button>
           </div>
-          <ul className="have-list">
+          <ul className="have-list" aria-label="Ingredients">
             {recipe.ingredients.map((raw, i) => {
               const ing = metric ? metricIngredient(raw) : raw;
               const ticked = have.has(i);
               const qty = formatAmount(ing);
+              // A section heading sits in the list as its own item. The ingredients keep their own indexes, so a
+              // heading never becomes something to tick and never shifts what a tick refers to.
+              const heading = raw.group !== recipe.ingredients[i - 1]?.group ? raw.group : null;
               return (
-                <li key={i}>
-                  <label className={`have-row${ticked ? ' ticked' : ''}`}>
-                    <input type="checkbox" checked={ticked} onChange={() => toggle(i)} aria-label={`We have this: ${formatIngredientLine(ing)}`} />
-                    <span className="have-text">
-                      {qty && <b>{qty}</b>}
-                      <span>{formatItem(ing.item)}{ing.note ? ` (${ing.note})` : ''}</span>
-                    </span>
-                    <span className="have-tag">{ticked ? 'Have it' : 'Need'}</span>
-                  </label>
-                </li>
+                <Fragment key={i}>
+                  {heading && <li className="have-group">{heading}</li>}
+                  <li>
+                    <label className={`have-row${ticked ? ' ticked' : ''}`}>
+                      <input type="checkbox" checked={ticked} onChange={() => toggle(i)} aria-label={`We have this: ${formatIngredientLine(ing)}`} />
+                      <span className="have-text">
+                        {qty && <b>{qty}</b>}
+                        <span>{formatItem(ing.item)}{ing.note ? ` (${ing.note})` : ''}</span>
+                      </span>
+                      <span className="have-tag">{ticked ? 'Have it' : 'Need'}</span>
+                    </label>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

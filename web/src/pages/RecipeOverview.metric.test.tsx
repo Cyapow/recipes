@@ -61,3 +61,37 @@ describe('showing an American recipe in metric', () => {
     expect(await screen.findByText('910g')).toBeTruthy();
   });
 });
+
+describe('ingredient sections', () => {
+  const grouped = [
+    { group: 'For the chicken', quantity: 2, unit: 'lb', item: 'chicken tenders', note: null },
+    { group: 'For the chicken', quantity: 1, unit: 'tsp', item: 'salt', note: null },
+    { group: 'For the sauce', quantity: 3, unit: 'tbsp', item: 'gochujang', note: null },
+  ];
+  it('puts each section heading above its ingredients', async () => {
+    show({ ingredients: grouped });
+    const list = await screen.findByRole('list', { name: 'Ingredients' });
+    expect([...list.children].map((li) => li.textContent?.trim())).toEqual([
+      'For the chicken',
+      expect.stringContaining('Chicken tenders'),
+      expect.stringContaining('Salt'),
+      'For the sauce',
+      expect.stringContaining('Gochujang'),
+    ]);
+  });
+  it('marks a heading as a heading, not as something to tick', async () => {
+    show({ ingredients: grouped });
+    await screen.findByText('For the sauce');
+    expect(screen.getAllByRole('checkbox', { name: /We have this/ })).toHaveLength(3);
+  });
+  it('ticks the right ingredient even though headings sit in the same list', async () => {
+    show({ ingredients: grouped });
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'We have this: 3 tbsp Gochujang' }));
+    expect(screen.getByRole('button', { name: /Add 2 to shopping list/ })).toBeTruthy();
+  });
+  it('says nothing about sections when a recipe has none', async () => {
+    show({ ingredients: [{ group: null, quantity: 1, unit: null, item: 'egg', note: null }] });
+    const list = await screen.findByRole('list', { name: 'Ingredients' });
+    expect(list.children).toHaveLength(1);
+  });
+});
