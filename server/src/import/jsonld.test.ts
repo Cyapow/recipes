@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseRecipeJsonLd, findImageUrl } from './jsonld.js';
+import { parseRecipeJsonLd, findImageUrl, stepImageUrls } from './jsonld.js';
 
 const fixture = (n: string) => readFileSync(new URL(`../../test-fixtures/${n}`, import.meta.url), 'utf8');
 const ld = (obj: unknown) => `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
@@ -93,6 +93,36 @@ describe('findImageUrl', () => {
   it('falls back to og:image and resolves relative urls', () => {
     expect(findImageUrl('<meta property="og:image" content="/img/p.jpg">', 'https://x.test/a/b')).toBe('https://x.test/img/p.jpg');
     expect(findImageUrl('<p/>', 'https://x.test')).toBeNull();
+  });
+});
+
+describe('stepImageUrls', () => {
+  it('reads the photo of each step, aligned with the parsed steps, resolving relative urls', () => {
+    const html = ld(recipe({
+      recipeInstructions: [
+        { '@type': 'HowToSection', name: 'A', itemListElement: [
+          { '@type': 'HowToStep', text: 'Fry.', image: 'https://x.test/1.jpg' },
+          { '@type': 'HowToStep', text: 'Stir.' },
+          'Add the tomatoes.',
+        ] },
+        { '@type': 'HowToStep', text: 'Serve.', image: { '@type': 'ImageObject', url: '/img/4.jpg' } },
+      ],
+    }));
+    expect(parseRecipeJsonLd(html)!.steps.map((s) => s.text)).toEqual(['Fry.', 'Stir.', 'Add the tomatoes.', 'Serve.']);
+    expect(stepImageUrls(html, 'https://x.test/recipe/p')).toEqual(['https://x.test/1.jpg', null, null, 'https://x.test/img/4.jpg']);
+  });
+  it('drops the photo of a dropped step, so the two lists stay aligned', () => {
+    const html = ld(recipe({
+      recipeInstructions: [
+        { '@type': 'HowToStep', text: 'Mix [object Object] well', image: 'https://x.test/bad.jpg' },
+        { '@type': 'HowToStep', text: 'Bake.', image: 'https://x.test/ok.jpg' },
+      ],
+    }));
+    expect(parseRecipeJsonLd(html)!.steps.map((s) => s.text)).toEqual(['Bake.']);
+    expect(stepImageUrls(html, 'https://x.test/p')).toEqual(['https://x.test/ok.jpg']);
+  });
+  it('has nothing to say about a page with no recipe', () => {
+    expect(stepImageUrls('<p>hi</p>', 'https://x.test')).toEqual([]);
   });
 });
 

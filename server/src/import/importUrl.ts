@@ -1,10 +1,11 @@
 import * as cheerio from 'cheerio';
 import { AiRequestError, type AiClient, type ProviderErrorCode, type ProviderName } from '../ai/client.js';
 import type { ImageStore } from '../images/store.js';
-import type { RecipeDraft } from '../recipes/schema.js';
-import { findImageUrl, parseRecipeJsonLd } from './jsonld.js';
+import type { RecipeDraft, RecipeInput } from '../recipes/schema.js';
+import { findImageUrl, parseRecipeJsonLd, stepImageUrls } from './jsonld.js';
 
 export const MAX_PAGE_TEXT_CHARS = 20_000;
+const STEP_IMAGE_CONCURRENCY = 4;
 
 export type ImportDeps = {
   fetchPage: (url: string) => Promise<{ html: string; finalUrl: string }>;
@@ -65,15 +66,38 @@ const hostName = (u: string) => {
   }
 };
 
-async function downloadImage(html: string, finalUrl: string, deps: ImportDeps): Promise<string[]> {
+/** Save one image and return its id, or null if anything about it fails: a missing photo must never fail an import. */
+async function saveImage(url: string, deps: ImportDeps): Promise<string | null> {
   try {
-    const url = findImageUrl(html, finalUrl);
-    if (!url) return [];
     const { bytes } = await deps.fetchBytes(url);
-    return [await deps.images.save(bytes)];
+    return await deps.images.save(bytes);
   } catch {
-    return []; // a missing image must never fail the import
+    return null;
   }
+}
+
+async function downloadImage(html: string, finalUrl: string, deps: ImportDeps): Promise<string[]> {
+  const url = findImageUrl(html, finalUrl);
+  if (!url) return [];
+  const id = await saveImage(url, deps);
+  return id ? [id] : [];
+}
+
+/**
+ * Photos for the steps that have one. A page that photographs every step can run to twenty of them, so they are
+ * fetched a few at a time rather than all at once; a step whose photo will not download simply keeps none.
+ */
+async function downloadStepImages(steps: RecipeInput['steps'], urls: (string | null)[], deps: ImportDeps): Promise<RecipeInput['steps']> {
+  const ids: (string | null)[] = urls.map(() => null);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < urls.length; i = next++) {
+      const url = urls[i];
+      if (url) ids[i] = await saveImage(url, deps);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(STEP_IMAGE_CONCURRENCY, urls.length) }, worker));
+  return steps.map((s, i) => (ids[i] ? { ...s, imageId: ids[i]! } : s));
 }
 
 export async function importFromUrl(url: string, deps: ImportDeps): Promise<ImportResult> {
@@ -83,8 +107,11 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
 
   const ld = parseRecipeJsonLd(html);
   if (ld && (ld.ingredients.length > 0 || ld.steps.length > 0)) {
-    const imageIds = await downloadImage(html, finalUrl, deps);
-    return { draft: { ...ld, ...source, imageIds, gaps: [] }, usedAi: false, usable: true };
+    const [imageIds, steps] = await Promise.all([
+      downloadImage(html, finalUrl, deps),
+      downloadStepImages(ld.steps, stepImageUrls(html, finalUrl), deps),
+    ]);
+    return { draft: { ...ld, ...source, steps, imageIds, gaps: [] }, usedAi: false, usable: true };
   }
 
   // A page whose body renders in the browser gives no visible text; its metadata may still hold the whole recipe.

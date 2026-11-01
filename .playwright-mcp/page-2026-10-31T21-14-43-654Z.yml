@@ -1,0 +1,67 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - link "Back" [ref=e5] [cursor=pointer]:
+      - /url: /recipe/33a0e199-ee42-40a8-aa91-b84a315396b0
+    - paragraph [ref=e6]: Print double-sided on A4, landscape.
+    - button "Print" [ref=e7] [cursor=pointer]
+  - generic [ref=e8]:
+    - img "Takeout style fried Noodles" [ref=e9]
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - heading "Takeout style fried Noodles" [level=1] [ref=e12]
+        - paragraph [ref=e13]: Cook 10m
+      - generic [ref=e14]:
+        - img "Scan to open https://recipes.matchapman.dev/recipe/33a0e199-ee42-40a8-aa91-b84a315396b0" [ref=e15]
+        - generic [ref=e17]: Scan for this reciperecipes.matchapman.dev
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - heading "Takeout style fried Noodles" [level=1] [ref=e20]
+      - paragraph [ref=e21]: Cook 10m
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - heading "Ingredients" [level=2] [ref=e24]
+        - list "Ingredients" [ref=e25]:
+          - listitem [ref=e26]:
+            - generic [ref=e27]: tbsp vegetable oil (1–2 tbsp, for frying)
+          - listitem [ref=e28]:
+            - generic [ref=e29]: 1 bunch
+            - generic [ref=e30]: spring onions
+          - listitem [ref=e31]:
+            - generic [ref=e32]: 250g
+            - generic [ref=e33]: bean sprouts
+          - listitem [ref=e34]:
+            - generic [ref=e35]: 250g
+            - generic [ref=e36]: medium dried egg noodles
+          - listitem [ref=e37]:
+            - generic [ref=e38]: 2 tbsp
+            - generic [ref=e39]: sesame oil
+          - listitem [ref=e40]: Sauce
+          - listitem [ref=e41]:
+            - generic [ref=e42]: "1"
+            - generic [ref=e43]: cube chicken stock cube
+          - listitem [ref=e44]:
+            - generic [ref=e45]: 3 tbsp
+            - generic [ref=e46]: dark soy sauce
+          - listitem [ref=e47]:
+            - generic [ref=e48]: 0.5 tsp
+            - generic [ref=e49]: salt
+          - listitem [ref=e50]:
+            - generic [ref=e51]: 0.5 tsp
+            - generic [ref=e52]: sugar
+          - listitem [ref=e53]:
+            - generic [ref=e54]: 0.5 tsp
+            - generic [ref=e55]: white pepper
+          - listitem [ref=e56]:
+            - generic [ref=e57]: 200ml
+            - generic [ref=e58]: boiling water
+      - generic [ref=e59]:
+        - heading "Method" [level=2] [ref=e60]
+        - list "Method" [ref=e61]:
+          - listitem [ref=e62]: 1Prepare the sauce by combining the sauce ingredients in a bowl. Add the boiling water and stir until everything is dissolved, adding the soy sauce last.
+          - listitem [ref=e63]: 2Heat the vegetable oil in a pan and sauté the spring onions, starting with the white ends. Add the bean sprouts, followed by the green ends of the spring onions.
+          - listitem [ref=e64]: 3Rehydrate the noodles according to the packet instructions.
+          - listitem [ref=e65]: 4Add the noodles to the pan, then add the sauces and toss well.
+          - listitem [ref=e66]: 5Make sure the noodles are well covered in the sauce, then leave them for 5 minutes to absorb the flavours of the sauce and allow the liquid to evaporate.
+    - generic [ref=e67]:
+      - generic [ref=e68]: From facebook.com
+      - generic [ref=e69]: recipes.matchapman.dev

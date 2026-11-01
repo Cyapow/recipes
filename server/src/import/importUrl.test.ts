@@ -36,6 +36,36 @@ describe('importFromUrl', () => {
       expect(r.draft.imageIds).toEqual([]);
     }
   });
+  it('saves a photo for every step that has one, leaving the others without', async () => {
+    // Each fake download carries its own url, so the store can hand back a different id per image.
+    const id = (c: string) => c.repeat(64) + '.jpg';
+    const store = images();
+    store.save.mockImplementation(async (bytes: Buffer) => {
+      const u = bytes.toString();
+      return id(u.includes('hero') ? 'a' : u.includes('s1') ? 'b' : 'c');
+    });
+    const fetchBytes = vi.fn(async (u: string) => ({ bytes: Buffer.from(u), contentType: 'image/jpeg', finalUrl: u }));
+    const r = await importFromUrl('https://x.test', { fetchPage: page('step-images.html', 'https://x.test/wrap'), fetchBytes, ai: undefined, images: store });
+    expect(r).toMatchObject({ usedAi: false, usable: true });
+    expect(r.draft.imageIds).toEqual([id('a')]);
+    expect(r.draft.steps.map((s) => [s.text, s.imageId])).toEqual([
+      ['Lay it out.', id('b')],
+      ['Fold it.', null],
+      ['Fry it.', id('c')],
+    ]);
+    expect(fetchBytes).toHaveBeenCalledWith('https://x.test/s1.jpg');
+    expect(RecipeDraftSchema.safeParse(r.draft).success).toBe(true);
+  });
+  it('a step photo that will not download leaves that step without one', async () => {
+    const store = images();
+    const fetchBytes = vi.fn(async (u: string) => {
+      if (u.includes('s1')) throw new Error('404');
+      return { bytes: Buffer.from(u), contentType: 'image/jpeg', finalUrl: u };
+    });
+    const r = await importFromUrl('https://x.test', { fetchPage: page('step-images.html', 'https://x.test/wrap'), fetchBytes, ai: undefined, images: store });
+    expect(r.usable).toBe(true);
+    expect(r.draft.steps.map((s) => s.imageId === null)).toEqual([true, true, false]);
+  });
   it('falls back to the AI on visible text when there is no JSON-LD', async () => {
     const ai = fakeAi();
     const r = await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html', 'https://www.nan.example/soup'), fetchBytes: img().fetchBytes, ai, images: images() });

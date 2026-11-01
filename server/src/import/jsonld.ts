@@ -60,28 +60,38 @@ function parseServings(v: Json): number | null {
   return m ? Number(m[0]) : null;
 }
 
-function flattenSteps(v: Json, out: string[], depth = 0): void {
+/** A step as the page gives it: its text, and the photo of its own that a HowToStep often carries. */
+type RawStep = { text: string; image: string | null };
+
+function flattenSteps(v: Json, out: RawStep[], depth = 0): void {
   if (depth > 5 || v == null) return;
   if (typeof v === 'string') {
     const parts = v.includes('\n') ? v.split('\n') : [v];
-    for (const p of parts) if (clean(p)) out.push(clean(p));
+    for (const p of parts) if (clean(p)) out.push({ text: clean(p), image: null });
   } else if (Array.isArray(v)) {
     v.forEach((x) => flattenSteps(x, out, depth + 1));
   } else if (isObj(v)) {
     if (hasType(v, 'HowToSection') || v.itemListElement) flattenSteps(v.itemListElement, out, depth + 1);
     else {
       const text = clean(v.text) || clean(v.name);
-      if (text) out.push(text);
+      if (text) out.push({ text, image: imageFrom(v.image) });
     }
   }
 }
 
 // Keep imported drafts within the recipe input limits so they are always savable.
-function clampSteps(steps: string[]): string[] {
+function clampSteps(steps: RawStep[]): RawStep[] {
   return steps
-    .filter((t) => !t.includes('[object Object]'))
+    .filter((s) => !s.text.includes('[object Object]'))
     .slice(0, 200)
-    .map((t) => (t.length > 5000 ? t.slice(0, 5000) : t));
+    .map((s) => (s.text.length > 5000 ? { ...s, text: s.text.slice(0, 5000) } : s));
+}
+
+/** The recipe's steps, flattened and clamped. Both exports below read them this way, so their indexes line up. */
+function stepsOf(r: Obj): RawStep[] {
+  const out: RawStep[] = [];
+  flattenSteps(r.recipeInstructions, out);
+  return clampSteps(out);
 }
 
 function asList(v: Json): string[] {
@@ -97,8 +107,6 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     .map(clean)
     .filter(Boolean)
     .map((item) => ({ group: null, quantity: null, unit: null, item, note: null }));
-  const steps: string[] = [];
-  flattenSteps(r.recipeInstructions, steps);
   const tags: string[] = [];
   for (const t of [...asList(r.recipeCategory), ...asList(r.recipeCuisine), ...asList(r.keywords)]) {
     const tag = clean(t).toLowerCase();
@@ -114,7 +122,8 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     prepMinutes: parseDuration(r.prepTime),
     cookMinutes: parseDuration(r.cookTime),
     ingredients,
-    steps: clampSteps(steps).map((text) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
+    // The photos themselves are downloaded by the importer, which fills the ids in; see stepImageUrls.
+    steps: stepsOf(r).map(({ text }) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
     notes: null,
     tags: tags.slice(0, 8),
     imageIds: [],
@@ -134,13 +143,26 @@ function imageFrom(v: Json): string | null {
   return null;
 }
 
-/** Recipe image from JSON-LD, else og:image; absolute URL resolved against `base`, or null. */
-export function findImageUrl(html: string, base: string): string | null {
-  const raw = (findRecipe(html) && imageFrom(findRecipe(html)!.image)) || cheerio.load(html)('meta[property="og:image"]').attr('content')?.trim() || null;
+function absolute(raw: string | null, base: string): string | null {
   if (!raw) return null;
   try {
     return new URL(raw, base).toString();
   } catch {
     return null;
   }
+}
+
+/** Recipe image from JSON-LD, else og:image; absolute URL resolved against `base`, or null. */
+export function findImageUrl(html: string, base: string): string | null {
+  const raw = (findRecipe(html) && imageFrom(findRecipe(html)!.image)) || cheerio.load(html)('meta[property="og:image"]').attr('content')?.trim() || null;
+  return absolute(raw, base);
+}
+
+/**
+ * The photo of each step, in step order, null where a step has none. Index n is the photo for step n of
+ * `parseRecipeJsonLd`: both run the steps through the same flattening and clamping, so the two lists stay aligned.
+ */
+export function stepImageUrls(html: string, base: string): (string | null)[] {
+  const r = findRecipe(html);
+  return r ? stepsOf(r).map((s) => absolute(s.image, base)) : [];
 }
