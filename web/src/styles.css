@@ -443,3 +443,19 @@ body.cook-scroll-lock { overflow: hidden; }
 .butcher-flag input { width: 22px; min-height: 22px; height: 22px; accent-color: var(--accent); }
 .edit-price { flex: none; min-height: 44px; padding: 0 14px; }
 .shopping-section { margin: 10px 0 0; font-size: 1.125rem; }
+
+/* Ingredients and prices */
+.ingredient-item { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.ingredient-head { display: flex; width: 100%; min-height: 64px; padding: 8px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; align-items: center; justify-content: flex-start; font: inherit; color: inherit; }
+.ingredient-editor { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 16px; }
+.ingredient-editor h3 { margin: 6px 0 0; }
+.editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.editor-grid label, .pack-row label { display: flex; flex-direction: column; gap: 2px; font-weight: 700; }
+.pack-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; align-items: end; border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px 12px; margin: 0; }
+.pack-row input { min-height: 44px; }
+.shops { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; }
+.shops summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.shop-row { display: flex; gap: 8px; align-items: center; }
+.shop-row input { min-height: 44px; }
+.shop-add { display: flex; gap: 8px; margin-top: 10px; }
+.shop-add input { min-height: 44px; }

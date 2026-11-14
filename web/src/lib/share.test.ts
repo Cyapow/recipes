@@ -4,11 +4,15 @@ import { shareText, shoppingShareText } from './share';
 const abort = () => Object.assign(new Error('dismissed'), { name: 'AbortError' });
 
 describe('shoppingShareText', () => {
-  it('puts butcher items under their own heading', () => {
-    const items = [{ text: '500g beef shin', section: 'butcher' as const }, { text: '2 onions', section: 'shop' as const }];
-    expect(shoppingShareText(items)).toBe('2 onions\n\nFrom the butcher:\n500g beef shin');
-    expect(shoppingShareText([items[0]!])).toBe('From the butcher:\n500g beef shin');
+  it('puts items for another shop under a heading with its name', () => {
+    const items = [
+      { text: '500g beef shin', section: 'Butcher' }, { text: '2 onions', section: 'shop' }, { text: '1 loaf', section: 'Baker' },
+      { text: '1kg shin bones', section: 'Butcher' },
+    ];
+    expect(shoppingShareText(items)).toBe('2 onions\n\nButcher:\n500g beef shin\n1kg shin bones\n\nBaker:\n1 loaf');
+    expect(shoppingShareText([items[0]!])).toBe('Butcher:\n500g beef shin');
   });
+
   it('puts one text per line with no bullets or trailing blank line', () => {
     const items = [{ text: '2 tins chopped tomatoes' }, { text: '500g beef mince' }] as never[];
     expect(shoppingShareText(items)).toBe('2 tins chopped tomatoes\n500g beef mince');

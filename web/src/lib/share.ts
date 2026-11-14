@@ -2,13 +2,18 @@ import type { ShoppingItem } from '../api';
 
 export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'manual';
 
-/** One item per line, no bullets, no trailing blank line. Butcher items follow under their own heading. */
-export function shoppingShareText(items: (Pick<ShoppingItem, 'text'> & { section?: 'shop' | 'butcher' })[]): string {
+/**
+ * One item per line, no bullets, no trailing blank line. Items for another shop follow under a heading with
+ * that shop's name, in the order the shops first appear.
+ */
+export function shoppingShareText(items: (Pick<ShoppingItem, 'text'> & { section?: string })[]): string {
   const lines = (list: typeof items) => list.map((i) => i.text).join('\n');
-  const shop = items.filter((i) => i.section !== 'butcher');
-  const butcher = items.filter((i) => i.section === 'butcher');
-  if (butcher.length === 0) return lines(shop);
-  return `${shop.length ? `${lines(shop)}\n\n` : ''}From the butcher:\n${lines(butcher)}`;
+  const isDefault = (i: { section?: string }) => !i.section || i.section === 'shop';
+  const blocks = [lines(items.filter(isDefault))].filter(Boolean);
+  const others = new Map<string, typeof items>();
+  for (const i of items.filter((x) => !isDefault(x))) others.set(i.section!, [...(others.get(i.section!) ?? []), i]);
+  for (const [name, list] of others) blocks.push(`${name}:\n${lines(list)}`);
+  return blocks.join('\n\n');
 }
 
 /**

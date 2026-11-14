@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPence, parsePence } from './money';
+import { formatPence, parseAmount, parsePence } from './money';
 
 describe('money', () => {
   it('formats pence as pounds', () => {
@@ -16,5 +16,18 @@ describe('money', () => {
   });
   it('rejects nonsense, zero and negatives', () => {
     for (const bad of ['', 'abc', '0', '0.00', '-1', '1.234', '1,50', '0p']) expect(parsePence(bad), bad).toBeNull();
+  });
+
+  it('parses pack sizes, turning kg and l into g and ml', () => {
+    expect(parseAmount('3', '')).toBe(3);
+    expect(parseAmount('0.5', '')).toBe(0.5);
+    expect(parseAmount('1kg', 'g')).toBe(1000);
+    expect(parseAmount('1.5 L', 'ml')).toBe(1500);
+    expect(parseAmount('500g', 'g')).toBe(500);
+  });
+  it('rejects sizes that do not fit the unit', () => {
+    for (const [t, u] of [['', ''], ['abc', ''], ['0', ''], ['1kg', 'ml'], ['1kg', ''], ['2 tins', 'tin'], ['500g', 'ml']] as const) {
+      expect(parseAmount(t, u), `${t}/${u}`).toBeNull();
+    }
   });
 });

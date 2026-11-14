@@ -137,14 +137,14 @@ describe('shopping repo', () => {
     }
   });
 
-  it('keeps butcher rows in their own section and never merges them with shop rows', () => {
+  it('keeps rows for another shop in their own section and never merges them with the default shop', () => {
     const r = make();
-    const isButcher = (i: Ingredient) => i.item === 'beef shin';
-    r.add(A, [ing(500, 'g', 'beef shin'), ing(1, null, 'onion')], { isButcher });
-    r.add(B, [ing(500, 'g', 'beef shin'), ing(1, null, 'onion')], { isButcher });
+    const isButcher = (i: Ingredient) => (i.item === 'beef shin' ? 'Butcher' : null);
+    r.add(A, [ing(500, 'g', 'beef shin'), ing(1, null, 'onion')], { sectionOf: isButcher });
+    r.add(B, [ing(500, 'g', 'beef shin'), ing(1, null, 'onion')], { sectionOf: isButcher });
     r.add({ id: 'c', title: 'C' }, [ing(250, 'g', 'beef shin')]); // same name, not flagged this time: shop row
     expect(r.list().map((i) => [i.text, i.section])).toEqual([
-      ['1000g beef shin', 'butcher'], ['2 onions', 'shop'], ['250g beef shin', 'shop'],
+      ['1000g beef shin', 'Butcher'], ['2 onions', 'shop'], ['250g beef shin', 'shop'],
     ]);
   });
 });

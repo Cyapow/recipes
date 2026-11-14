@@ -196,8 +196,12 @@ export function Shopping() {
                   </button>
                 </li>
   );
-  const shopItems = items?.filter((i) => i.section !== 'butcher') ?? [];
-  const butcherItems = items?.filter((i) => i.section === 'butcher') ?? [];
+  const isDefault = (i: ShoppingItem) => !i.section || i.section === 'shop';
+  const shopItems = items?.filter(isDefault) ?? [];
+  const otherShops = [...(items?.filter((i) => !isDefault(i)) ?? []).reduce(
+    (m, i) => m.set(i.section, [...(m.get(i.section) ?? []), i]),
+    new Map<string, ShoppingItem[]>(),
+  )];
 
   const recipes = new Set(items?.flatMap((i) => i.sources.map((s) => s.recipeId))).size;
 
@@ -228,12 +232,12 @@ export function Shopping() {
         <>
           <p className="sub">{plural(items.length, 'item', 'items')}{recipes > 0 && ` from ${plural(recipes, 'recipe', 'recipes')}`}</p>
           {shopItems.length > 0 && <ul className="rows shopping-rows">{shopItems.map(renderRow)}</ul>}
-          {butcherItems.length > 0 && (
-            <>
-              <h2 className="shopping-section">From the butcher</h2>
-              <ul className="rows shopping-rows">{butcherItems.map(renderRow)}</ul>
-            </>
-          )}
+          {otherShops.map(([name, list]) => (
+            <section key={name} aria-label={name}>
+              <h2 className="shopping-section">{name}</h2>
+              <ul className="rows shopping-rows">{list.map(renderRow)}</ul>
+            </section>
+          ))}
         </>
       )}
 

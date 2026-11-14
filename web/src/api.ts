@@ -160,53 +160,76 @@ export const removeShoppingItem = (id: string): Promise<void> =>
 export const clearShopping = (): Promise<void> =>
   request<unknown>('/api/shopping', { method: 'DELETE' }).then(() => undefined);
 
-export type PlannerPrice = {
-  key: string; item: string; pricePence: number; clubcardPence: number | null; packNote: string | null; source: string;
+export type Shop = { id: string; name: string; position: number };
+export type Pack = { id?: string; label: string; amount: number | null; pricePence: number; clubcardPence: number | null };
+export type IngredientRow = {
+  key: string; item: string; recipeCount: number;
+  /** The unit recipes most often use for it ('' = whole items). */
+  usualUnit: string;
+  /** null = the default (first) shop. */
+  shopId: string | null;
+  /** What pack amounts are counted in. */
+  unit: string;
+  packs: Pack[];
 };
+export type IngredientInput = { item: string; shopId: string | null; unit: string; packs: Pack[] };
+
+export const listIngredients = (): Promise<{ ingredients: IngredientRow[]; shops: Shop[] }> =>
+  request('/api/planner/ingredients');
+
+const putJson = (url: string, body: unknown, method = 'PUT'): Promise<unknown> =>
+  request<unknown>(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+export const saveIngredient = (i: IngredientInput): Promise<void> =>
+  putJson('/api/planner/ingredient', {
+    ...i, packs: i.packs.map(({ label, amount, pricePence, clubcardPence }) => ({ label, amount, pricePence, clubcardPence })),
+  }).then(() => undefined);
+
+export const removeIngredient = (item: string): Promise<void> =>
+  request<void>(`/api/planner/ingredient?item=${encodeURIComponent(item)}`, { method: 'DELETE' });
+
+export const addShop = (name: string): Promise<void> => putJson('/api/planner/shops', { name }, 'POST').then(() => undefined);
+export const renameShop = (id: string, name: string): Promise<void> =>
+  putJson(`/api/planner/shops/${encodeURIComponent(id)}`, { name }).then(() => undefined);
+export const deleteShop = (id: string): Promise<void> =>
+  request<void>(`/api/planner/shops/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+export type PackPick = { label: string; count: number; pence: number };
 export type BasketItem = {
-  key: string; item: string; pricePence: number | null; normalPence: number | null; clubcardPence: number | null;
-  butcher: boolean; usedBy: string[];
+  key: string; item: string;
+  /** null = the default shop. */
+  shop: string | null;
+  pricePence: number | null;
+  picks: PackPick[];
+  needed: number | null;
+  unit: string;
+  unclear: boolean;
+  leftover: number | null;
+  usedBy: string[];
 };
 export type PlannerSuggestion = {
-  id: string; title: string; shared: string[]; extra: string[]; butcherExtra: string[]; extraPence: number; unpricedExtra: string[];
+  id: string; title: string; shared: string[];
+  extra: { item: string; shop: string | null }[];
+  extraPence: number; unpricedExtra: string[];
 };
 export type Plan = {
   selected: { id: string; title: string }[];
-  basket: { items: BasketItem[]; totalPence: number; butcherPence: number; unpriced: string[] };
+  basket: { items: BasketItem[]; totalPence: number; byShop: { shop: string | null; totalPence: number }[]; unpriced: string[] };
   suggestions: PlannerSuggestion[];
   budgetPence: number | null;
+  defaultShop: string;
 };
 
-export const getPlan = (recipeIds: string[]): Promise<Plan> =>
-  request('/api/planner/plan', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ recipeIds }),
-  });
+export const getPlan = (recipeIds: string[]): Promise<Plan> => putJson('/api/planner/plan', { recipeIds }, 'POST') as Promise<Plan>;
 
 export const getBudget = (): Promise<number | null> =>
   request<{ pence: number | null }>('/api/planner/budget').then((r) => r.pence);
 
 export const saveBudget = (pence: number | null): Promise<void> =>
-  request<unknown>('/api/planner/budget', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ pence }),
-  }).then(() => undefined);
+  putJson('/api/planner/budget', { pence }).then(() => undefined);
 
-export const savePrice = (item: string, pricePence: number, clubcardPence: number | null, butcher = false): Promise<void> =>
-  request<unknown>('/api/planner/prices', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ item, pricePence, clubcardPence, butcher }),
-  }).then(() => undefined);
+export type AddPlanResult = { added: number; alreadyOnList: string[]; elsewhere: { item: string; shop: string }[] };
 
-export type AddPlanResult = { added: number; alreadyOnList: string[]; butcherItems: string[] };
-
-/** Puts the recipes on the shopping list, leaving butcher items off it. */
+/** Puts the recipes on the shopping list, each ingredient in the section of its shop. */
 export const addPlanToShopping = (recipeIds: string[]): Promise<AddPlanResult> =>
-  request('/api/planner/add-to-shopping', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ recipeIds }),
-  });
+  putJson('/api/planner/add-to-shopping', { recipeIds }, 'POST') as Promise<AddPlanResult>;

@@ -1,79 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  addPlanToShopping, getBudget, getPlan, listRecipes, saveBudget, savePrice,
+  addPlanToShopping, getBudget, getPlan, listRecipes, saveBudget,
   type BasketItem, type Plan, type RecipeSummary,
 } from '../api';
 import { BackIcon } from '../components/Icons';
+import { formatAmount } from '../lib/amount';
 import { formatPence, parsePence } from '../lib/money';
 import { formatItem } from '../lib/text';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-const pounds = (pence: number | null) => (pence === null ? '' : (pence / 100).toFixed(2));
-
-function PriceEditor({ item, initial, onSaved }: { item: string; initial?: BasketItem; onSaved: () => void }) {
-  const [butcher, setButcher] = useState(initial?.butcher ?? false);
-  const [price, setPrice] = useState(pounds(initial?.normalPence ?? null));
-  const [club, setClub] = useState(pounds(initial?.clubcardPence ?? null));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    const p = parsePence(price);
-    const c = !butcher && club.trim() ? parsePence(club) : null;
-    if (p === null || (!butcher && club.trim() && c === null)) return setError('Enter prices like 1.50');
-    if (c !== null && c > p) return setError('Clubcard price is higher than the normal price');
-    setBusy(true);
-    setError(null);
-    try {
-      await savePrice(item, p, c, butcher);
-      onSaved();
-    } catch {
-      setError('Could not save the price');
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form className="price-editor" onSubmit={(e) => void save(e)}>
-      <label className="butcher-flag">
-        <input type="checkbox" checked={butcher} onChange={(e) => setButcher(e.target.checked)} />
-        <span>From the butcher</span>
-      </label>
-      <label>
-        <span className="sub">{butcher ? 'Usual cost £' : 'Price £'}</span>
-        <input inputMode="decimal" aria-label={`Price of ${item}`} value={price} onChange={(e) => setPrice(e.target.value)} />
-      </label>
-      {!butcher && (
-        <label>
-          <span className="sub">Clubcard £</span>
-          <input inputMode="decimal" aria-label={`Clubcard price of ${item}`} value={club} onChange={(e) => setClub(e.target.value)} />
-        </label>
-      )}
-      <button type="submit" disabled={busy}>Save</button>
-      {error && <p className="field-error" role="alert">{error}</p>}
-    </form>
-  );
-}
-
-function BasketRow({ i, onSaved }: { i: BasketItem; onSaved: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const open = editing || i.pricePence === null;
+function BasketRow({ i }: { i: BasketItem }) {
+  const picks = i.picks.map((p) => `${p.count} × ${p.label || 'pack'}`).join(' + ');
   return (
     <li className="shopping-row planner-item">
       <span className="shopping-meta">
         <span className="shopping-text">{formatItem(i.item)}</span>
         <span className="sub">
-          {i.pricePence !== null ? `${i.butcher ? 'About ' : ''}${formatPence(i.pricePence)}` : 'No price yet'}
+          {i.pricePence === null ? 'No price yet' : `${formatPence(i.pricePence)}${picks ? ` · ${picks}` : ''}`}
           {i.usedBy.length > 1 && ` · shared by ${i.usedBy.length} recipes`}
         </span>
-        {open && <PriceEditor item={i.item} initial={i} onSaved={() => { setEditing(false); onSaved(); }} />}
+        {i.pricePence !== null && i.needed !== null && i.needed > 0 && (
+          <span className="sub">
+            Needs {formatAmount(i.needed, i.unit)}
+            {i.leftover ? `, ${formatAmount(i.leftover, i.unit)} spare` : ''}
+          </span>
+        )}
+        {i.pricePence !== null && i.unclear && (
+          <span className="sub">Some use isn't measured (a vague amount or a different unit), so this may be a little low.</span>
+        )}
       </span>
-      {!open && (
-        <button type="button" className="edit-price" aria-label={`Edit price of ${i.item}`} onClick={() => setEditing(true)}>Edit</button>
-      )}
+      <Link className="btn edit-price" to={`/ingredients?q=${encodeURIComponent(i.item)}`} aria-label={`${i.pricePence === null ? 'Set a price for' : 'Edit prices for'} ${i.item}`}>
+        {i.pricePence === null ? 'Set price' : 'Edit'}
+      </Link>
     </li>
   );
 }
@@ -129,7 +89,7 @@ export function Planner() {
     try {
       const r = await addPlanToShopping(plan.selected.map((x) => x.id));
       const parts = [`Added ${plural(r.added, 'recipe', 'recipes')} to the shopping list`];
-      if (r.butcherItems.length) parts.push(`Butcher items are in their own section: ${r.butcherItems.map(formatItem).join(', ')}`);
+      if (r.elsewhere.length) parts.push(`Sorted by shop: ${r.elsewhere.map((e) => `${formatItem(e.item)} (${e.shop})`).join(', ')}`);
       if (r.alreadyOnList.length) parts.push(`Already on the list: ${r.alreadyOnList.join(', ')}`);
       setStatus(parts.join('. '));
     } catch {
@@ -142,14 +102,16 @@ export function Planner() {
   const total = plan?.basket.totalPence ?? 0;
   const budgetPence = plan?.budgetPence ?? null;
   const over = budgetPence !== null && total > budgetPence;
-  const shopItems = plan?.basket.items.filter((i) => !i.butcher) ?? [];
-  const butcherItems = plan?.basket.items.filter((i) => i.butcher) ?? [];
   const pct = budgetPence ? Math.min(100, Math.round((total / budgetPence) * 100)) : 0;
+  const defaultShop = plan?.defaultShop ?? '';
+  const shopNames = plan ? [null, ...new Set(plan.basket.items.map((i) => i.shop).filter((s): s is string => s !== null))] : [];
+  const subtotal = (shop: string | null) => plan?.basket.byShop.find((b) => b.shop === shop)?.totalPence ?? 0;
 
   return (
     <main className="page planner">
       <header className="cook-bar">
         <Link className="btn round-btn" to="/" aria-label="Back to library"><BackIcon /></Link>
+        <Link className="btn" to="/ingredients">Ingredients and prices</Link>
       </header>
       <h1>Meal planner</h1>
       <p className="sub">Pick a recipe or two. We'll suggest others that need only a few extra things.</p>
@@ -203,18 +165,20 @@ export function Planner() {
                 {plural(plan.basket.unpriced.length, 'item has', 'items have')} no price yet, so this is a minimum.
               </p>
             )}
-            <ul className="rows shopping-rows">
-              {shopItems.map((i) => <BasketRow key={i.key} i={i} onSaved={() => refresh(picked)} />)}
-            </ul>
-            {butcherItems.length > 0 && (
-              <>
-                <h3 className="planner-sub">From the butcher · about {formatPence(plan.basket.butcherPence)}</h3>
-                <p className="sub">Kept in their own section on the shopping list. Included in the total at your usual cost.</p>
-                <ul className="rows shopping-rows">
-                  {butcherItems.map((i) => <BasketRow key={i.key} i={i} onSaved={() => refresh(picked)} />)}
-                </ul>
-              </>
-            )}
+            {shopNames.map((shop) => {
+              const items = plan.basket.items.filter((i) => i.shop === shop);
+              if (items.length === 0) return null;
+              return (
+                <div key={shop ?? 'default'}>
+                  {shopNames.length > 1 && (
+                    <h3 className="planner-sub">{shop ?? defaultShop} · {formatPence(subtotal(shop))}</h3>
+                  )}
+                  <ul className="rows shopping-rows">
+                    {items.map((i) => <BasketRow key={i.key} i={i} />)}
+                  </ul>
+                </div>
+              );
+            })}
           </section>
 
           {plan.suggestions.length > 0 && (
@@ -228,11 +192,11 @@ export function Planner() {
                       <p className="sub">
                         {s.extra.length === 0
                           ? 'Nothing extra to buy'
-                          : `Needs ${plural(s.extra.length, 'extra thing', 'extra things')}: ${s.extra.map((x) => formatItem(x) + (s.butcherExtra.includes(x) ? ' (butcher)' : '')).join(', ')}`}
+                          : `Needs ${plural(s.extra.length, 'extra thing', 'extra things')}: ${s.extra.map((x) => formatItem(x.item) + (x.shop ? ` (${x.shop})` : '')).join(', ')}`}
                       </p>
                       <p className="sub">
                         Uses what you have: {s.shared.map(formatItem).join(', ')}
-                        {s.extra.length > 0 && ` · about ${formatPence(s.extraPence)} more${s.unpricedExtra.length ? ' (plus unpriced items)' : ''}`}
+                        {` · adds about ${formatPence(s.extraPence)}${s.unpricedExtra.length ? ' (plus unpriced items)' : ''}`}
                       </p>
                     </div>
                     <button type="button" onClick={() => toggle(s.id)} aria-label={`Add ${s.title}`}>Add</button>

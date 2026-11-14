@@ -11,8 +11,8 @@ export type ShoppingItem = {
   quantity: number | null;
   unit: string | null;
   sources: ShoppingSource[];
-  /** The online order, or the butcher. */
-  section: 'shop' | 'butcher';
+  /** 'shop' for the default shop, otherwise the name of the shop it is bought from. */
+  section: string;
 };
 
 type Row = {
@@ -36,7 +36,7 @@ function toItem(r: Row): ShoppingItem {
     quantity: r.quantity,
     unit: r.unit,
     sources: JSON.parse(r.sources_json),
-    section: r.section === 'butcher' ? 'butcher' : 'shop',
+    section: r.section || 'shop',
   };
 }
 
@@ -57,14 +57,14 @@ export function createShoppingRepo(db: Database) {
     'UPDATE shopping_items SET quantity = ?, sources_json = ?, merged = 1 WHERE id = ?',
   );
 
-  const addAll = db.transaction((recipe: { id: string; title: string }, ingredients: Ingredient[], isButcher: (i: Ingredient) => boolean) => {
+  const addAll = db.transaction((recipe: { id: string; title: string }, ingredients: Ingredient[], sectionOf: (i: Ingredient) => string | null) => {
     const now = new Date().toISOString();
     for (const ing of ingredients) {
       const unit = ing.unit?.trim() || null;
       const note = ing.note?.trim() || null;
-      const butcher = isButcher(ing);
-      // Butcher rows never merge into shop rows (and vice versa): the key carries the section.
-      const key = `${butcher ? 'butcher|' : ''}${normaliseItemName(ing.item)}|${normaliseUnit(unit) ?? ''}`;
+      const section = sectionOf(ing) ?? 'shop';
+      // Rows for different shops never merge: the key carries the section.
+      const key = `${section === 'shop' ? '' : `${section.toLowerCase()}|`}${normaliseItemName(ing.item)}|${normaliseUnit(unit) ?? ''}`;
       // Merge only exact, fully numeric matches. Vague (no quantity) or annotated lines stay separate.
       const mergeable = ing.quantity !== null && ing.quantity > 0 && note === null;
       const existing = mergeable ? (mergeCandidate.get(key) as Row | undefined) : undefined;
@@ -76,7 +76,7 @@ export function createShoppingRepo(db: Database) {
       } else {
         insert.run(
           crypto.randomUUID(), key, ing.item.trim(), ing.quantity, unit, note,
-          JSON.stringify([{ recipeId: recipe.id, title: recipe.title }]), now, butcher ? 'butcher' : 'shop',
+          JSON.stringify([{ recipeId: recipe.id, title: recipe.title }]), now, section,
         );
       }
     }
@@ -90,10 +90,10 @@ export function createShoppingRepo(db: Database) {
     add(
       recipe: { id: string; title: string },
       ingredients: Ingredient[],
-      opts: { force?: boolean; isButcher?: (i: Ingredient) => boolean } = {},
+      opts: { force?: boolean; sectionOf?: (i: Ingredient) => string | null } = {},
     ): { added: number } | { alreadyOnList: true } {
       if (!opts.force && onListStmt.get(recipe.id)) return { alreadyOnList: true };
-      return { added: addAll(recipe, ingredients, opts.isButcher ?? (() => false)) };
+      return { added: addAll(recipe, ingredients, opts.sectionOf ?? (() => null)) };
     },
     remove(id: string): boolean {
       return db.prepare('DELETE FROM shopping_items WHERE id = ?').run(id).changes > 0;
