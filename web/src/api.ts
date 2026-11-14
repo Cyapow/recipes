@@ -163,13 +163,16 @@ export const clearShopping = (): Promise<void> =>
 export type PlannerPrice = {
   key: string; item: string; pricePence: number; clubcardPence: number | null; packNote: string | null; source: string;
 };
-export type BasketItem = { key: string; item: string; pricePence: number | null; usedBy: string[] };
+export type BasketItem = {
+  key: string; item: string; pricePence: number | null; normalPence: number | null; clubcardPence: number | null;
+  butcher: boolean; usedBy: string[];
+};
 export type PlannerSuggestion = {
-  id: string; title: string; shared: string[]; extra: string[]; extraPence: number; unpricedExtra: string[];
+  id: string; title: string; shared: string[]; extra: string[]; butcherExtra: string[]; extraPence: number; unpricedExtra: string[];
 };
 export type Plan = {
   selected: { id: string; title: string }[];
-  basket: { items: BasketItem[]; totalPence: number; unpriced: string[] };
+  basket: { items: BasketItem[]; totalPence: number; butcherPence: number; unpriced: string[] };
   suggestions: PlannerSuggestion[];
   budgetPence: number | null;
 };
@@ -191,9 +194,19 @@ export const saveBudget = (pence: number | null): Promise<void> =>
     body: JSON.stringify({ pence }),
   }).then(() => undefined);
 
-export const savePrice = (item: string, pricePence: number, clubcardPence: number | null): Promise<void> =>
+export const savePrice = (item: string, pricePence: number, clubcardPence: number | null, butcher = false): Promise<void> =>
   request<unknown>('/api/planner/prices', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ item, pricePence, clubcardPence }),
+    body: JSON.stringify({ item, pricePence, clubcardPence, butcher }),
   }).then(() => undefined);
+
+export type AddPlanResult = { added: number; alreadyOnList: string[]; butcherItems: string[] };
+
+/** Puts the recipes on the shopping list, leaving butcher items off it. */
+export const addPlanToShopping = (recipeIds: string[]): Promise<AddPlanResult> =>
+  request('/api/planner/add-to-shopping', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ recipeIds }),
+  });

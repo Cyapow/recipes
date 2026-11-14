@@ -55,3 +55,23 @@ describe('suggest', () => {
     expect(out.map((s) => s.id)).toEqual(['y', 'x']);
   });
 });
+
+describe('butcher items', () => {
+  const withButcher: PriceMap = new Map([
+    ['carrot', { pricePence: 80, clubcardPence: null }],
+    ['beef mince', { pricePence: 600, clubcardPence: null, butcher: true }],
+  ]);
+
+  it('counts butcher items in the total and subtotals them separately', () => {
+    const b = buildBasket([recipe('a', 'carrot', 'beef mince')], withButcher);
+    expect(b.totalPence).toBe(680);
+    expect(b.butcherPence).toBe(600);
+    expect(b.items.find((i) => i.key === 'beef mince')).toMatchObject({ butcher: true, normalPence: 600 });
+    expect(b.items.find((i) => i.key === 'carrot')!.butcher).toBe(false);
+  });
+
+  it('marks butcher extras on suggestions', () => {
+    const out = suggest([recipe('base', 'carrot')], [recipe('stew', 'carrot', 'beef mince')], withButcher);
+    expect(out[0]).toMatchObject({ extra: ['beef mince'], butcherExtra: ['beef mince'], extraPence: 600 });
+  });
+});

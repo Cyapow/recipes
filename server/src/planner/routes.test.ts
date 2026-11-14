@@ -80,3 +80,33 @@ describe('POST /api/planner/plan', () => {
     expect((await app.inject({ method: 'POST', url: '/api/planner/plan', payload: { recipeIds: [] } })).statusCode).toBe(400);
   });
 });
+
+describe('butcher items', () => {
+  it('saves the flag, reports it in the plan and counts it in the total', async () => {
+    const app = make();
+    const id = await seed(app, recipe('Stew', 'carrots', 'beef shin'));
+    await put(app, { item: 'carrot', pricePence: 80, clubcardPence: null });
+    await put(app, { item: 'beef shin', pricePence: 700, clubcardPence: null, butcher: true });
+    const body = (await app.inject({ method: 'POST', url: '/api/planner/plan', payload: { recipeIds: [id] } })).json();
+    expect(body.basket.totalPence).toBe(780);
+    expect(body.basket.butcherPence).toBe(700);
+    expect(body.basket.items.find((i: { key: string }) => i.key === 'beef shin').butcher).toBe(true);
+  });
+
+  it('keeps butcher items off the shopping list when adding recipes, and says so', async () => {
+    const app = make();
+    const id = await seed(app, recipe('Stew', 'carrots', 'beef shin'));
+    await put(app, { item: 'beef shin', pricePence: 700, clubcardPence: null, butcher: true });
+    const res = await app.inject({ method: 'POST', url: '/api/planner/add-to-shopping', payload: { recipeIds: [id] } });
+    expect(res.json()).toEqual({ added: 1, alreadyOnList: [], butcherItems: ['beef shin'] });
+    const list = (await app.inject({ url: '/api/shopping' })).json().items.map((i: { item: string }) => i.item);
+    expect(list).toEqual(['carrots']);
+    const again = await app.inject({ method: 'POST', url: '/api/planner/add-to-shopping', payload: { recipeIds: [id] } });
+    expect(again.json().alreadyOnList).toEqual(['Stew']);
+  });
+
+  it('404 for an unknown recipe', async () => {
+    const res = await make().inject({ method: 'POST', url: '/api/planner/add-to-shopping', payload: { recipeIds: ['x'] } });
+    expect(res.statusCode).toBe(404);
+  });
+});

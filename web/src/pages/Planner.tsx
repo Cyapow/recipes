@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  addToShopping, ApiError, getBudget, getPlan, getRecipe, listRecipes, saveBudget, savePrice,
-  type Plan, type RecipeSummary,
+  addPlanToShopping, getBudget, getPlan, listRecipes, saveBudget, savePrice,
+  type BasketItem, type Plan, type RecipeSummary,
 } from '../api';
 import { BackIcon } from '../components/Icons';
 import { formatPence, parsePence } from '../lib/money';
@@ -10,22 +10,25 @@ import { formatItem } from '../lib/text';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-function PriceEditor({ item, onSaved }: { item: string; onSaved: () => void }) {
-  const [price, setPrice] = useState('');
-  const [club, setClub] = useState('');
+const pounds = (pence: number | null) => (pence === null ? '' : (pence / 100).toFixed(2));
+
+function PriceEditor({ item, initial, onSaved }: { item: string; initial?: BasketItem; onSaved: () => void }) {
+  const [butcher, setButcher] = useState(initial?.butcher ?? false);
+  const [price, setPrice] = useState(pounds(initial?.normalPence ?? null));
+  const [club, setClub] = useState(pounds(initial?.clubcardPence ?? null));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const p = parsePence(price);
-    const c = club.trim() ? parsePence(club) : null;
-    if (p === null || (club.trim() && c === null)) return setError('Enter prices like 1.50');
+    const c = !butcher && club.trim() ? parsePence(club) : null;
+    if (p === null || (!butcher && club.trim() && c === null)) return setError('Enter prices like 1.50');
     if (c !== null && c > p) return setError('Clubcard price is higher than the normal price');
     setBusy(true);
     setError(null);
     try {
-      await savePrice(item, p, c);
+      await savePrice(item, p, c, butcher);
       onSaved();
     } catch {
       setError('Could not save the price');
@@ -35,17 +38,43 @@ function PriceEditor({ item, onSaved }: { item: string; onSaved: () => void }) {
 
   return (
     <form className="price-editor" onSubmit={(e) => void save(e)}>
+      <label className="butcher-flag">
+        <input type="checkbox" checked={butcher} onChange={(e) => setButcher(e.target.checked)} />
+        <span>From the butcher</span>
+      </label>
       <label>
-        <span className="sub">Price £</span>
+        <span className="sub">{butcher ? 'Usual cost £' : 'Price £'}</span>
         <input inputMode="decimal" aria-label={`Price of ${item}`} value={price} onChange={(e) => setPrice(e.target.value)} />
       </label>
-      <label>
-        <span className="sub">Clubcard £</span>
-        <input inputMode="decimal" aria-label={`Clubcard price of ${item}`} value={club} onChange={(e) => setClub(e.target.value)} />
-      </label>
+      {!butcher && (
+        <label>
+          <span className="sub">Clubcard £</span>
+          <input inputMode="decimal" aria-label={`Clubcard price of ${item}`} value={club} onChange={(e) => setClub(e.target.value)} />
+        </label>
+      )}
       <button type="submit" disabled={busy}>Save</button>
       {error && <p className="field-error" role="alert">{error}</p>}
     </form>
+  );
+}
+
+function BasketRow({ i, onSaved }: { i: BasketItem; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const open = editing || i.pricePence === null;
+  return (
+    <li className="shopping-row planner-item">
+      <span className="shopping-meta">
+        <span className="shopping-text">{formatItem(i.item)}</span>
+        <span className="sub">
+          {i.pricePence !== null ? `${i.butcher ? 'About ' : ''}${formatPence(i.pricePence)}` : 'No price yet'}
+          {i.usedBy.length > 1 && ` · shared by ${i.usedBy.length} recipes`}
+        </span>
+        {open && <PriceEditor item={i.item} initial={i} onSaved={() => { setEditing(false); onSaved(); }} />}
+      </span>
+      {!open && (
+        <button type="button" className="edit-price" aria-label={`Edit price of ${i.item}`} onClick={() => setEditing(true)}>Edit</button>
+      )}
+    </li>
   );
 }
 
@@ -97,25 +126,12 @@ export function Planner() {
     if (!plan || adding) return;
     setAdding(true);
     setStatus('');
-    let added = 0;
-    const skipped: string[] = [];
     try {
-      for (const sel of plan.selected) {
-        const recipe = await getRecipe(sel.id);
-        const indexes = recipe.ingredients.map((_, i) => i);
-        if (indexes.length === 0) continue;
-        try {
-          await addToShopping(sel.id, indexes);
-          added++;
-        } catch (e) {
-          if (e instanceof ApiError && e.status === 409) skipped.push(sel.title);
-          else throw e;
-        }
-      }
-      setStatus(
-        `Added ${plural(added, 'recipe', 'recipes')} to the shopping list` +
-          (skipped.length ? `. Already on the list: ${skipped.join(', ')}` : ''),
-      );
+      const r = await addPlanToShopping(plan.selected.map((x) => x.id));
+      const parts = [`Added ${plural(r.added, 'recipe', 'recipes')} to the shopping list`];
+      if (r.butcherItems.length) parts.push(`Left off for the butcher: ${r.butcherItems.map(formatItem).join(', ')}`);
+      if (r.alreadyOnList.length) parts.push(`Already on the list: ${r.alreadyOnList.join(', ')}`);
+      setStatus(parts.join('. '));
     } catch {
       setStatus('Could not add everything to the shopping list');
     } finally {
@@ -126,6 +142,8 @@ export function Planner() {
   const total = plan?.basket.totalPence ?? 0;
   const budgetPence = plan?.budgetPence ?? null;
   const over = budgetPence !== null && total > budgetPence;
+  const shopItems = plan?.basket.items.filter((i) => !i.butcher) ?? [];
+  const butcherItems = plan?.basket.items.filter((i) => i.butcher) ?? [];
   const pct = budgetPence ? Math.min(100, Math.round((total / budgetPence) * 100)) : 0;
 
   return (
@@ -186,19 +204,17 @@ export function Planner() {
               </p>
             )}
             <ul className="rows shopping-rows">
-              {plan.basket.items.map((i) => (
-                <li key={i.key} className="shopping-row planner-item">
-                  <span className="shopping-meta">
-                    <span className="shopping-text">{formatItem(i.item)}</span>
-                    <span className="sub">
-                      {i.pricePence !== null ? formatPence(i.pricePence) : 'No price yet'}
-                      {i.usedBy.length > 1 && ` · shared by ${i.usedBy.length} recipes`}
-                    </span>
-                    {i.pricePence === null && <PriceEditor item={i.item} onSaved={() => refresh(picked)} />}
-                  </span>
-                </li>
-              ))}
+              {shopItems.map((i) => <BasketRow key={i.key} i={i} onSaved={() => refresh(picked)} />)}
             </ul>
+            {butcherItems.length > 0 && (
+              <>
+                <h3 className="planner-sub">From the butcher · about {formatPence(plan.basket.butcherPence)}</h3>
+                <p className="sub">Not on the shopping list. Included in the total at your usual cost.</p>
+                <ul className="rows shopping-rows">
+                  {butcherItems.map((i) => <BasketRow key={i.key} i={i} onSaved={() => refresh(picked)} />)}
+                </ul>
+              </>
+            )}
           </section>
 
           {plan.suggestions.length > 0 && (
@@ -212,7 +228,7 @@ export function Planner() {
                       <p className="sub">
                         {s.extra.length === 0
                           ? 'Nothing extra to buy'
-                          : `Needs ${plural(s.extra.length, 'extra thing', 'extra things')}: ${s.extra.map(formatItem).join(', ')}`}
+                          : `Needs ${plural(s.extra.length, 'extra thing', 'extra things')}: ${s.extra.map((x) => formatItem(x) + (s.butcherExtra.includes(x) ? ' (butcher)' : '')).join(', ')}`}
                       </p>
                       <p className="sub">
                         Uses what you have: {s.shared.map(formatItem).join(', ')}

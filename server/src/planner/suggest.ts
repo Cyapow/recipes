@@ -2,7 +2,7 @@ import type { Ingredient } from '../recipes/schema.js';
 import { normaliseItemName } from '../shopping/normalise.js';
 
 export type PlannerRecipe = { id: string; title: string; ingredients: Ingredient[] };
-export type Price = { pricePence: number; clubcardPence: number | null };
+export type Price = { pricePence: number; clubcardPence: number | null; butcher?: boolean };
 export type PriceMap = ReadonlyMap<string, Price>;
 
 /** Cupboard basics: never counted as something to buy or as a reason two recipes match. */
@@ -26,8 +26,19 @@ export function recipeItems(r: PlannerRecipe): Map<string, string> {
 /** What you actually pay: the Clubcard price when there is one. */
 export const effectivePence = (p: Price): number => p.clubcardPence ?? p.pricePence;
 
-export type BasketItem = { key: string; item: string; pricePence: number | null; usedBy: string[] };
-export type Basket = { items: BasketItem[]; totalPence: number; unpriced: string[] };
+export type BasketItem = {
+  key: string;
+  item: string;
+  /** What it counts for in the total (Clubcard price when set); null when unpriced. */
+  pricePence: number | null;
+  /** The prices as entered, so they can be edited. */
+  normalPence: number | null;
+  clubcardPence: number | null;
+  /** Bought from the butcher, and the price is a usual cost rather than a shop price. */
+  butcher: boolean;
+  usedBy: string[];
+};
+export type Basket = { items: BasketItem[]; totalPence: number; butcherPence: number; unpriced: string[] };
 
 /**
  * The shop for a set of recipes. An ingredient two recipes share is bought once (one pack), which is
@@ -41,7 +52,13 @@ export function buildBasket(recipes: PlannerRecipe[], prices: PriceMap): Basket 
       if (existing) existing.usedBy.push(r.title);
       else {
         const p = prices.get(key);
-        byKey.set(key, { key, item, pricePence: p ? effectivePence(p) : null, usedBy: [r.title] });
+        byKey.set(key, {
+          key, item, usedBy: [r.title],
+          pricePence: p ? effectivePence(p) : null,
+          normalPence: p?.pricePence ?? null,
+          clubcardPence: p?.clubcardPence ?? null,
+          butcher: p?.butcher === true,
+        });
       }
     }
   }
@@ -49,6 +66,7 @@ export function buildBasket(recipes: PlannerRecipe[], prices: PriceMap): Basket 
   return {
     items,
     totalPence: items.reduce((n, i) => n + (i.pricePence ?? 0), 0),
+    butcherPence: items.reduce((n, i) => n + (i.butcher ? (i.pricePence ?? 0) : 0), 0),
     unpriced: items.filter((i) => i.pricePence === null).map((i) => i.item),
   };
 }
@@ -60,6 +78,8 @@ export type Suggestion = {
   shared: string[];
   /** Ingredients you would still need to buy. */
   extra: string[];
+  /** Which of the extras come from the butcher. */
+  butcherExtra: string[];
   /** Cost of the extras that have a price. */
   extraPence: number;
   /** Extras with no price yet, so extraPence is a floor. */
@@ -81,6 +101,7 @@ export function suggest(selected: PlannerRecipe[], all: PlannerRecipe[], prices:
     const extra: string[] = [];
     let extraPence = 0;
     const unpricedExtra: string[] = [];
+    const butcherExtra: string[] = [];
     for (const [key, name] of items) {
       if (have.has(key)) shared.push(name);
       else {
@@ -88,10 +109,11 @@ export function suggest(selected: PlannerRecipe[], all: PlannerRecipe[], prices:
         const p = prices.get(key);
         if (p) extraPence += effectivePence(p);
         else unpricedExtra.push(name);
+        if (p?.butcher) butcherExtra.push(name);
       }
     }
     if (shared.length === 0) continue;
-    out.push({ id: r.id, title: r.title, shared, extra, extraPence, unpricedExtra });
+    out.push({ id: r.id, title: r.title, shared, extra, butcherExtra, extraPence, unpricedExtra });
   }
   return out.sort(
     (a, b) =>

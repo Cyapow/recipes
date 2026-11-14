@@ -8,21 +8,21 @@ import { Planner } from './Planner';
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
   listRecipes: vi.fn(), getPlan: vi.fn(), getBudget: vi.fn(), saveBudget: vi.fn(), savePrice: vi.fn(),
-  getRecipe: vi.fn(), addToShopping: vi.fn(),
+  addPlanToShopping: vi.fn(),
 }));
-import { addToShopping, ApiError, getBudget, getPlan, getRecipe, listRecipes, saveBudget, savePrice } from '../api';
+import { addPlanToShopping, getBudget, getPlan, listRecipes, saveBudget, savePrice } from '../api';
 
 const summary = (id: string, title: string) => ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
 const plan = (over: object = {}) => ({
   selected: [{ id: 'soup', title: 'Carrot soup' }],
   basket: {
     items: [
-      { key: 'carrot', item: 'carrot', pricePence: 80, usedBy: ['Carrot soup'] },
-      { key: 'stock', item: 'stock', pricePence: null, usedBy: ['Carrot soup'] },
+      { key: 'carrot', item: 'carrot', pricePence: 80, normalPence: 80, clubcardPence: null, butcher: false, usedBy: ['Carrot soup'] },
+      { key: 'stock', item: 'stock', pricePence: null, normalPence: null, clubcardPence: null, butcher: false, usedBy: ['Carrot soup'] },
     ],
-    totalPence: 80, unpriced: ['stock'],
+    totalPence: 80, butcherPence: 0, unpriced: ['stock'],
   },
-  suggestions: [{ id: 'stew', title: 'Stew', shared: ['carrot'], extra: ['beef mince'], extraPence: 400, unpricedExtra: [] }],
+  suggestions: [{ id: 'stew', title: 'Stew', shared: ['carrot'], extra: ['beef mince'], butcherExtra: [], extraPence: 400, unpricedExtra: [] }],
   budgetPence: 7000,
   ...over,
 }) as never;
@@ -35,8 +35,7 @@ beforeEach(() => {
   vi.mocked(saveBudget).mockReset().mockResolvedValue(undefined);
   vi.mocked(getPlan).mockReset().mockResolvedValue(plan());
   vi.mocked(savePrice).mockReset().mockResolvedValue(undefined);
-  vi.mocked(getRecipe).mockReset().mockResolvedValue({ ingredients: [{}, {}] } as never);
-  vi.mocked(addToShopping).mockReset().mockResolvedValue({ added: 2 });
+  vi.mocked(addPlanToShopping).mockReset().mockResolvedValue({ added: 1, alreadyOnList: [], butcherItems: [] });
 });
 afterEach(cleanup);
 
@@ -82,7 +81,7 @@ describe('Planner', () => {
     await userEvent.type(await screen.findByLabelText('Price of stock'), '1.10');
     await userEvent.type(screen.getByLabelText('Clubcard price of stock'), '0.90');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(savePrice).toHaveBeenCalledWith('stock', 110, 90));
+    await waitFor(() => expect(savePrice).toHaveBeenCalledWith('stock', 110, 90, false));
     await waitFor(() => expect(getPlan).toHaveBeenCalledTimes(2));
   });
 
@@ -104,12 +103,41 @@ describe('Planner', () => {
     await waitFor(() => expect(saveBudget).toHaveBeenCalledWith(6500));
   });
 
-  it('adds every picked recipe to the shopping list and reports ones already there', async () => {
-    vi.mocked(addToShopping).mockRejectedValueOnce(new ApiError('x', 409, { error: 'already_on_list' }));
+  it('adds the picked recipes to the shopping list and reports what was left out or already there', async () => {
+    vi.mocked(addPlanToShopping).mockResolvedValue({ added: 0, alreadyOnList: ['Carrot soup'], butcherItems: ['beef shin'] });
     view();
     await userEvent.click(await screen.findByLabelText('Carrot soup'));
     await userEvent.click(await screen.findByRole('button', { name: 'Add 1 recipe to shopping list' }));
-    expect(addToShopping).toHaveBeenCalledWith('soup', [0, 1]);
-    expect(await screen.findByText(/Already on the list: Carrot soup/)).toBeTruthy();
+    expect(addPlanToShopping).toHaveBeenCalledWith(['soup']);
+    expect(await screen.findByText(/Left off for the butcher: Beef shin\. Already on the list: Carrot soup/)).toBeTruthy();
+  });
+
+  it('shows butcher items in their own section with a subtotal, and marks butcher suggestions', async () => {
+    vi.mocked(getPlan).mockResolvedValue(plan({
+      basket: {
+        items: [
+          { key: 'carrot', item: 'carrot', pricePence: 80, normalPence: 80, clubcardPence: null, butcher: false, usedBy: ['Stew'] },
+          { key: 'beef shin', item: 'beef shin', pricePence: 700, normalPence: 700, clubcardPence: null, butcher: true, usedBy: ['Stew'] },
+        ],
+        totalPence: 780, butcherPence: 700, unpriced: [],
+      },
+      suggestions: [{ id: 'x', title: 'Pie', shared: ['carrot'], extra: ['beef shin'], butcherExtra: ['beef shin'], extraPence: 700, unpricedExtra: [] }],
+    }));
+    view();
+    await userEvent.click(await screen.findByLabelText('Carrot soup'));
+    expect(await screen.findByText('From the butcher · about £7.00')).toBeTruthy();
+    expect(screen.getByText('About £7.00')).toBeTruthy();
+    expect(document.querySelector('.planner-total')!.textContent).toBe('£7.80 of £70.00');
+    expect(screen.getByText(/Beef shin \(butcher\)/)).toBeTruthy();
+  });
+
+  it('flags an item as from the butcher with a usual cost (no Clubcard box)', async () => {
+    view();
+    await userEvent.click(await screen.findByLabelText('Carrot soup'));
+    await userEvent.click(await screen.findByLabelText('From the butcher'));
+    expect(screen.queryByLabelText('Clubcard price of stock')).toBeNull();
+    await userEvent.type(screen.getByLabelText('Price of stock'), '6');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(savePrice).toHaveBeenCalledWith('stock', 600, null, true));
   });
 });
