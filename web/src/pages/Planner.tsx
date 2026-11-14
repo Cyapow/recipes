@@ -129,7 +129,7 @@ export function Planner() {
     try {
       const r = await addPlanToShopping(plan.selected.map((x) => x.id));
       const parts = [`Added ${plural(r.added, 'recipe', 'recipes')} to the shopping list`];
-      if (r.butcherItems.length) parts.push(`Left off for the butcher: ${r.butcherItems.map(formatItem).join(', ')}`);
+      if (r.butcherItems.length) parts.push(`Butcher items are in their own section: ${r.butcherItems.map(formatItem).join(', ')}`);
       if (r.alreadyOnList.length) parts.push(`Already on the list: ${r.alreadyOnList.join(', ')}`);
       setStatus(parts.join('. '));
     } catch {
@@ -209,7 +209,7 @@ export function Planner() {
             {butcherItems.length > 0 && (
               <>
                 <h3 className="planner-sub">From the butcher · about {formatPence(plan.basket.butcherPence)}</h3>
-                <p className="sub">Not on the shopping list. Included in the total at your usual cost.</p>
+                <p className="sub">Kept in their own section on the shopping list. Included in the total at your usual cost.</p>
                 <ul className="rows shopping-rows">
                   {butcherItems.map((i) => <BasketRow key={i.key} i={i} onSaved={() => refresh(picked)} />)}
                 </ul>

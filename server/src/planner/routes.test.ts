@@ -93,14 +93,14 @@ describe('butcher items', () => {
     expect(body.basket.items.find((i: { key: string }) => i.key === 'beef shin').butcher).toBe(true);
   });
 
-  it('keeps butcher items off the shopping list when adding recipes, and says so', async () => {
+  it('puts butcher items on the shopping list in their own section', async () => {
     const app = make();
     const id = await seed(app, recipe('Stew', 'carrots', 'beef shin'));
     await put(app, { item: 'beef shin', pricePence: 700, clubcardPence: null, butcher: true });
     const res = await app.inject({ method: 'POST', url: '/api/planner/add-to-shopping', payload: { recipeIds: [id] } });
     expect(res.json()).toEqual({ added: 1, alreadyOnList: [], butcherItems: ['beef shin'] });
-    const list = (await app.inject({ url: '/api/shopping' })).json().items.map((i: { item: string }) => i.item);
-    expect(list).toEqual(['carrots']);
+    const list = (await app.inject({ url: '/api/shopping' })).json().items.map((i: { item: string; section: string }) => [i.item, i.section]);
+    expect(list).toEqual([['carrots', 'shop'], ['beef shin', 'butcher']]);
     const again = await app.inject({ method: 'POST', url: '/api/planner/add-to-shopping', payload: { recipeIds: [id] } });
     expect(again.json().alreadyOnList).toEqual(['Stew']);
   });

@@ -54,27 +54,26 @@ export function registerPlannerRoutes(
     return { pence: p.data.pence };
   });
 
-  // Puts the picked recipes on the shared shopping list, leaving out butcher items (they are not part of the
-  // online order). A recipe already on the list is reported, not added twice.
+  // Puts the picked recipes on the shared shopping list. Butcher items go in as their own section, so the
+  // online order and the butcher trip stay apart. A recipe already on the list is reported, not added twice.
   app.post('/api/planner/add-to-shopping', async (req, reply) => {
     const p = PlanBody.safeParse(req.body);
     if (!p.success) return reply.code(400).send({ error: 'Invalid request', issues: p.error.issues });
     const found = [...new Set(p.data.recipeIds)].map((id) => recipes.get(id));
     if (found.some((r) => !r)) return reply.code(404).send({ error: 'Not found' });
     const prices = planner.priceMap();
+    const isButcher = (ing: { item: string }) => prices.get(ingredientKey(ing.item))?.butcher === true;
     const alreadyOnList: string[] = [];
     const butcher = new Set<string>();
     let added = 0;
     for (const r of found as NonNullable<(typeof found)[number]>[]) {
-      const keep = r.ingredients.filter((ing) => {
-        const isButcher = prices.get(ingredientKey(ing.item))?.butcher === true;
-        if (isButcher) butcher.add(ing.item.trim().toLowerCase());
-        return !isButcher;
-      });
-      if (keep.length === 0) continue;
-      const res = shopping.add({ id: r.id, title: r.title }, keep);
+      if (r.ingredients.length === 0) continue;
+      const res = shopping.add({ id: r.id, title: r.title }, r.ingredients, { isButcher });
       if ('alreadyOnList' in res) alreadyOnList.push(r.title);
-      else added++;
+      else {
+        added++;
+        for (const ing of r.ingredients) if (isButcher(ing)) butcher.add(ing.item.trim().toLowerCase());
+      }
     }
     return { added, alreadyOnList, butcherItems: [...butcher] };
   });

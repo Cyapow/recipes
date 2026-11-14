@@ -27,6 +27,15 @@ beforeEach(() => {
 });
 
 describe('Shopping', () => {
+  it('shows butcher items under their own heading', async () => {
+    vi.mocked(listShopping).mockResolvedValue([
+      { ...(LIST[1] as object), id: '9', text: '500g beef shin', section: 'butcher' } as never,
+      LIST[0]!,
+    ]);
+    view();
+    expect(await screen.findByRole('heading', { name: 'From the butcher' })).toBeTruthy();
+    expect(screen.getByText('500g Beef shin')).toBeTruthy();
+  });
   it('renders items, sources and the count line', async () => {
     view();
     expect(await screen.findByText('2 tins Chopped tomatoes')).toBeTruthy();

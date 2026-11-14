@@ -2,9 +2,13 @@ import type { ShoppingItem } from '../api';
 
 export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'manual';
 
-/** One item per line, no bullets, no trailing blank line. */
-export function shoppingShareText(items: Pick<ShoppingItem, 'text'>[]): string {
-  return items.map((i) => i.text).join('\n');
+/** One item per line, no bullets, no trailing blank line. Butcher items follow under their own heading. */
+export function shoppingShareText(items: (Pick<ShoppingItem, 'text'> & { section?: 'shop' | 'butcher' })[]): string {
+  const lines = (list: typeof items) => list.map((i) => i.text).join('\n');
+  const shop = items.filter((i) => i.section !== 'butcher');
+  const butcher = items.filter((i) => i.section === 'butcher');
+  if (butcher.length === 0) return lines(shop);
+  return `${shop.length ? `${lines(shop)}\n\n` : ''}From the butcher:\n${lines(butcher)}`;
 }
 
 /**

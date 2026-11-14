@@ -103,13 +103,13 @@ describe('Planner', () => {
     await waitFor(() => expect(saveBudget).toHaveBeenCalledWith(6500));
   });
 
-  it('adds the picked recipes to the shopping list and reports what was left out or already there', async () => {
+  it('adds the picked recipes to the shopping list and reports butcher items and ones already there', async () => {
     vi.mocked(addPlanToShopping).mockResolvedValue({ added: 0, alreadyOnList: ['Carrot soup'], butcherItems: ['beef shin'] });
     view();
     await userEvent.click(await screen.findByLabelText('Carrot soup'));
     await userEvent.click(await screen.findByRole('button', { name: 'Add 1 recipe to shopping list' }));
     expect(addPlanToShopping).toHaveBeenCalledWith(['soup']);
-    expect(await screen.findByText(/Left off for the butcher: Beef shin\. Already on the list: Carrot soup/)).toBeTruthy();
+    expect(await screen.findByText(/Butcher items are in their own section: Beef shin\. Already on the list: Carrot soup/)).toBeTruthy();
   });
 
   it('shows butcher items in their own section with a subtotal, and marks butcher suggestions', async () => {

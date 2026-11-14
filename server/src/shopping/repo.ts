@@ -11,6 +11,8 @@ export type ShoppingItem = {
   quantity: number | null;
   unit: string | null;
   sources: ShoppingSource[];
+  /** The online order, or the butcher. */
+  section: 'shop' | 'butcher';
 };
 
 type Row = {
@@ -23,6 +25,7 @@ type Row = {
   sources_json: string;
   added_at: string;
   merged: number;
+  section: string;
 };
 
 function toItem(r: Row): ShoppingItem {
@@ -33,6 +36,7 @@ function toItem(r: Row): ShoppingItem {
     quantity: r.quantity,
     unit: r.unit,
     sources: JSON.parse(r.sources_json),
+    section: r.section === 'butcher' ? 'butcher' : 'shop',
   };
 }
 
@@ -46,19 +50,21 @@ export function createShoppingRepo(db: Database) {
     'SELECT * FROM shopping_items WHERE merge_key = ? AND quantity > 0 AND note IS NULL ORDER BY added_at, rowid LIMIT 1',
   );
   const insert = db.prepare(
-    `INSERT INTO shopping_items (id, merge_key, item, quantity, unit, note, sources_json, added_at, merged)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    `INSERT INTO shopping_items (id, merge_key, item, quantity, unit, note, sources_json, added_at, merged, section)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
   );
   const updateMerged = db.prepare(
     'UPDATE shopping_items SET quantity = ?, sources_json = ?, merged = 1 WHERE id = ?',
   );
 
-  const addAll = db.transaction((recipe: { id: string; title: string }, ingredients: Ingredient[]) => {
+  const addAll = db.transaction((recipe: { id: string; title: string }, ingredients: Ingredient[], isButcher: (i: Ingredient) => boolean) => {
     const now = new Date().toISOString();
     for (const ing of ingredients) {
       const unit = ing.unit?.trim() || null;
       const note = ing.note?.trim() || null;
-      const key = `${normaliseItemName(ing.item)}|${normaliseUnit(unit) ?? ''}`;
+      const butcher = isButcher(ing);
+      // Butcher rows never merge into shop rows (and vice versa): the key carries the section.
+      const key = `${butcher ? 'butcher|' : ''}${normaliseItemName(ing.item)}|${normaliseUnit(unit) ?? ''}`;
       // Merge only exact, fully numeric matches. Vague (no quantity) or annotated lines stay separate.
       const mergeable = ing.quantity !== null && ing.quantity > 0 && note === null;
       const existing = mergeable ? (mergeCandidate.get(key) as Row | undefined) : undefined;
@@ -70,7 +76,7 @@ export function createShoppingRepo(db: Database) {
       } else {
         insert.run(
           crypto.randomUUID(), key, ing.item.trim(), ing.quantity, unit, note,
-          JSON.stringify([{ recipeId: recipe.id, title: recipe.title }]), now,
+          JSON.stringify([{ recipeId: recipe.id, title: recipe.title }]), now, butcher ? 'butcher' : 'shop',
         );
       }
     }
@@ -84,10 +90,10 @@ export function createShoppingRepo(db: Database) {
     add(
       recipe: { id: string; title: string },
       ingredients: Ingredient[],
-      opts: { force?: boolean } = {},
+      opts: { force?: boolean; isButcher?: (i: Ingredient) => boolean } = {},
     ): { added: number } | { alreadyOnList: true } {
       if (!opts.force && onListStmt.get(recipe.id)) return { alreadyOnList: true };
-      return { added: addAll(recipe, ingredients) };
+      return { added: addAll(recipe, ingredients, opts.isButcher ?? (() => false)) };
     },
     remove(id: string): boolean {
       return db.prepare('DELETE FROM shopping_items WHERE id = ?').run(id).changes > 0;

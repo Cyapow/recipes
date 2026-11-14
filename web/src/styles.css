@@ -442,3 +442,4 @@ body.cook-scroll-lock { overflow: hidden; }
 .butcher-flag { flex-direction: row !important; align-items: center; gap: 10px !important; flex-basis: 100%; min-height: 44px; font-weight: 600; }
 .butcher-flag input { width: 22px; min-height: 22px; height: 22px; accent-color: var(--accent); }
 .edit-price { flex: none; min-height: 44px; padding: 0 14px; }
+.shopping-section { margin: 10px 0 0; font-size: 1.125rem; }
