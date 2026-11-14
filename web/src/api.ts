@@ -159,3 +159,41 @@ export const removeShoppingItem = (id: string): Promise<void> =>
 
 export const clearShopping = (): Promise<void> =>
   request<unknown>('/api/shopping', { method: 'DELETE' }).then(() => undefined);
+
+export type PlannerPrice = {
+  key: string; item: string; pricePence: number; clubcardPence: number | null; packNote: string | null; source: string;
+};
+export type BasketItem = { key: string; item: string; pricePence: number | null; usedBy: string[] };
+export type PlannerSuggestion = {
+  id: string; title: string; shared: string[]; extra: string[]; extraPence: number; unpricedExtra: string[];
+};
+export type Plan = {
+  selected: { id: string; title: string }[];
+  basket: { items: BasketItem[]; totalPence: number; unpriced: string[] };
+  suggestions: PlannerSuggestion[];
+  budgetPence: number | null;
+};
+
+export const getPlan = (recipeIds: string[]): Promise<Plan> =>
+  request('/api/planner/plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ recipeIds }),
+  });
+
+export const getBudget = (): Promise<number | null> =>
+  request<{ pence: number | null }>('/api/planner/budget').then((r) => r.pence);
+
+export const saveBudget = (pence: number | null): Promise<void> =>
+  request<unknown>('/api/planner/budget', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pence }),
+  }).then(() => undefined);
+
+export const savePrice = (item: string, pricePence: number, clubcardPence: number | null): Promise<void> =>
+  request<unknown>('/api/planner/prices', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ item, pricePence, clubcardPence }),
+  }).then(() => undefined);
