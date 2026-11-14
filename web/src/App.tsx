@@ -8,6 +8,8 @@ import { RecipeOverview } from './pages/RecipeOverview';
 import { PrintCard } from './pages/PrintCard';
 import { Settings } from './pages/Settings';
 import { Shopping } from './pages/Shopping';
+import { Planner } from './pages/Planner';
+import { Ingredients } from './pages/Ingredients';
 import { NotFound } from './pages/NotFound';
 
 export function App() {
@@ -19,6 +21,8 @@ export function App() {
       <Route path="/import" element={<Import />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/shopping" element={<Shopping />} />
+      <Route path="/planner" element={<Planner />} />
+      <Route path="/ingredients" element={<Ingredients />} />
       <Route path="/recipe/:id" element={<RecipeOverview />} />
       <Route path="/recipe/:id/cook" element={<Cook />} />
       <Route path="/recipe/:id/edit" element={<Editor />} />

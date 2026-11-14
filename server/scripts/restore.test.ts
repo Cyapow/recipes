@@ -279,7 +279,7 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
 
   it('restores a snapshot from before the shopping migration and openDb migrates it', async () => {
     withSnapshot((d) => {
-      d.exec('DROP TABLE shopping_items');
+      d.exec('DROP TABLE shopping_items; DROP TABLE IF EXISTS ingredient_packs; DROP TABLE IF EXISTS ingredient_info; DROP TABLE IF EXISTS shops; DROP TABLE IF EXISTS ingredient_prices');
       d.pragma('user_version = 1');
     });
     await restoreFromDirectory(backupDir, dataDir);

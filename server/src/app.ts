@@ -17,6 +17,8 @@ import { createRecipeRepo } from './recipes/repo.js';
 import { registerRecipeRoutes } from './recipes/routes.js';
 import { createShoppingRepo } from './shopping/repo.js';
 import { registerShoppingRoutes } from './shopping/routes.js';
+import { createPlannerRepo } from './planner/repo.js';
+import { registerPlannerRoutes } from './planner/routes.js';
 import type { DriveClient } from './backup/drive.js';
 import { createGoogleAuth, type GoogleAuth } from './backup/google.js';
 import { registerBackupRoutes } from './backup/routes.js';
@@ -53,7 +55,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get('/api/health', async () => ({ ok: true }));
   const recipeRepo = createRecipeRepo(deps.db);
   registerRecipeRoutes(app, recipeRepo);
-  registerShoppingRoutes(app, { shopping: createShoppingRepo(deps.db), recipes: recipeRepo });
+  const shopping = createShoppingRepo(deps.db);
+  registerShoppingRoutes(app, { shopping, recipes: recipeRepo });
+  registerPlannerRoutes(app, { planner: createPlannerRepo(deps.db), recipes: recipeRepo, shopping });
 
   const images = deps.images ?? createImageStore(deps.config.dataDir);
   registerImageRoutes(app, images);

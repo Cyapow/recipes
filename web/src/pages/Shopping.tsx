@@ -174,6 +174,35 @@ export function Shopping() {
     }
   }
 
+  const renderRow = (it: ShoppingItem) => (
+    <li key={it.id} className="shopping-row">
+                  <span className="shopping-meta">
+                    <span className="shopping-text">{formatLine(it.text)}</span>
+                    {it.sources.length > 0 && (
+                      <span className="sub">{it.sources.map((s) => s.title).join(', ')}</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="round-btn remove-btn"
+                    aria-label={`Remove ${formatLine(it.text)}`}
+                    aria-busy={removing.has(it.id) || undefined}
+                    ref={(el) => { if (el) removeBtns.current.set(it.id, el); else removeBtns.current.delete(it.id); }}
+                    onClick={() => void remove(it)}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </li>
+  );
+  const isDefault = (i: ShoppingItem) => !i.section || i.section === 'shop';
+  const shopItems = items?.filter(isDefault) ?? [];
+  const otherShops = [...(items?.filter((i) => !isDefault(i)) ?? []).reduce(
+    (m, i) => m.set(i.section, [...(m.get(i.section) ?? []), i]),
+    new Map<string, ShoppingItem[]>(),
+  )];
+
   const recipes = new Set(items?.flatMap((i) => i.sources.map((s) => s.recipeId))).size;
 
   return (
@@ -202,30 +231,13 @@ export function Shopping() {
       {items && items.length > 0 && (
         <>
           <p className="sub">{plural(items.length, 'item', 'items')}{recipes > 0 && ` from ${plural(recipes, 'recipe', 'recipes')}`}</p>
-          <ul className="rows shopping-rows">
-            {items.map((it) => (
-              <li key={it.id} className="shopping-row">
-                <span className="shopping-meta">
-                  <span className="shopping-text">{formatLine(it.text)}</span>
-                  {it.sources.length > 0 && (
-                    <span className="sub">{it.sources.map((s) => s.title).join(', ')}</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="round-btn remove-btn"
-                  aria-label={`Remove ${formatLine(it.text)}`}
-                  aria-busy={removing.has(it.id) || undefined}
-                  ref={(el) => { if (el) removeBtns.current.set(it.id, el); else removeBtns.current.delete(it.id); }}
-                  onClick={() => void remove(it)}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6 6 18" />
-                  </svg>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {shopItems.length > 0 && <ul className="rows shopping-rows">{shopItems.map(renderRow)}</ul>}
+          {otherShops.map(([name, list]) => (
+            <section key={name} aria-label={name}>
+              <h2 className="shopping-section">{name}</h2>
+              <ul className="rows shopping-rows">{list.map(renderRow)}</ul>
+            </section>
+          ))}
         </>
       )}
 

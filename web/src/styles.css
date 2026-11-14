@@ -417,3 +417,45 @@ body.cook-scroll-lock { overflow: hidden; }
 /* A section heading inside the ingredients list: part of the list, but not something to tick. */
 .have-group { margin: 14px 0 2px; font-size: .8125rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .have-list > .have-group:first-child { margin-top: 0; }
+
+/* Meal planner */
+.planner h1, .planner h2 { margin: 0; }
+.planner h2 { font-size: 1.125rem; margin-top: 6px; }
+.planner .sub { margin: 0; }
+.budget-field { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
+.planner-recipes { gap: 8px; }
+.planner-pick { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); font-size: 1.0625rem; font-weight: 600; cursor: pointer; }
+.planner-pick input { width: 24px; min-height: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.planner-total { margin: 0; font-size: 2rem; font-weight: 800; }
+.meter { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; margin: 6px 0; }
+.meter-fill { height: 100%; background: var(--accent); }
+.meter-fill.over { background: var(--danger); }
+.planner-item { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+.price-editor { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.price-editor label { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 96px; }
+.price-editor input { min-height: 44px; }
+.price-editor button { min-height: 44px; padding: 0 16px; }
+.price-editor .field-error { flex-basis: 100%; }
+.planner-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 12px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+.planner-suggestion button { flex: none; min-height: 44px; min-width: 64px; }
+.planner-sub { margin: 10px 0 0; font-size: 1rem; }
+.butcher-flag { flex-direction: row !important; align-items: center; gap: 10px !important; flex-basis: 100%; min-height: 44px; font-weight: 600; }
+.butcher-flag input { width: 22px; min-height: 22px; height: 22px; accent-color: var(--accent); }
+.edit-price { flex: none; min-height: 44px; padding: 0 14px; }
+.shopping-section { margin: 10px 0 0; font-size: 1.125rem; }
+
+/* Ingredients and prices */
+.ingredient-item { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.ingredient-head { display: flex; width: 100%; min-height: 64px; padding: 8px 16px; border: 0; background: transparent; text-align: left; cursor: pointer; align-items: center; justify-content: flex-start; font: inherit; color: inherit; }
+.ingredient-editor { display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 16px; }
+.ingredient-editor h3 { margin: 6px 0 0; }
+.editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.editor-grid label, .pack-row label { display: flex; flex-direction: column; gap: 2px; font-weight: 700; }
+.pack-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; align-items: end; border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px 12px; margin: 0; }
+.pack-row input { min-height: 44px; }
+.shops { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; }
+.shops summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.shop-row { display: flex; gap: 8px; align-items: center; }
+.shop-row input { min-height: 44px; }
+.shop-add { display: flex; gap: 8px; margin-top: 10px; }
+.shop-add input { min-height: 44px; }
