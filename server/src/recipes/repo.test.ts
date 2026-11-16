@@ -80,7 +80,7 @@ describe('recipe repo', () => {
     repo.create(base);
     repo.create({ ...base, title: 'Other', origin: 'other', brand: 'Gousto', tags: [{ group: 'other', name: 'soup' }] });
     expect(repo.list({ origin: 'mine' }).map((r) => r.title)).toEqual(['Spaghetti Bolognese']);
-    expect(repo.list({ tag: 'pasta' }).map((r) => r.title)).toEqual(['Spaghetti Bolognese']);
+    expect(repo.list({ tags: [pasta] }).map((r) => r.title)).toEqual(['Spaghetti Bolognese']);
     expect(repo.list({})).toHaveLength(2);
   });
 
@@ -97,10 +97,68 @@ describe('recipe repo', () => {
     expect(bare.totalMinutes).toBeNull();
   });
 
-  it('tags() returns distinct sorted tags', () => {
-    repo.create(base);
-    repo.create({ ...base, tags: [pasta, tag('Zesty'), tag('brunch')] });
-    expect(repo.tags()).toEqual(['Zesty', 'brunch', 'dinner', 'pasta']);
+  describe('brand and tag filters', () => {
+    const thai = { group: 'cuisine' as const, name: 'Thai' };
+    const italian = { group: 'cuisine' as const, name: 'Italian' };
+    const dinner = { group: 'meal' as const, name: 'Dinner' };
+    const mk = (title: string, brand: string | null, tags: RecipeInput['tags'], sourceUrl: string | null = null) =>
+      repo.create({ ...base, title, brand, origin: brand === 'Mine' ? 'mine' : 'other', tags, sourceUrl });
+    const titles = (q: Parameters<typeof repo.list>[0]) => repo.list(q).map((r) => r.title).sort();
+
+    beforeEach(() => {
+      mk('GoustoThai', 'Gousto', [thai, dinner]);
+      mk('HFThai', 'HelloFresh', [thai]);
+      mk('GoustoItalian', 'Gousto', [italian]);
+      mk('Plain', 'Mine', []);
+    });
+
+    it('ORs brands and ANDs them with tags', () => {
+      expect(titles({ brands: ['Gousto', 'HelloFresh'], tags: [thai] })).toEqual(['GoustoThai', 'HFThai']);
+      expect(titles({ brands: ['gousto'] })).toEqual(['GoustoItalian', 'GoustoThai']);
+    });
+
+    it('ORs tags within a group', () => {
+      expect(titles({ brands: ['Gousto'], tags: [thai, italian] })).toEqual(['GoustoItalian', 'GoustoThai']);
+    });
+
+    it('ANDs across groups', () => {
+      expect(titles({ tags: [thai, dinner] })).toEqual(['GoustoThai']);
+    });
+
+    it('searches brand but not tag group ids', () => {
+      expect(titles({ search: 'other' })).toEqual([]);
+      expect(titles({ search: 'gousto' })).toEqual(['GoustoItalian', 'GoustoThai']);
+      expect(titles({ search: 'thai' })).toEqual(['GoustoThai', 'HFThai']);
+    });
+
+    it('finds a tag whose name contains a colon', () => {
+      mk('Spicy', null, [{ group: 'other', name: 'Middle Eastern: spicy' }]);
+      expect(titles({ tags: [{ group: 'other', name: 'middle eastern: spicy' }] })).toEqual(['Spicy']);
+    });
+
+    it('facets() counts brands and tags, count desc then name', () => {
+      expect(repo.facets()).toEqual({
+        brands: [
+          { name: 'Gousto', count: 2 },
+          { name: 'HelloFresh', count: 1 },
+          { name: 'Mine', count: 1 },
+        ],
+        tags: [
+          { group: 'cuisine', name: 'Thai', count: 2 },
+          { group: 'meal', name: 'Dinner', count: 1 },
+          { group: 'cuisine', name: 'Italian', count: 1 },
+        ],
+      });
+    });
+
+    it('brandForHost returns the newest brand for a host, www stripped', async () => {
+      mk('Old', 'Gousto', [], 'https://www.bbcgoodfood.com/a');
+      await new Promise((r) => setTimeout(r, 5));
+      mk('New', 'Simply Cook', [], 'https://bbcgoodfood.com/b');
+      mk('NoBrand', null, [], 'https://bbcgoodfood.com/c');
+      expect(repo.brandForHost('bbcgoodfood.com')).toBe('Simply Cook');
+      expect(repo.brandForHost('nowhere.example')).toBeNull();
+    });
   });
 
   it('reads a legacy string-array tags_json as Other tags and a missing brand as null', () => {

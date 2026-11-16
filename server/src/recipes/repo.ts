@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import crypto from 'node:crypto';
-import { normaliseTags } from './categories.js';
+import { normaliseTags, type Tag, type TagGroup } from './categories.js';
 import { normaliseSteps, type Recipe, type RecipeInput, type RecipeSummary } from './schema.js';
 
 type Row = {
@@ -23,7 +23,12 @@ type Row = {
   updated_at: string;
 };
 
-export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
+export type ListQuery = { search?: string; origin?: 'mine' | 'other'; brands?: string[]; tags?: Tag[] };
+
+export type Facets = {
+  brands: { name: string; count: number }[];
+  tags: { group: TagGroup; name: string; count: number }[];
+};
 
 function parseJson(s: string): unknown {
   try {
@@ -128,25 +133,67 @@ export function createRecipeRepo(db: Database) {
         const esc = q.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
         params.search = `%${esc}%`;
         where.push(
-          `(title LIKE @search ESCAPE '\\' OR ingredients_json LIKE @search ESCAPE '\\' OR EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE json_extract(value, '$.name') LIKE @search ESCAPE '\\'))`,
+          `(title LIKE @search ESCAPE '\\' OR ingredients_json LIKE @search ESCAPE '\\' OR brand LIKE @search ESCAPE '\\' OR EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE json_extract(value, '$.name') LIKE @search ESCAPE '\\'))`,
         );
       }
       if (q.origin) {
         params.origin = q.origin;
         where.push('origin = @origin');
       }
-      if (q.tag) {
-        where.push(`EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE json_extract(value, '$.name') = @tag)`);
-        params.tag = q.tag;
+      if (q.brands?.length) {
+        const names = q.brands.map((b, i) => {
+          params[`b${i}`] = b.toLowerCase();
+          return `@b${i}`;
+        });
+        where.push(`lower(brand) IN (${names.join(', ')})`);
+      }
+      const byGroup = new Map<TagGroup, string[]>();
+      for (const t of q.tags ?? []) byGroup.set(t.group, [...(byGroup.get(t.group) ?? []), t.name]);
+      let g = 0;
+      for (const [group, names] of byGroup) {
+        params[`g${g}`] = group;
+        const marks = names.map((n, i) => {
+          params[`t${g}_${i}`] = n.toLowerCase();
+          return `@t${g}_${i}`;
+        });
+        where.push(
+          `EXISTS (SELECT 1 FROM json_each(recipes.tags_json) t WHERE json_extract(t.value, '$.group') = @g${g} AND lower(json_extract(t.value, '$.name')) IN (${marks.join(', ')}))`,
+        );
+        g++;
       }
       const sql = `SELECT * FROM recipes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC, title`;
       return (db.prepare(sql).all(params) as Row[]).map(toSummary);
     },
-    tags(): string[] {
+    facets(): Facets {
+      const brands = db
+        .prepare(`SELECT brand AS name, COUNT(*) AS count FROM recipes WHERE brand IS NOT NULL GROUP BY brand ORDER BY count DESC, name`)
+        .all() as Facets['brands'];
+      const rows = db.prepare('SELECT tags_json FROM recipes').all() as { tags_json: string }[];
+      const counts = new Map<string, { group: TagGroup; name: string; count: number }>();
+      for (const r of rows) {
+        for (const t of normaliseTags(parseJson(r.tags_json))) {
+          const key = `${t.group}:${t.name.toLowerCase()}`;
+          const hit = counts.get(key);
+          if (hit) hit.count++;
+          else counts.set(key, { group: t.group, name: t.name, count: 1 });
+        }
+      }
+      const tags = [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      return { brands, tags };
+    },
+    brandForHost(host: string): string | null {
+      const want = host.toLowerCase().replace(/^www\./, '');
       const rows = db
-        .prepare(`SELECT DISTINCT json_extract(value, '$.name') AS name FROM recipes, json_each(recipes.tags_json)`)
-        .all() as { name: string }[];
-      return rows.map((r) => r.name).sort();
+        .prepare(`SELECT brand, source_url FROM recipes WHERE brand IS NOT NULL AND source_url IS NOT NULL ORDER BY created_at DESC, rowid DESC`)
+        .all() as { brand: string; source_url: string }[];
+      for (const r of rows) {
+        try {
+          if (new URL(r.source_url).hostname.toLowerCase().replace(/^www\./, '') === want) return r.brand;
+        } catch {
+          /* unparseable URL: skip */
+        }
+      }
+      return null;
     },
   };
   return repo;

@@ -28,7 +28,7 @@ export function listRecipes(q: ListQuery = {}): Promise<RecipeSummary[]> {
   const p = new URLSearchParams();
   if (q.search) p.set('search', q.search);
   if (q.origin) p.set('origin', q.origin);
-  if (q.tag) p.set('tag', q.tag);
+  if (q.tag) p.set('tag', `${tagGroups.get(q.tag) ?? 'other'}:${q.tag}`);
   const qs = p.toString();
   return request(`/api/recipes${qs ? `?${qs}` : ''}`);
 }
@@ -46,7 +46,14 @@ export function saveRecipe(id: string | null, input: RecipeInput): Promise<Recip
 export const deleteRecipe = (id: string): Promise<void> =>
   request(`/api/recipes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
-export const listTags = (): Promise<string[]> => request('/api/tags');
+// Interim: the Library still filters by a bare tag name; remember each name's group so it can be sent as group:name.
+const tagGroups = new Map<string, string>();
+
+export async function listTags(): Promise<string[]> {
+  const facets = await request<{ tags: { group: string; name: string }[] }>('/api/tags');
+  for (const t of facets.tags) if (!tagGroups.has(t.name)) tagGroups.set(t.name, t.group);
+  return [...new Set(facets.tags.map((t) => t.name))].sort();
+}
 
 export async function uploadImage(file: File): Promise<string> {
   const body = new FormData();
