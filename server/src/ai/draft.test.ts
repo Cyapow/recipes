@@ -8,6 +8,7 @@ const draft = {
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
+const expected = { ...draft, brand: 'Mine' };
 const toolUse = (input: unknown) => ({ content: [{ type: 'tool_use', id: 't1', name: 'record_recipe', input }] });
 const config = { anthropicApiKey: 'sk-secret', anthropicModel: 'test-model' } as never;
 
@@ -160,7 +161,7 @@ describe('recipeToolSchema (strict-safe)', () => {
 describe('createAnthropicClient', () => {
   it('skips thinking blocks and finds the tool_use block', async () => {
     const { sdk } = fake({ content: [{ type: 'thinking', thinking: 'hm', signature: 's' }, { type: 'tool_use', id: 't1', name: 'record_recipe', input: draft }] });
-    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
   });
 
   it('retries with the full assistant content (thinking included) after invalid output', async () => {
@@ -185,7 +186,7 @@ describe('createAnthropicClient', () => {
 
   it('recovers when the retry after a text reply calls the tool', async () => {
     const { sdk } = fake({ content: [{ type: 'text', text: 'hi' }] }, toolUse(draft));
-    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
   });
 
   it('throws AiRefusedError on refusal without retrying', async () => {
@@ -197,7 +198,7 @@ describe('createAnthropicClient', () => {
   it('asks for the record_recipe tool without forcing it, delimits user text and returns the validated draft', async () => {
     const { sdk, create } = fake(toolUse(draft));
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 'my spag bol' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     const [params, opts] = create.mock.calls[0]!;
     expect(params.model).toBe('test-model');
     expect(params.system).toBe(SYSTEM_PROMPT);
@@ -223,7 +224,7 @@ describe('createAnthropicClient', () => {
   it('retries once on invalid output, feeding the error back', async () => {
     const { sdk, create } = fake(toolUse({ title: 'x' }), toolUse(draft));
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     expect(create).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(create.mock.calls[1]![0].messages)).toContain('tool_result');
   });
@@ -248,7 +249,7 @@ describe('createAnthropicClient', () => {
   it('never accepts a max_tokens-truncated result; retries with a larger budget', async () => {
     const { sdk, create } = fake({ ...toolUse(draft), stop_reason: 'max_tokens' }, { ...toolUse(draft), stop_reason: 'tool_use' });
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1]![0].max_tokens).toBeGreaterThan(create.mock.calls[0]![0].max_tokens);
     expect(create.mock.calls[1]![0].messages).toHaveLength(1);
@@ -266,7 +267,7 @@ describe('createAnthropicClient', () => {
   it('leaves normal stop reasons unaffected', async () => {
     for (const stop_reason of ['end_turn', 'tool_use']) {
       const { sdk, create } = fake({ ...toolUse(draft), stop_reason });
-      expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+      expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
       expect(create).toHaveBeenCalledTimes(1);
     }
   });

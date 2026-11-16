@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import crypto from 'node:crypto';
+import { normaliseTags } from './categories.js';
 import { normaliseSteps, type Recipe, type RecipeInput, type RecipeSummary } from './schema.js';
 
 type Row = {
@@ -7,6 +8,7 @@ type Row = {
   title: string;
   description: string | null;
   origin: 'mine' | 'other';
+  brand: string | null;
   source_name: string | null;
   source_url: string | null;
   servings: number | null;
@@ -38,6 +40,7 @@ function toRecipe(r: Row): Recipe {
     title: r.title,
     description: r.description,
     origin: r.origin,
+    brand: r.brand,
     sourceName: r.source_name,
     sourceUrl: r.source_url,
     servings: r.servings,
@@ -46,7 +49,7 @@ function toRecipe(r: Row): Recipe {
     ingredients,
     steps: normaliseSteps(parseJson(r.steps_json), Array.isArray(ingredients) ? ingredients.length : 0),
     notes: r.notes,
-    tags: JSON.parse(r.tags_json),
+    tags: normaliseTags(parseJson(r.tags_json)),
     imageIds: JSON.parse(r.image_ids_json),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -60,8 +63,9 @@ function toSummary(r: Row): RecipeSummary {
     id: r.id,
     title: r.title,
     origin: r.origin,
+    brand: r.brand,
     sourceName: r.source_name,
-    tags: JSON.parse(r.tags_json),
+    tags: normaliseTags(parseJson(r.tags_json)),
     thumbnailId: imageIds[0] ?? null,
     totalMinutes: hasTime ? (r.prep_minutes ?? 0) + (r.cook_minutes ?? 0) : null,
   };
@@ -73,6 +77,7 @@ function values(id: string, i: RecipeInput) {
     title: i.title,
     description: i.description,
     origin: i.origin,
+    brand: i.brand,
     source_name: i.sourceName,
     source_url: i.sourceUrl,
     servings: i.servings,
@@ -88,12 +93,12 @@ function values(id: string, i: RecipeInput) {
 
 export function createRecipeRepo(db: Database) {
   const insert = db.prepare(`INSERT INTO recipes
-    (id, title, description, origin, source_name, source_url, servings, prep_minutes, cook_minutes, notes,
+    (id, title, description, origin, brand, source_name, source_url, servings, prep_minutes, cook_minutes, notes,
      ingredients_json, steps_json, tags_json, image_ids_json, created_at, updated_at)
-    VALUES (@id, @title, @description, @origin, @source_name, @source_url, @servings, @prep_minutes, @cook_minutes, @notes,
+    VALUES (@id, @title, @description, @origin, @brand, @source_name, @source_url, @servings, @prep_minutes, @cook_minutes, @notes,
      @ingredients_json, @steps_json, @tags_json, @image_ids_json, @now, @now)`);
   const updateStmt = db.prepare(`UPDATE recipes SET
-    title=@title, description=@description, origin=@origin, source_name=@source_name, source_url=@source_url,
+    title=@title, description=@description, origin=@origin, brand=@brand, source_name=@source_name, source_url=@source_url,
     servings=@servings, prep_minutes=@prep_minutes, cook_minutes=@cook_minutes, notes=@notes,
     ingredients_json=@ingredients_json, steps_json=@steps_json, tags_json=@tags_json,
     image_ids_json=@image_ids_json, updated_at=@now WHERE id=@id`);
@@ -123,7 +128,7 @@ export function createRecipeRepo(db: Database) {
         const esc = q.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
         params.search = `%${esc}%`;
         where.push(
-          `(title LIKE @search ESCAPE '\\' OR ingredients_json LIKE @search ESCAPE '\\' OR tags_json LIKE @search ESCAPE '\\')`,
+          `(title LIKE @search ESCAPE '\\' OR ingredients_json LIKE @search ESCAPE '\\' OR EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE json_extract(value, '$.name') LIKE @search ESCAPE '\\'))`,
         );
       }
       if (q.origin) {
@@ -131,7 +136,7 @@ export function createRecipeRepo(db: Database) {
         where.push('origin = @origin');
       }
       if (q.tag) {
-        where.push('EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE value = @tag)');
+        where.push(`EXISTS (SELECT 1 FROM json_each(recipes.tags_json) WHERE json_extract(value, '$.name') = @tag)`);
         params.tag = q.tag;
       }
       const sql = `SELECT * FROM recipes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC, title`;
@@ -139,9 +144,9 @@ export function createRecipeRepo(db: Database) {
     },
     tags(): string[] {
       const rows = db
-        .prepare('SELECT DISTINCT value FROM recipes, json_each(recipes.tags_json)')
-        .all() as { value: string }[];
-      return rows.map((r) => r.value).sort();
+        .prepare(`SELECT DISTINCT json_extract(value, '$.name') AS name FROM recipes, json_each(recipes.tags_json)`)
+        .all() as { name: string }[];
+      return rows.map((r) => r.name).sort();
     },
   };
   return repo;

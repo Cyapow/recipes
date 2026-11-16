@@ -38,7 +38,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [stepsBusy, setStepsBusy] = useState(false);
   const [notes, setNotes] = useState(initial.notes ?? '');
-  const [tags, setTags] = useState(initial.tags.join(', '));
+  const [tags, setTags] = useState(initial.tags.map((t) => (typeof t === 'string' ? t : t.name)).join(', '));
   const [error, setError] = useState<string | null>(null);
   const [imageIds, setImageIds] = useState(initial.imageIds);
   const [pending, setPending] = useState(0);
@@ -92,7 +92,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
         }))
         .filter((st) => st.text !== '' || st.imageId !== null || st.ingredients.length > 0),
       notes: str(notes),
-      tags: parseTags(tags),
+      // Names only for now: keep the group a name already had, new names go under Other.
+      tags: parseTags(tags).map((name) => {
+        const known = initial.tags.find((t) => typeof t !== 'string' && t.name.toLowerCase() === name.toLowerCase());
+        return { group: typeof known === 'string' || !known ? ('other' as const) : known.group, name };
+      }),
+      brand: origin === 'mine' ? 'Mine' : initial.brand && initial.brand !== 'Mine' ? initial.brand : null,
       imageIds,
     };
   }

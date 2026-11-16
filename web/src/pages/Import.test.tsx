@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 const draft: ImportResult['draft'] = {
-  title: 'Easy pancakes', description: null, origin: 'other', sourceName: 'bbcgoodfood.com', sourceUrl: 'https://www.bbcgoodfood.com/r',
+  title: 'Easy pancakes', description: null, origin: 'other', brand: null, sourceName: 'bbcgoodfood.com', sourceUrl: 'https://www.bbcgoodfood.com/r',
   servings: 4, prepMinutes: 10, cookMinutes: 20,
   ingredients: [{ group: null, quantity: null, unit: null, item: '100g plain flour', note: null }],
   steps: [{ text: 'Whisk', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: [],

@@ -13,6 +13,7 @@ const draft = {
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
+const expected = { ...draft, brand: 'Mine' };
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
@@ -111,7 +112,7 @@ describe.each(specs)('$name provider', (spec) => {
   it('sends the key only in a header, the schema, system prompt and defanged user text', async () => {
     const { ai, sent } = client(spec, reply(200, spec.ok(draft)));
     const out = await ai.extractRecipe(input);
-    expect(out.draft).toEqual(draft);
+    expect(out.draft).toEqual(expected);
     expect(out.provider).toBe(spec.name);
     expect(out.model).toBe(spec.model);
     const s = sent(0);
@@ -135,7 +136,7 @@ describe.each(specs)('$name provider', (spec) => {
 
   it('retries truncation with a larger limit and fails safely when truncated twice', async () => {
     const a = client(spec, reply(200, spec.truncated), reply(200, spec.ok(draft)));
-    expect((await a.ai.extractRecipe(input)).draft).toEqual(draft);
+    expect((await a.ai.extractRecipe(input)).draft).toEqual(expected);
     expect(spec.body.maxTokens(a.sent(1).body)).toBeGreaterThan(spec.body.maxTokens(a.sent(0).body));
     expect(spec.body.userTexts(a.sent(1).body)).toHaveLength(1);
     const b = client(spec, reply(200, spec.truncated), reply(200, spec.truncated));
@@ -153,7 +154,7 @@ describe.each(specs)('$name provider', (spec) => {
 
   it('retries once on invalid output with the validation error, then succeeds', async () => {
     const { ai, sent } = client(spec, reply(200, spec.ok({ title: 'x' })), reply(200, spec.ok(draft)));
-    expect((await ai.extractRecipe(input)).draft).toEqual(draft);
+    expect((await ai.extractRecipe(input)).draft).toEqual(expected);
     const second = JSON.stringify(sent(1).body);
     expect(second).toContain('valid fields');
     expect(second).toContain('do not add anything the user did not say');

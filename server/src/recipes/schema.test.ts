@@ -19,10 +19,29 @@ describe('(g) RecipeDraftSchema', () => {
     const draft = {
       title: 't', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
       prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 's', imageId: null, ingredients: [] }],
-      notes: null, tags: [], imageIds: [], gaps: [],
+      notes: null, brand: null, tags: [], imageIds: [], gaps: [],
     };
     expect(RecipeDraftSchema.safeParse(draft).success).toBe(true);
     expect(() => z.toJSONSchema(RecipeDraftSchema)).not.toThrow();
     expect(RecipeInputSchema.safeParse({ ...draft, steps: ['s'] }).success).toBe(true);
+  });
+});
+
+describe('RecipeInputSchema brand and tags', () => {
+  const input = {
+    title: 't', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
+    prepMinutes: null, cookMinutes: null, ingredients: [], steps: [], notes: null, tags: [], imageIds: [],
+  };
+  it('accepts legacy string tags and derives brand from origin when brand is absent', () => {
+    const r = RecipeInputSchema.parse({ ...input, tags: ['pasta'] });
+    expect(r.brand).toBe('Mine');
+    expect(r.origin).toBe('mine');
+    expect(r.tags).toEqual([{ group: 'other', name: 'pasta' }]);
+    expect(RecipeInputSchema.parse({ ...input, origin: 'other' }).brand).toBeNull();
+  });
+  it('lets a present brand decide origin', () => {
+    expect(RecipeInputSchema.parse({ ...input, brand: 'gousto' })).toMatchObject({ brand: 'Gousto', origin: 'other' });
+    expect(RecipeInputSchema.parse({ ...input, brand: null })).toMatchObject({ brand: null, origin: 'other' });
+    expect(RecipeInputSchema.parse({ ...input, origin: 'other', brand: ' mine ' })).toMatchObject({ brand: 'Mine', origin: 'mine' });
   });
 });

@@ -18,7 +18,7 @@ const hostOf = (u: string) => {
 function emptyDraft(url: string): ImportResult['draft'] {
   const host = hostOf(url);
   return {
-    title: host, description: null, origin: 'other', sourceName: host, sourceUrl: url,
+    title: host, description: null, origin: 'other', brand: null, sourceName: host, sourceUrl: url,
     servings: null, prepMinutes: null, cookMinutes: null,
     ingredients: [], steps: [], notes: null, tags: [], imageIds: [], gaps: [],
   };

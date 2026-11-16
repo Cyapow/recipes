@@ -13,7 +13,7 @@ vi.mock('../api', async () => {
 import { getRecipe } from '../api';
 
 const base: Recipe = {
-  id: 'a', title: 'Spag bol', description: 'Better the next day.', origin: 'mine', sourceName: null, sourceUrl: null,
+  id: 'a', title: 'Spag bol', description: 'Better the next day.', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 4, prepMinutes: 10, cookMinutes: 40,
   ingredients: [
     { group: null, quantity: 500, unit: 'g', item: 'beef mince', note: null },

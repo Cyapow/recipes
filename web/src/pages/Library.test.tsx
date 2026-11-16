@@ -15,8 +15,8 @@ import { getBackupStatus, listRecipes, listTags } from '../api';
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listRecipes).mockReset().mockResolvedValue([
-    { id: 'a', title: 'Carbonara', origin: 'mine', sourceName: null, tags: ['Pasta'], thumbnailId: null, totalMinutes: 90 },
-    { id: 'b', title: 'Dal', origin: 'other', sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45 },
+    { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90 },
+    { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45 },
   ]);
   vi.mocked(listTags).mockReset().mockResolvedValue(['Pasta']);
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({

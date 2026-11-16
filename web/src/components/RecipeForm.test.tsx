@@ -8,7 +8,7 @@ import type { RecipeInput } from '../../../server/src/recipes/schema';
 afterEach(cleanup);
 
 const empty: RecipeInput = {
-  title: '', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: '', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null, ingredients: [], steps: [],
   notes: null, tags: [], imageIds: [],
 };
@@ -44,7 +44,10 @@ describe('RecipeForm', () => {
       { group: 'Sauce', quantity: null, unit: null, item: 'salt to taste', note: null },
     ]);
     expect(out.steps.map((s) => s.text)).toEqual(['Boil', 'Serve']);
-    expect(out.tags).toEqual(['Pasta', 'quick']);
+    expect(out.tags).toEqual([
+      { group: 'other', name: 'Pasta' },
+      { group: 'other', name: 'quick' },
+    ]);
   });
 
   it('blocks save with an inline error when title is empty', async () => {

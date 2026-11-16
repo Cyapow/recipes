@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 const EMPTY = {
-  title: '', description: null, origin: 'mine' as const, sourceName: null, sourceUrl: null, servings: null,
+  title: '', description: null, origin: 'mine' as const, brand: 'Mine', sourceName: null, sourceUrl: null, servings: null,
   prepMinutes: null, cookMinutes: null, ingredients: [], steps: [], notes: null, tags: [], imageIds: [],
 };
 

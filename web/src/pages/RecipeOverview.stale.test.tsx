@@ -13,7 +13,7 @@ vi.mock('../api', async () => {
 import { addToShopping, ApiError, getRecipe } from '../api';
 
 const base: Recipe = {
-  id: 'a', title: 'Carbonara', description: '', origin: 'mine', sourceName: null, sourceUrl: null,
+  id: 'a', title: 'Carbonara', description: '', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 2, prepMinutes: 5, cookMinutes: 70,
   ingredients: [
     { group: null, quantity: 200, unit: 'g', item: 'spaghetti', note: null },

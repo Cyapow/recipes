@@ -103,7 +103,7 @@ async function downloadStepImages(steps: RecipeInput['steps'], urls: (string | n
 export async function importFromUrl(url: string, deps: ImportDeps): Promise<ImportResult> {
   const { html, finalUrl } = await deps.fetchPage(url);
   const sourceName = hostName(finalUrl);
-  const source = { origin: 'other' as const, sourceUrl: finalUrl, sourceName };
+  const source = { origin: 'other' as const, brand: null, sourceUrl: finalUrl, sourceName };
 
   const ld = parseRecipeJsonLd(html);
   if (ld && (ld.ingredients.length > 0 || ld.steps.length > 0)) {

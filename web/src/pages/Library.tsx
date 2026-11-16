@@ -15,7 +15,7 @@ const CHIPS: { label: string; origin: Origin }[] = [
 ];
 
 export function subtitle(r: RecipeSummary): string {
-  return [originLabel(r), r.tags[0], formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
+  return [originLabel(r), r.tags[0]?.name, formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
 }
 
 export function Library() {

@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
+import { normaliseTags } from '../recipes/categories.js';
 import { RecipeCoreSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
 /** What the model may say about a step: its text and which ingredients it names. No photo, ever. */
 export const AiStepSchema = z.object({ text: z.string(), ingredients: z.array(z.number().int()) });
-export const AiDraftSchema = RecipeCoreSchema.extend({
+// The model still writes plain string tags and no brand; toRecipeDraft converts them.
+export const AiDraftSchema = RecipeCoreSchema.omit({ brand: true }).extend({
+  tags: z.array(z.string()),
   steps: z.array(AiStepSchema),
   gaps: z.array(z.string()),
 });
@@ -43,6 +46,8 @@ function repairAmount(i: Ingredient): Ingredient {
 export function toRecipeDraft(ai: AiDraft): RecipeDraft {
   return {
     ...ai,
+    brand: ai.origin === 'mine' ? 'Mine' : null,
+    tags: normaliseTags(ai.tags),
     ingredients: ai.ingredients.map(repairAmount),
     steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({
       ...s,

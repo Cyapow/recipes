@@ -117,6 +117,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     title: clean(r.name),
     description: clean(r.description) || null,
     origin: 'other',
+    brand: null,
     sourceName: null,
     sourceUrl: null,
     servings: parseServings(r.recipeYield),
@@ -126,7 +127,7 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     // The photos themselves are downloaded by the importer, which fills the ids in; see stepImageUrls.
     steps: stepsOf(r).map(({ text }) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
     notes: null,
-    tags: tags.slice(0, 8),
+    tags: tags.slice(0, 8).map((name) => ({ group: 'other' as const, name })),
     imageIds: [],
   };
 }

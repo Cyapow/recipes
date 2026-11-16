@@ -6,7 +6,7 @@ import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
 
 const EMPTY: RecipeInput = {
-  title: '', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: '', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null, ingredients: [], steps: [],
   notes: null, tags: [], imageIds: [],
 };
