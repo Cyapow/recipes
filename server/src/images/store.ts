@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
-import { rename, writeFile, rm } from 'node:fs/promises';
+import { readFile, rename, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import { IMAGE_ID_RE } from './ids.js';
@@ -9,8 +9,16 @@ export { IMAGE_ID_RE };
 const MAX_WIDTH = 1600;
 const THUMB_WIDTH = 400;
 
+/** A rectangle in 0-1000 of an image's width and height. */
+export type Box1000 = { x0: number; y0: number; x1: number; y1: number };
+const MIN_SIDE = 50; // 5% of the image
+
 export type ImageStore = {
   save(bytes: Buffer): Promise<string>;
+  /** The stored full-size JPEG, or undefined for an unknown id. */
+  read(id: string): Promise<Buffer | undefined>;
+  /** Save the part of a stored image inside the box as a new image; null when the id is unknown or the box is under 5% either way. */
+  crop(id: string, box: Box1000): Promise<string | null>;
   path(id: string): string | undefined;
   dir: string;
 };
@@ -30,7 +38,7 @@ async function writeAtomic(file: string, bytes: Buffer): Promise<void> {
 export function createImageStore(dataDir: string): ImageStore {
   const dir = path.join(dataDir, 'images'); // created lazily on first save
 
-  return {
+  const store: ImageStore = {
     dir,
     path(id) {
       if (!IMAGE_ID_RE.test(id)) return undefined;
@@ -56,5 +64,27 @@ export function createImageStore(dataDir: string): ImageStore {
       await writeAtomic(full, fullBytes);
       return id;
     },
+    async read(id) {
+      const file = store.path(id);
+      return file ? readFile(file) : undefined;
+    },
+    async crop(id, box) {
+      const file = store.path(id);
+      if (!file) return null;
+      const clamp = (n: number) => Math.min(1000, Math.max(0, n));
+      const [x0, x1] = [clamp(box.x0), clamp(box.x1)].sort((a, b) => a - b) as [number, number];
+      const [y0, y1] = [clamp(box.y0), clamp(box.y1)].sort((a, b) => a - b) as [number, number];
+      if (!(x1 - x0 >= MIN_SIDE) || !(y1 - y0 >= MIN_SIDE)) return null;
+      const bytes = await readFile(file);
+      const { width, height } = await sharp(bytes).metadata();
+      if (!width || !height) return null;
+      const left = Math.min(width - 1, Math.round((x0 / 1000) * width));
+      const top = Math.min(height - 1, Math.round((y0 / 1000) * height));
+      const w = Math.max(1, Math.min(width - left, Math.round(((x1 - x0) / 1000) * width)));
+      const h = Math.max(1, Math.min(height - top, Math.round(((y1 - y0) / 1000) * height)));
+      const cropped = await sharp(bytes).extract({ left, top, width: w, height: h }).jpeg({ quality: 90 }).toBuffer();
+      return store.save(cropped);
+    },
   };
+  return store;
 }

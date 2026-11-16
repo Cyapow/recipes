@@ -1,10 +1,20 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Config } from '../config.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
 import { sourceFromText, type SourceDeps } from '../import/describedSource.js';
 import { aiStatus } from './registry.js';
+import { IMAGE_ID_RE, type ImageStore } from '../images/store.js';
+import { originForBrand } from '../recipes/categories.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
+export const MAX_PHOTOS = 6;
+
+function aiFailure(err: unknown, reply: FastifyReply) {
+  if (err instanceof AiRefusedError) return reply.code(502).send({ error: 'The AI declined this request', code: 'other' });
+  if (err instanceof AiInvalidOutputError) return reply.code(502).send({ error: 'AI returned an invalid recipe', code: 'other' });
+  if (err instanceof AiRequestError) return reply.code(502).send({ error: err.message, code: err.code });
+  return reply.code(502).send({ error: 'AI request failed', code: 'other' });
+}
 
 export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined, config: Config, source?: SourceDeps) {
   app.get('/api/ai/status', async () => aiStatus(config));
@@ -34,10 +44,46 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         model,
       };
     } catch (err) {
-      if (err instanceof AiRefusedError) return reply.code(502).send({ error: 'The AI declined this request', code: 'other' });
-      if (err instanceof AiInvalidOutputError) return reply.code(502).send({ error: 'AI returned an invalid recipe', code: 'other' });
-      if (err instanceof AiRequestError) return reply.code(502).send({ error: err.message, code: err.code });
-      return reply.code(502).send({ error: 'AI request failed', code: 'other' });
+      return aiFailure(err, reply);
+    }
+  });
+
+  app.post('/api/ai/photos', async (req, reply) => {
+    if (!ai) return reply.code(503).send({ error: 'AI not configured' });
+    const store: ImageStore | undefined = source?.images;
+    const ids = (req.body as { imageIds?: unknown } | null)?.imageIds;
+    if (!store || !Array.isArray(ids) || ids.length < 1 || ids.length > MAX_PHOTOS || !ids.every((i) => typeof i === 'string' && IMAGE_ID_RE.test(i))) {
+      return reply.code(400).send({ error: `imageIds must be 1 to ${MAX_PHOTOS} image ids` });
+    }
+    const imageIds = [...new Set(ids as string[])];
+    const files = await Promise.all(imageIds.map((id) => store.read(id)));
+    if (files.some((f) => !f)) return reply.code(400).send({ error: 'An image was not found' });
+    try {
+      const { draft, provider, model } = await ai.extractRecipe({
+        kind: 'photos',
+        images: files.map((f) => ({ mediaType: 'image/jpeg' as const, base64: f!.toString('base64') })),
+      });
+      const { dishPhoto, ...rest } = draft;
+      // A box for a photo that does not exist, or one too small to crop, just means no crop.
+      const sourceImageId = dishPhoto ? imageIds[dishPhoto.image] : undefined;
+      const cropId = dishPhoto && sourceImageId
+        ? await store.crop(sourceImageId, { x0: dishPhoto.x0, y0: dishPhoto.y0, x1: dishPhoto.x1, y1: dishPhoto.y1 }).catch(() => null)
+        : null;
+      const brand = rest.brand;
+      return {
+        ...rest,
+        gaps: brand === null && !rest.gaps.some((g) => g.trim().toLowerCase() === 'brand') ? [...rest.gaps, 'brand'] : rest.gaps,
+        origin: originForBrand(brand),
+        brand,
+        sourceName: brand,
+        sourceUrl: null,
+        imageIds: cropId ? [...new Set([cropId, ...imageIds])] : imageIds,
+        dishCrop: cropId && dishPhoto && sourceImageId ? { sourceImageId, x0: dishPhoto.x0, y0: dishPhoto.y0, x1: dishPhoto.x1, y1: dishPhoto.y1 } : null,
+        provider,
+        model,
+      };
+    } catch (err) {
+      return aiFailure(err, reply);
     }
   });
 }

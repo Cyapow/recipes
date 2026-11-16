@@ -1,4 +1,9 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
+import { createImageStore } from '../images/store.js';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
@@ -137,5 +142,106 @@ describe('POST /api/ai/describe with a link in the text', () => {
     const res = await post(make({ extractRecipe: vi.fn().mockResolvedValue(extraction) }, {}, w), { text: pasted });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ imageIds: [], sourceUrl: null, sourceName: null });
+  });
+});
+
+describe('POST /api/ai/photos', () => {
+  const setup = async (ai?: AiClient, n = 2) => {
+    const images = createImageStore(mkdtempSync(path.join(tmpdir(), 'ai-photos-')));
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      ids.push(await images.save(await sharp({ create: { width: 1000, height: 500, channels: 3, background: { r: 10 + i, g: 50, b: 90 } } }).png().toBuffer()));
+    }
+    const app = make(ai, {}, { images });
+    return { app, ids, images };
+  };
+  const photos = (app: ReturnType<typeof make>, payload: unknown) =>
+    app.inject({ method: 'POST', url: '/api/ai/photos', payload: payload as never });
+  const photoDraft = (over: Record<string, unknown> = {}) => ({
+    ...extraction,
+    draft: { ...draft, brand: 'HelloFresh', gaps: ['servings'], dishPhoto: { image: 1, x0: 0, y0: 0, x1: 500, y1: 500 }, ...over },
+  });
+
+  it('crops the dish and puts the crop before the originals', async () => {
+    const extractRecipe = vi.fn().mockResolvedValue(photoDraft());
+    const { app, ids } = await setup({ extractRecipe });
+    const res = await photos(app, { imageIds: ids });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.imageIds).toHaveLength(3);
+    expect(body.imageIds[0]).not.toBe(ids[0]);
+    expect(body.imageIds.slice(1)).toEqual(ids);
+    expect(body.dishCrop).toEqual({ sourceImageId: ids[1], x0: 0, y0: 0, x1: 500, y1: 500 });
+    expect('dishPhoto' in body).toBe(false);
+    expect(body).toMatchObject({ origin: 'other', brand: 'HelloFresh', sourceName: 'HelloFresh', sourceUrl: null, provider: 'openai', model: 'gpt-x' });
+    const call = extractRecipe.mock.calls[0]![0];
+    expect(call.kind).toBe('photos');
+    expect(call.images).toHaveLength(2);
+    expect(call.images[0]).toMatchObject({ mediaType: 'image/jpeg' });
+    expect(typeof call.images[0].base64).toBe('string');
+  });
+
+  it('makes no crop for an image index that does not exist', async () => {
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ dishPhoto: { image: 5, x0: 0, y0: 0, x1: 500, y1: 500 } })) });
+    const body = (await photos(app, { imageIds: ids })).json();
+    expect(body.imageIds).toEqual(ids);
+    expect(body.dishCrop).toBeNull();
+  });
+
+  it('makes no crop for a tiny box or no box, and still returns the photos', async () => {
+    const tiny = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ dishPhoto: { image: 0, x0: 0, y0: 0, x1: 20, y1: 900 } })) });
+    const a = await photos(tiny.app, { imageIds: tiny.ids });
+    expect(a.statusCode).toBe(200);
+    expect(a.json()).toMatchObject({ imageIds: tiny.ids, dishCrop: null });
+    const none = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ dishPhoto: null })) });
+    expect((await photos(none.app, { imageIds: none.ids })).json()).toMatchObject({ imageIds: none.ids, dishCrop: null });
+  });
+
+  it('crops an inverted, out-of-range box into the image', async () => {
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ dishPhoto: { image: 0, x0: 600, y0: 1200, x1: 100, y1: -50 } })) });
+    const body = (await photos(app, { imageIds: ids })).json();
+    expect(body.imageIds).toHaveLength(3);
+    expect(body.dishCrop.sourceImageId).toBe(ids[0]);
+  });
+
+  it('400 unless 1-6 ids that all exist', async () => {
+    const { app, ids } = await setup({ extractRecipe: vi.fn() }, 7);
+    expect((await photos(app, { imageIds: ids })).statusCode).toBe(400);
+    expect((await photos(app, { imageIds: [] })).statusCode).toBe(400);
+    expect((await photos(app, {})).statusCode).toBe(400);
+    expect((await photos(app, { imageIds: ['nope'] })).statusCode).toBe(400);
+    expect((await photos(app, { imageIds: [ids[0], 'f'.repeat(64) + '.jpg'] })).statusCode).toBe(400);
+  });
+
+  it('adds a brand gap when the AI found no brand', async () => {
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: ['servings'] })) });
+    const body = (await photos(app, { imageIds: ids })).json();
+    expect(body.origin).toBe('other');
+    expect(body.brand).toBeNull();
+    expect(body.sourceName).toBeNull();
+    expect(body.gaps).toEqual(['servings', 'brand']);
+  });
+
+  it('does not repeat a brand gap the AI already listed', async () => {
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: [' Brand '] })) });
+    expect((await photos(app, { imageIds: ids })).json().gaps).toEqual([' Brand ']);
+  });
+
+  it('503 without AI', async () => {
+    const { app, ids } = await setup(undefined);
+    expect((await photos(app, { imageIds: ids })).statusCode).toBe(503);
+  });
+
+  it('502 {error, code} for provider failure and the same mapping as describe otherwise', async () => {
+    const run = async (err: Error) => {
+      const { app, ids } = await setup({ extractRecipe: vi.fn().mockRejectedValue(err) });
+      return photos(app, { imageIds: ids });
+    };
+    const credit = await run(new AiRequestError('no_credit'));
+    expect(credit.statusCode).toBe(502);
+    expect(credit.json()).toEqual({ error: 'The AI account is out of credit. Add credit or switch provider.', code: 'no_credit' });
+    expect((await run(new AiRefusedError())).json()).toEqual({ error: 'The AI declined this request', code: 'other' });
+    expect((await run(new AiInvalidOutputError('x'))).json()).toEqual({ error: 'AI returned an invalid recipe', code: 'other' });
+    expect((await run(new Error('sk-secret'))).json()).toEqual({ error: 'AI request failed', code: 'other' });
   });
 });

@@ -61,4 +61,37 @@ describe('image store', () => {
     createImageStore(d);
     expect(existsSync(d)).toBe(false);
   });
+
+  describe('crop', () => {
+    const wide = () => png(1000, 500);
+    it('crops the stored image to the box, mapping 0-1000 onto its pixels', async () => {
+      const store = createImageStore(tmp());
+      const id = await store.save(await wide());
+      const out = await store.crop(id, { x0: 0, y0: 0, x1: 500, y1: 1000 });
+      expect(out).toMatch(/^[a-f0-9]{64}\.jpg$/);
+      const meta = await sharp(store.path(out!)!).metadata();
+      expect([meta.width, meta.height]).toEqual([500, 500]);
+    });
+    it('swaps an inverted box and clamps to the image', async () => {
+      const store = createImageStore(tmp());
+      const id = await store.save(await wide());
+      const out = await store.crop(id, { x0: 500, y0: 1000, x1: -200, y1: 0 });
+      const meta = await sharp(store.path(out!)!).metadata();
+      expect([meta.width, meta.height]).toEqual([500, 500]);
+    });
+    it('returns null for a box under 5% either way, or an unknown id', async () => {
+      const store = createImageStore(tmp());
+      const id = await store.save(await wide());
+      expect(await store.crop(id, { x0: 0, y0: 0, x1: 30, y1: 30 })).toBeNull();
+      expect(await store.crop(id, { x0: 0, y0: 0, x1: 1000, y1: 40 })).toBeNull();
+      expect(await store.crop('f'.repeat(64) + '.jpg', { x0: 0, y0: 0, x1: 500, y1: 500 })).toBeNull();
+      expect(await store.crop('nope', { x0: 0, y0: 0, x1: 500, y1: 500 })).toBeNull();
+    });
+    it('read returns the stored bytes, or undefined', async () => {
+      const store = createImageStore(tmp());
+      const id = await store.save(await wide());
+      expect((await store.read(id))!.length).toBeGreaterThan(0);
+      expect(await store.read('f'.repeat(64) + '.jpg')).toBeUndefined();
+    });
+  });
 });

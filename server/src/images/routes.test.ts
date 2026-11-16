@@ -92,3 +92,28 @@ describe('image routes', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('POST /api/images/:id/crop', () => {
+  const upload = async (app: ReturnType<typeof make>) =>
+    (await app.inject({ method: 'POST', url: '/api/images', ...multipart('a.png', 'image/png', await png()) })).json().id as string;
+  const crop = (app: ReturnType<typeof make>, id: string, payload: unknown) =>
+    app.inject({ method: 'POST', url: `/api/images/${id}/crop`, payload: payload as never });
+
+  it('returns the id of the cropped image', async () => {
+    const app = make();
+    const id = await upload(app);
+    const res = await crop(app, id, { x0: 0, y0: 0, x1: 500, y1: 1000 });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toMatch(/^[a-f0-9]{64}\.jpg$/);
+    expect(res.json().id).not.toBe(id);
+  });
+  it('400 on a bad id or a bad box, 404 unknown, 422 too small', async () => {
+    const app = make();
+    const id = await upload(app);
+    expect((await crop(app, 'nope', { x0: 0, y0: 0, x1: 500, y1: 500 })).statusCode).toBe(400);
+    expect((await crop(app, id, { x0: 0, y0: 0, x1: 'a', y1: 500 })).statusCode).toBe(400);
+    expect((await crop(app, id, { x0: 0, y0: 0, x1: 500 })).statusCode).toBe(400);
+    expect((await crop(app, 'f'.repeat(64) + '.jpg', { x0: 0, y0: 0, x1: 500, y1: 500 })).statusCode).toBe(404);
+    expect((await crop(app, id, { x0: 0, y0: 0, x1: 20, y1: 500 })).statusCode).toBe(422);
+  });
+});
