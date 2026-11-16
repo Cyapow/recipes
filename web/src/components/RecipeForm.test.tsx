@@ -33,7 +33,7 @@ describe('RecipeForm', () => {
     await user.click(screen.getByRole('button', { name: '+ Add a step' }));
     await user.type(screen.getByLabelText('Step 1'), 'Boil');
     await user.type(screen.getByLabelText('Step 3'), 'Serve');
-    await user.type(screen.getByLabelText('Tags'), 'Pasta, quick');
+    await user.type(screen.getByLabelText('Other'), 'Pasta, quick');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     const out = onSave.mock.calls[0][0] as RecipeInput;
@@ -226,6 +226,67 @@ describe('RecipeForm', () => {
         await user.click(screen.getByRole('button', { name: '+ Add a step' }));
       });
       expect(steps).toEqual([{ text: 'Season!', imageId: H, ingredients: [0, 1] }]);
+    });
+  });
+
+  describe('brand and grouped tags', () => {
+    it('loads a legacy string tag under Other and saves it as an other tag', async () => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      const legacy = { ...empty, title: 'Soup', tags: ['pasta'] } as unknown as RecipeInput;
+      render(<RecipeForm initial={legacy} onSave={onSave} />);
+      expect((screen.getByLabelText('Other') as HTMLInputElement).value).toBe('pasta');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect((onSave.mock.calls[0][0] as RecipeInput).tags).toEqual([{ group: 'other', name: 'pasta' }]);
+    });
+
+    it('saves a typed brand and derives the origin from it', async () => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      render(<RecipeForm initial={{ ...empty, title: 'Soup' }} onSave={onSave} />);
+      expect((screen.getByLabelText('Brand') as HTMLInputElement).value).toBe('Mine');
+      await user.clear(screen.getByLabelText('Brand'));
+      await user.type(screen.getByLabelText('Brand'), 'Gousto');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave.mock.calls[0][0]).toMatchObject({ brand: 'Gousto', origin: 'other' });
+    });
+
+    it('saves a blank brand as none and Mine as mine', async () => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      render(<RecipeForm initial={{ ...empty, title: 'Soup' }} onSave={onSave} />);
+      await user.clear(screen.getByLabelText('Brand'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave.mock.calls[0][0]).toMatchObject({ brand: null, origin: 'other' });
+      await user.type(screen.getByLabelText('Brand'), 'Mine');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave.mock.calls[1][0]).toMatchObject({ brand: 'Mine', origin: 'mine' });
+    });
+
+    it('saves comma-separated names in each group', async () => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      render(<RecipeForm initial={{ ...empty, title: 'Soup' }} onSave={onSave} />);
+      await user.type(screen.getByLabelText('Cuisine'), 'Thai, Indian');
+      await user.type(screen.getByLabelText('Meal'), 'Dinner');
+      await user.type(screen.getByLabelText('Main ingredient'), 'Chicken');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect((onSave.mock.calls[0][0] as RecipeInput).tags).toEqual([
+        { group: 'cuisine', name: 'Thai' },
+        { group: 'cuisine', name: 'Indian' },
+        { group: 'meal', name: 'Dinner' },
+        { group: 'main', name: 'Chicken' },
+      ]);
+    });
+
+    it('suggests known brands and facet brands, per instance', () => {
+      const facets = { brands: [{ name: 'Riverford', count: 2 }], tags: [{ group: 'cuisine' as const, name: 'Thai', count: 1 }] };
+      const { container } = render(<RecipeForm initial={empty} facets={facets} onSave={() => {}} />);
+      const listId = (screen.getByLabelText('Brand') as HTMLInputElement).getAttribute('list')!;
+      const opts = Array.from(container.querySelectorAll(`datalist[id="${CSS.escape(listId)}"] option`)).map((o) => o.getAttribute('value'));
+      expect(opts).toEqual(['Mine', 'HelloFresh', 'Gousto', 'Simply Cook', 'Riverford']);
+      const cuisine = (screen.getByLabelText('Cuisine') as HTMLInputElement).getAttribute('list')!;
+      expect(Array.from(container.querySelectorAll(`datalist[id="${CSS.escape(cuisine)}"] option`)).map((o) => o.getAttribute('value'))).toEqual(['Thai']);
     });
   });
 });

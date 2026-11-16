@@ -5,8 +5,10 @@ import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
+import { useFacets } from '../lib/useFacets';
 
 export function Describe() {
+  const facets = useFacets();
   const nav = useNavigate();
   const kept = useDraft('describe');
   const resumed = kept.existing;
@@ -88,7 +90,7 @@ export function Describe() {
       {error && <p className="field-error" role="alert">{error}</p>}
       {draft && draftedBy(provider) && <p className="hint">{draftedBy(provider)}</p>}
       {draft && (
-        <RecipeForm key={draft.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ text, input })} />
+        <RecipeForm facets={facets} key={draft.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ text, input })} />
       )}
     </main>
   );

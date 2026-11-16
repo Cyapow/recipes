@@ -9,16 +9,16 @@ import { listDrafts, putDraft } from '../lib/drafts';
 
 vi.mock('../api', () => ({
   getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn(),
-  listRecipes: vi.fn(), listTags: vi.fn(), getBackupStatus: vi.fn(),
+  listRecipes: vi.fn(), getFacets: vi.fn(), getBackupStatus: vi.fn(),
 }));
-import { getBackupStatus, listRecipes, listTags, saveRecipe } from '../api';
+import { getBackupStatus, getFacets, listRecipes, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(saveRecipe).mockReset().mockResolvedValue({ id: 'n1' } as never);
   vi.mocked(listRecipes).mockReset().mockResolvedValue([]);
-  vi.mocked(listTags).mockReset().mockResolvedValue([]);
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({ banner: 'none' } as never);
 });
 

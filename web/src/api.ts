@@ -1,9 +1,17 @@
 import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step } from '../../server/src/recipes/schema';
 import type { ShoppingItem } from '../../server/src/shopping/repo';
+import { tagKey, type Tag } from '../../server/src/recipes/categories';
+import type { Box1000 } from '../../server/src/images/store';
 
 export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingItem };
 
-export type ListQuery = { search?: string; origin?: 'mine' | 'other'; tag?: string };
+export type { Box1000, Tag };
+
+/** origin is interim: the Library's Mine / From elsewhere chips still use it until the Filters sheet replaces them. */
+export type ListQuery = { search?: string; origin?: 'mine' | 'other'; brands?: string[]; tags?: Tag[] };
+
+/** What the library can be filtered by, with how many recipes each has. */
+export type Facets = { brands: { name: string; count: number }[]; tags: (Tag & { count: number })[] };
 
 /** An API failure that keeps the HTTP status so callers can branch without string matching. */
 export class ApiError extends Error {
@@ -28,7 +36,8 @@ export function listRecipes(q: ListQuery = {}): Promise<RecipeSummary[]> {
   const p = new URLSearchParams();
   if (q.search) p.set('search', q.search);
   if (q.origin) p.set('origin', q.origin);
-  if (q.tag) p.set('tag', `${tagGroups.get(q.tag) ?? 'other'}:${q.tag}`);
+  for (const b of q.brands ?? []) p.append('brand', b);
+  for (const t of q.tags ?? []) p.append('tag', tagKey(t));
   const qs = p.toString();
   return request(`/api/recipes${qs ? `?${qs}` : ''}`);
 }
@@ -46,14 +55,7 @@ export function saveRecipe(id: string | null, input: RecipeInput): Promise<Recip
 export const deleteRecipe = (id: string): Promise<void> =>
   request(`/api/recipes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
-// Interim: the Library still filters by a bare tag name; remember each name's group so it can be sent as group:name.
-const tagGroups = new Map<string, string>();
-
-export async function listTags(): Promise<string[]> {
-  const facets = await request<{ tags: { group: string; name: string }[] }>('/api/tags');
-  for (const t of facets.tags) if (!tagGroups.has(t.name)) tagGroups.set(t.name, t.group);
-  return [...new Set(facets.tags.map((t) => t.name))].sort();
-}
+export const getFacets = (): Promise<Facets> => request('/api/tags');
 
 export async function uploadImage(file: File): Promise<string> {
   const body = new FormData();
@@ -87,6 +89,32 @@ export async function describeRecipe(text: string): Promise<AiDraft> {
     throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body ?? undefined);
   }
   return (await res.json()) as AiDraft;
+}
+
+/** A draft from photos of a recipe card; dishCrop is where the finished dish is in one of those photos. */
+export type PhotosDraft = AiDraft & { dishCrop: ({ sourceImageId: string } & Box1000) | null };
+
+export async function photosRecipe(imageIds: string[]): Promise<PhotosDraft> {
+  const res = await fetch('/api/ai/photos', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ imageIds }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body ?? undefined);
+  }
+  return (await res.json()) as PhotosDraft;
+}
+
+/** Cuts the box out of an image and returns the new image's id. */
+export async function cropImage(id: string, box: Box1000): Promise<string> {
+  const res = await request<{ id: string }>(`/api/images/${encodeURIComponent(id)}/crop`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(box),
+  });
+  return res.id;
 }
 
 export type ImportResult = {

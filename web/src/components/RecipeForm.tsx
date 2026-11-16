@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { uploadImage } from '../api';
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { uploadImage, type Facets } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { canonicalUnit } from '../../../server/src/recipes/amount';
 import { IngredientRows } from './IngredientRows';
+import { KNOWN_BRANDS, TAG_GROUPS, normaliseTags, originForBrand, type TagGroup } from '../../../server/src/recipes/categories';
 import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
@@ -15,6 +16,8 @@ export type RecipeFormProps = {
   saving?: boolean;
   /** Called (debounced) with the form's current contents after the user changes something, so a draft can be kept. */
   onChange?(input: RecipeInput): void;
+  /** Brands and tags already in use; offered as suggestions only. */
+  facets?: Facets;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -25,10 +28,11 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets }: RecipeFormProps) {
+  const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
-  const [origin, setOrigin] = useState(initial.origin);
+  const [brand, setBrand] = useState(initial.brand ?? '');
   const [sourceName, setSourceName] = useState(initial.sourceName ?? '');
   const [sourceUrl, setSourceUrl] = useState(initial.sourceUrl ?? '');
   const [servings, setServings] = useState(initial.servings?.toString() ?? '');
@@ -38,7 +42,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [stepsBusy, setStepsBusy] = useState(false);
   const [notes, setNotes] = useState(initial.notes ?? '');
-  const [tags, setTags] = useState(initial.tags.map((t) => (typeof t === 'string' ? t : t.name)).join(', '));
+  const [tags, setTags] = useState<Record<TagGroup, string>>(() => {
+    const out: Record<TagGroup, string> = { cuisine: '', meal: '', main: '', other: '' };
+    const all = normaliseTags(initial.tags);
+    for (const g of TAG_GROUPS) out[g.id] = all.filter((t) => t.group === g.id).map((t) => t.name).join(', ');
+    return out;
+  });
   const [error, setError] = useState<string | null>(null);
   const [imageIds, setImageIds] = useState(initial.imageIds);
   const [pending, setPending] = useState(0);
@@ -73,11 +82,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
     const parsedIngredients = ingredients
       .map((i) => ({ ...i, item: i.item.trim(), unit: canonicalUnit(i.unit) }))
       .filter((i) => i.item !== '');
+    const brandValue = str(brand);
     return {
       ...initial,
       title: title.trim(),
       description: str(description),
-      origin,
+      origin: originForBrand(brandValue),
       sourceName: str(sourceName),
       sourceUrl: str(sourceUrl),
       servings: num(servings),
@@ -92,12 +102,8 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
         }))
         .filter((st) => st.text !== '' || st.imageId !== null || st.ingredients.length > 0),
       notes: str(notes),
-      // Names only for now: keep the group a name already had, new names go under Other.
-      tags: parseTags(tags).map((name) => {
-        const known = initial.tags.find((t) => typeof t !== 'string' && t.name.toLowerCase() === name.toLowerCase());
-        return { group: typeof known === 'string' || !known ? ('other' as const) : known.group, name };
-      }),
-      brand: origin === 'mine' ? 'Mine' : initial.brand && initial.brand !== 'Mine' ? initial.brand : null,
+      tags: normaliseTags(TAG_GROUPS.flatMap((g) => parseTags(tags[g.id]).map((name) => ({ group: g.id, name })))),
+      brand: brandValue,
       imageIds,
     };
   }
@@ -118,7 +124,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
     if (!onChangeRef.current) return;
     const t = setTimeout(() => onChangeRef.current?.(latest.current()), 400);
     return () => clearTimeout(t);
-  }, [title, description, origin, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
+  }, [title, description, brand, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
   useEffect(
     () => () => {
       if (touched.current) onChangeRef.current?.(latest.current());
@@ -168,11 +174,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
           <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
         <label>
-          Origin
-          <select value={origin} onChange={(e) => setOrigin(e.target.value as 'mine' | 'other')}>
-            <option value="mine">Mine</option>
-            <option value="other">From elsewhere</option>
-          </select>
+          Brand
+          <input list={`${listId}-brand`} value={brand} onChange={(e) => setBrand(e.target.value)} />
+          <datalist id={`${listId}-brand`}>
+            {[...new Set([...KNOWN_BRANDS, ...(facets?.brands.map((b) => b.name) ?? [])])].map((b) => (
+              <option key={b} value={b} />
+            ))}
+          </datalist>
         </label>
         <label>
           Source name
@@ -208,11 +216,24 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
           Notes
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
-        <div className="field">
-          <label htmlFor="f-tags">Tags</label>
-          <input id="f-tags" aria-describedby="h-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
-          <small id="h-tags">Comma-separated.</small>
-        </div>
+        {TAG_GROUPS.map((g) => (
+          <div className="field" key={g.id}>
+            <label htmlFor={`${listId}-${g.id}`}>{g.label}</label>
+            <input
+              id={`${listId}-${g.id}`}
+              list={`${listId}-${g.id}-list`}
+              aria-describedby={`${listId}-tags-hint`}
+              value={tags[g.id]}
+              onChange={(e) => setTags((cur) => ({ ...cur, [g.id]: e.target.value }))}
+            />
+            <datalist id={`${listId}-${g.id}-list`}>
+              {(facets?.tags ?? []).filter((t) => t.group === g.id).map((t) => (
+                <option key={t.name} value={t.name} />
+              ))}
+            </datalist>
+          </div>
+        ))}
+        <small id={`${listId}-tags-hint`}>Tags are comma-separated.</small>
         <div className="field photos">
           <label htmlFor="f-photos">Add photos</label>
           <input id="f-photos" type="file" accept="image/*" multiple onChange={onPick} />

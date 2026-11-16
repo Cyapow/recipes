@@ -7,10 +7,10 @@ import { Library } from './Library';
 
 vi.mock('../api', () => ({
   listRecipes: vi.fn(),
-  listTags: vi.fn(),
+  getFacets: vi.fn(),
   getBackupStatus: vi.fn(),
 }));
-import { getBackupStatus, listRecipes, listTags } from '../api';
+import { getBackupStatus, listRecipes, getFacets } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -18,7 +18,7 @@ beforeEach(() => {
     { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90 },
     { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45 },
   ]);
-  vi.mocked(listTags).mockReset().mockResolvedValue(['Pasta']);
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [{ group: 'other', name: 'Pasta', count: 1 }] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
     configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   });
@@ -50,7 +50,7 @@ describe('Library', () => {
     render(<MemoryRouter><Library /></MemoryRouter>);
     expect(await screen.findByText('Carbonara')).toBeTruthy();
     expect(screen.getByText('Mine · Pasta · 1h 30m')).toBeTruthy();
-    expect(screen.getByText('BBC · 45m')).toBeTruthy();
+    expect(screen.getByText('From elsewhere · 45m')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Carbonara/ }).getAttribute('href')).toBe('/recipe/a');
   });
 

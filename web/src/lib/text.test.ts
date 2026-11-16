@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAmount, formatIngredientLine, formatItem, formatLine, formatQuantity } from './text';
+import { originLabel, formatAmount, formatIngredientLine, formatItem, formatLine, formatQuantity } from './text';
 import { splitAmount } from '../../../server/src/recipes/amount';
 
 const ing = (quantity: number | null, unit: string | null, item: string, note: string | null = null) =>
@@ -87,5 +87,15 @@ describe('formatLine', () => {
   it('leaves a line it cannot read alone, apart from its first letter', () => {
     expect(formatLine('salt and pepper to taste')).toBe('Salt and pepper to taste');
     expect(formatLine('')).toBe('');
+  });
+});
+
+describe('originLabel', () => {
+  it('prefers the brand', () => {
+    expect(originLabel({ brand: 'Gousto', origin: 'other' })).toBe('Gousto');
+  });
+  it('falls back to the origin', () => {
+    expect(originLabel({ brand: null, origin: 'mine' })).toBe('Mine');
+    expect(originLabel({ brand: null, origin: 'other' })).toBe('From elsewhere');
   });
 });

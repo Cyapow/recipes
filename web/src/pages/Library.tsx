@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getBackupStatus, listRecipes, listTags, type BackupStatus, type RecipeSummary } from '../api';
+import { getBackupStatus, listRecipes, getFacets, type BackupStatus, type RecipeSummary } from '../api';
+import type { Tag } from '../../../server/src/recipes/categories';
 import { BackupBanner } from '../components/BackupBanner';
 import { CartIcon, ChevronIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { formatMinutes, originLabel } from '../lib/text';
@@ -22,7 +23,7 @@ export function Library() {
   const [search, setSearch] = useState('');
   const [origin, setOrigin] = useState<Origin>(undefined);
   const [tag, setTag] = useState<string | undefined>(undefined);
-  const [tags, setTags] = useState<string[]>([]);
+  const [facetTags, setFacetTags] = useState<Tag[]>([]);
   const [rows, setRows] = useState<RecipeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupStatus | null>(null);
@@ -34,18 +35,22 @@ export function Library() {
   }, []);
 
   useEffect(() => {
-    listTags().then(setTags).catch(() => {});
+    getFacets().then((f) => setFacetTags(f.tags)).catch(() => {});
   }, []);
 
   useEffect(() => {
     let live = true;
-    listRecipes({ search: search || undefined, origin, tag })
+    // Origin is now the brand "Mine" or anything else; the Filters sheet (Task 8) replaces these chips.
+    const chosen = facetTags.find((t) => t.name === tag);
+    listRecipes({ search: search || undefined, origin, tags: chosen ? [chosen] : undefined })
       .then((r) => live && (setRows(r), setError(null)))
       .catch(() => live && setError('Could not load recipes'));
     return () => {
       live = false;
     };
-  }, [search, origin, tag]);
+  }, [search, origin, tag, facetTags]);
+
+  const tagNames = [...new Set(facetTags.map((t) => t.name))].sort();
 
   return (
     <main className="page">
@@ -87,9 +92,9 @@ export function Library() {
           </button>
         ))}
       </div>
-      {tags.length > 0 && (
+      {tagNames.length > 0 && (
         <div className="chips tags">
-          {tags.map((t) => (
+          {tagNames.map((t) => (
             <button
               key={t}
               type="button"

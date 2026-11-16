@@ -47,6 +47,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('RecipeOverview', () => {
+  it('shows the brand as the label', async () => {
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, origin: 'other', brand: 'Gousto', sourceName: 'bbc.co.uk' });
+    renderAt();
+    await screen.findByRole('heading', { name: 'Carbonara' });
+    expect(screen.getByText('Gousto')).toBeTruthy();
+    expect(screen.queryByText('bbc.co.uk')).toBeNull();
+  });
+
   it('shows header, title, meta, hero and links', async () => {
     vi.mocked(getRecipe).mockResolvedValue({ ...base, imageIds: ['h.jpg'] });
     renderAt();

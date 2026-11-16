@@ -6,13 +6,14 @@ import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Editor } from './Editor';
 import type { Recipe } from '../api';
 
-vi.mock('../api', () => ({ getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn() }));
-import { getRecipe, saveRecipe } from '../api';
+vi.mock('../api', () => ({ getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn(), getFacets: vi.fn() }));
+import { getFacets, getRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(getRecipe).mockReset();
   vi.mocked(saveRecipe).mockReset();
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [] });
 });
 
 const rec = (id: string, title: string): Recipe => ({
