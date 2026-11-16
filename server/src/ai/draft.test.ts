@@ -43,6 +43,7 @@ describe('brand, grouped tags and the dish photo', () => {
     expect(SYSTEM_PROMPT).toContain('dishPhoto');
     expect(SYSTEM_PROMPT).toContain('"brand"');
     expect(SYSTEM_PROMPT).toContain('(unreadable)');
+    expect(SYSTEM_PROMPT).toContain('the caller sets the brand');
   });
   it('buildUserMessage describes a set of photos', () => {
     expect(buildUserMessage({ kind: 'photos', imageCount: 2 })).toContain('2 photos');

@@ -25,6 +25,7 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
       return {
         ...rest,
         brand: 'Mine',
+        gaps: rest.gaps.filter((g) => g.trim().toLowerCase() !== 'brand'),
         origin: 'mine',
         sourceName: from?.sourceName ?? null,
         sourceUrl: from?.sourceUrl ?? null,

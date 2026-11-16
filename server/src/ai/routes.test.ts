@@ -27,6 +27,12 @@ describe('POST /api/ai/describe', () => {
     expect(extractRecipe).toHaveBeenCalledWith({ kind: 'description', text: 'red wine, mince' });
   });
 
+  it('drops a brand gap, since the caller sets the brand', async () => {
+    const withGap = { ...extraction, draft: { ...draft, gaps: ['Brand', 'servings'] } };
+    const res = await post(make({ extractRecipe: vi.fn().mockResolvedValue(withGap) }), { text: 'x' });
+    expect(res.json().gaps).toEqual(['servings']);
+  });
+
   it('400 on empty, whitespace or missing text', async () => {
     const app = make({ extractRecipe: vi.fn() });
     expect((await post(app, { text: '' })).statusCode).toBe(400);
