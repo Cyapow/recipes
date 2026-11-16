@@ -4,6 +4,7 @@ import { ProviderError, type Provider, type ProviderErrorCode, type ProviderName
 import { aiStatus, providerOrder } from './registry.js';
 import { loadConfig } from '../config.js';
 import type { ProviderRequest } from './providers/types.js';
+import { buildUserMessage } from './draft.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
@@ -321,5 +322,26 @@ describe('overall deadline', () => {
     expect((await build(cfg(), { anthropic: a }).extractRecipe(input)).provider).toBe('anthropic');
     const b = fake('anthropic');
     expect((await createAiClient(cfg() as never, { providers: { anthropic: b }, totalTimeoutMs: 10_000 }).extractRecipe(input)).provider).toBe('anthropic');
+  });
+});
+
+describe('photos input', () => {
+  it('falls back past an auth failure and sends the images with the photos message', async () => {
+    const images = [{ mediaType: 'image/jpeg' as const, base64: 'AAAA' }];
+    const a = fake('anthropic', 'auth');
+    const o = fake('openai');
+    const out = await build(cfg(), { anthropic: a, openai: o, gemini: fake('gemini') }).extractRecipe({ kind: 'photos', images });
+    expect(out.provider).toBe('openai');
+    expect(out.draft.dishPhoto).toBeNull();
+    const first = a.complete.mock.calls[0]![0] as ProviderRequest;
+    const second = o.complete.mock.calls[0]![0] as ProviderRequest;
+    for (const req of [first, second]) {
+      expect(req.messages).toEqual([{ role: 'user', text: buildUserMessage({ kind: 'photos', imageCount: 1 }), images }]);
+    }
+  });
+  it('text kinds carry no images key', async () => {
+    const a = fake('anthropic');
+    await build(cfg(), { anthropic: a }).extractRecipe(input);
+    expect((a.complete.mock.calls[0]![0] as ProviderRequest).messages[0]).not.toHaveProperty('images');
   });
 });

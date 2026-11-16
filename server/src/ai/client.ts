@@ -4,7 +4,7 @@ import { AiDraftParseSchema, buildUserMessage, type DishBox, SYSTEM_PROMPT, toRe
 import { createAnthropicProvider, type SdkLike } from './providers/anthropic.js';
 import { createGeminiProvider } from './providers/gemini.js';
 import { createOpenAiProvider } from './providers/openai.js';
-import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderMessage, type ProviderName, type ProviderResult } from './providers/types.js';
+import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderImage, type ProviderMessage, type ProviderName, type ProviderResult } from './providers/types.js';
 import { providerOrder } from './registry.js';
 
 export type { SdkLike };
@@ -12,8 +12,12 @@ export type { ProviderErrorCode, ProviderName };
 
 export type AiExtraction = { draft: RecipeDraft & { dishPhoto: DishBox | null }; provider: ProviderName; model: string };
 
+export type ExtractInput =
+  | { kind: 'description' | 'page'; text: string; sourceUrl?: string }
+  | { kind: 'photos'; images: ProviderImage[]; text?: string };
+
 export interface AiClient {
-  extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<AiExtraction>;
+  extractRecipe(input: ExtractInput): Promise<AiExtraction>;
 }
 
 export class AiInvalidOutputError extends Error {
@@ -101,8 +105,12 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
     }
   }
 
-  async function extractWith(budget: Budget, provider: Provider, input: Parameters<AiClient['extractRecipe']>[0]): Promise<AiExtraction> {
-    const messages: ProviderMessage[] = [{ role: 'user', text: buildUserMessage(input) }];
+  async function extractWith(budget: Budget, provider: Provider, input: ExtractInput): Promise<AiExtraction> {
+    const first: ProviderMessage =
+      input.kind === 'photos'
+        ? { role: 'user', text: buildUserMessage({ kind: 'photos', text: input.text, imageCount: input.images.length }), images: input.images }
+        : { role: 'user', text: buildUserMessage(input) };
+    const messages: ProviderMessage[] = [first];
     let lastError = '';
     let maxTokens = MAX_TOKENS;
     for (let n = 0; n < 2; n++) {

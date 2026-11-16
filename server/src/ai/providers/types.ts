@@ -23,8 +23,10 @@ const MESSAGES: Record<ProviderErrorCode, string> = {
 export const aiErrorMessage = (code: ProviderErrorCode): string => MESSAGES[code];
 
 /** Provider-neutral conversation. Providers translate it; `raw` is whatever the provider needs to replay its own turn. */
+export type ProviderImage = { mediaType: 'image/jpeg'; base64: string };
+
 export type ProviderMessage =
-  | { role: 'user'; text: string }
+  | { role: 'user'; text: string; images?: ProviderImage[] }
   /** The previous answer was unusable. `problem` is the validation error, or null when no recipe came back at all. */
   | { role: 'retry'; raw: unknown; problem: string | null };
 
