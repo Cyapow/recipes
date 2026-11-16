@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -115,5 +115,17 @@ describe('POST /api/images/:id/crop', () => {
     expect((await crop(app, id, { x0: 0, y0: 0, x1: 500 })).statusCode).toBe(400);
     expect((await crop(app, 'f'.repeat(64) + '.jpg', { x0: 0, y0: 0, x1: 500, y1: 500 })).statusCode).toBe(404);
     expect((await crop(app, id, { x0: 0, y0: 0, x1: 20, y1: 500 })).statusCode).toBe(422);
+  });
+
+  it('422 when the stored file cannot be decoded', async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), 'img-routes-'));
+    dirs.push(dataDir);
+    const app = buildApp({ config: { dataDir } as never, db: openDb(':memory:') });
+    const id = 'e'.repeat(64) + '.jpg';
+    mkdirSync(path.join(dataDir, 'images'), { recursive: true });
+    writeFileSync(path.join(dataDir, 'images', id), 'not an image');
+    const res = await crop(app, id, { x0: 0, y0: 0, x1: 500, y1: 500 });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toEqual({ error: 'Could not crop this image' });
   });
 });

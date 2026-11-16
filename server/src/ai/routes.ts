@@ -3,7 +3,7 @@ import type { Config } from '../config.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
 import { sourceFromText, type SourceDeps } from '../import/describedSource.js';
 import { aiStatus } from './registry.js';
-import { IMAGE_ID_RE, type ImageStore } from '../images/store.js';
+import { IMAGE_ID_RE, normaliseBox, type ImageStore } from '../images/store.js';
 import { originForBrand } from '../recipes/categories.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
@@ -51,8 +51,9 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
   app.post('/api/ai/photos', async (req, reply) => {
     if (!ai) return reply.code(503).send({ error: 'AI not configured' });
     const store: ImageStore | undefined = source?.images;
+    if (!store) return reply.code(503).send({ error: 'Image store not configured' });
     const ids = (req.body as { imageIds?: unknown } | null)?.imageIds;
-    if (!store || !Array.isArray(ids) || ids.length < 1 || ids.length > MAX_PHOTOS || !ids.every((i) => typeof i === 'string' && IMAGE_ID_RE.test(i))) {
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_PHOTOS || !ids.every((i) => typeof i === 'string' && IMAGE_ID_RE.test(i))) {
       return reply.code(400).send({ error: `imageIds must be 1 to ${MAX_PHOTOS} image ids` });
     }
     const imageIds = [...new Set(ids as string[])];
@@ -78,7 +79,7 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         sourceName: brand,
         sourceUrl: null,
         imageIds: cropId ? [...new Set([cropId, ...imageIds])] : imageIds,
-        dishCrop: cropId && dishPhoto && sourceImageId ? { sourceImageId, x0: dishPhoto.x0, y0: dishPhoto.y0, x1: dishPhoto.x1, y1: dishPhoto.y1 } : null,
+        dishCrop: cropId && dishPhoto && sourceImageId ? { sourceImageId, ...normaliseBox(dishPhoto) } : null,
         provider,
         model,
       };

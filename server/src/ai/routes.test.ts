@@ -201,7 +201,7 @@ describe('POST /api/ai/photos', () => {
     const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ dishPhoto: { image: 0, x0: 600, y0: 1200, x1: 100, y1: -50 } })) });
     const body = (await photos(app, { imageIds: ids })).json();
     expect(body.imageIds).toHaveLength(3);
-    expect(body.dishCrop.sourceImageId).toBe(ids[0]);
+    expect(body.dishCrop).toEqual({ sourceImageId: ids[0], x0: 100, y0: 0, x1: 600, y1: 1000 });
   });
 
   it('400 unless 1-6 ids that all exist', async () => {

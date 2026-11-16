@@ -13,6 +13,14 @@ const THUMB_WIDTH = 400;
 export type Box1000 = { x0: number; y0: number; x1: number; y1: number };
 const MIN_SIDE = 50; // 5% of the image
 
+/** Clamp a box to 0-1000 and put each corner the right way round. */
+export function normaliseBox(b: Box1000): Box1000 {
+  const clamp = (n: number) => Math.min(1000, Math.max(0, n));
+  const [x0, x1] = [clamp(b.x0), clamp(b.x1)].sort((a, c) => a - c) as [number, number];
+  const [y0, y1] = [clamp(b.y0), clamp(b.y1)].sort((a, c) => a - c) as [number, number];
+  return { x0, y0, x1, y1 };
+}
+
 export type ImageStore = {
   save(bytes: Buffer): Promise<string>;
   /** The stored full-size JPEG, or undefined for an unknown id. */
@@ -71,9 +79,7 @@ export function createImageStore(dataDir: string): ImageStore {
     async crop(id, box) {
       const file = store.path(id);
       if (!file) return null;
-      const clamp = (n: number) => Math.min(1000, Math.max(0, n));
-      const [x0, x1] = [clamp(box.x0), clamp(box.x1)].sort((a, b) => a - b) as [number, number];
-      const [y0, y1] = [clamp(box.y0), clamp(box.y1)].sort((a, b) => a - b) as [number, number];
+      const { x0, y0, x1, y1 } = normaliseBox(box);
       if (!(x1 - x0 >= MIN_SIDE) || !(y1 - y0 >= MIN_SIDE)) return null;
       const bytes = await readFile(file);
       const { width, height } = await sharp(bytes).metadata();
