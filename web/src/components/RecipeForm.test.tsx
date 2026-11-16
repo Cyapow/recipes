@@ -240,6 +240,16 @@ describe('RecipeForm', () => {
       expect((onSave.mock.calls[0][0] as RecipeInput).tags).toEqual([{ group: 'other', name: 'pasta' }]);
     });
 
+    it('loads a legacy draft with no brand key and saves brand null, origin other', async () => {
+      const onSave = vi.fn();
+      const user = userEvent.setup();
+      const { brand: _b, ...noBrand } = { ...empty, title: 'Soup', origin: 'other' as const };
+      render(<RecipeForm initial={noBrand as unknown as RecipeInput} onSave={onSave} />);
+      expect((screen.getByLabelText('Brand') as HTMLInputElement).value).toBe('');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave.mock.calls[0][0]).toMatchObject({ brand: null, origin: 'other' });
+    });
+
     it('saves a typed brand and derives the origin from it', async () => {
       const onSave = vi.fn();
       const user = userEvent.setup();

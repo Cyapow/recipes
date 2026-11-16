@@ -91,6 +91,16 @@ describe('the printable card', () => {
     expect(await screen.findByText('From slowcookerclub.com')).toBeTruthy();
   });
 
+  it('credits the brand of a recipe with no source', async () => {
+    show({ origin: 'other', brand: 'Gousto', sourceName: null, sourceUrl: null });
+    expect(await screen.findByText('From Gousto')).toBeTruthy();
+  });
+
+  it('calls a Mine recipe with no source "My recipe"', async () => {
+    show();
+    expect(await screen.findByText('My recipe')).toBeTruthy();
+  });
+
   it('opens the print dialog when you ask it to', async () => {
     const print = vi.fn();
     vi.stubGlobal('print', print);
