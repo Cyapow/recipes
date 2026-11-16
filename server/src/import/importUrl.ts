@@ -146,7 +146,8 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
   let aiError: ImportResult['aiError'];
   if (deps.ai && text !== '') {
     try {
-      const { draft: ai, provider, model } = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
+      const { draft: aiWithPhoto, provider, model } = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
+      const { dishPhoto: _dishPhoto, ...ai } = aiWithPhoto;
       if (ai.ingredients.length > 0 || ai.steps.length > 0) {
         const imageIds = await downloadImage(html, finalUrl, deps);
         return { draft: { ...ai, ...source, imageIds }, usedAi: true, usable: true, provider, model };

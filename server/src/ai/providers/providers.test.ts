@@ -8,12 +8,12 @@ import { recipeToolSchema } from '../draft.js';
 
 const KEY = 'sk-test-SECRET-123';
 const draft = {
-  title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
-const expected = { ...draft, brand: 'Mine' };
+const expected = draft;
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 

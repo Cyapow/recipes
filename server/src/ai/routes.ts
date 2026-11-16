@@ -21,8 +21,10 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         ai.extractRecipe({ kind: 'description', text: described }),
         source ? sourceFromText(described, source) : Promise.resolve(null),
       ]);
+      const { dishPhoto: _dishPhoto, ...rest } = draft;
       return {
-        ...draft,
+        ...rest,
+        brand: 'Mine',
         origin: 'mine',
         sourceName: from?.sourceName ?? null,
         sourceUrl: from?.sourceUrl ?? null,

@@ -1,16 +1,26 @@
 import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
-import { normaliseTags } from '../recipes/categories.js';
-import { RecipeCoreSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
+import { canonicalBrand, normaliseTags } from '../recipes/categories.js';
+import { RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
 /** What the model may say about a step: its text and which ingredients it names. No photo, ever. */
 export const AiStepSchema = z.object({ text: z.string(), ingredients: z.array(z.number().int()) });
-// The model still writes plain string tags and no brand; toRecipeDraft converts them.
-export const AiDraftSchema = RecipeCoreSchema.omit({ brand: true }).extend({
-  tags: z.array(z.string()),
+/** Where the finished dish is in one of the photos, in 0-1000 of that image (photos input only). */
+export const DishBoxSchema = z.object({
+  image: z.number().int(),
+  x0: z.number(),
+  y0: z.number(),
+  x1: z.number(),
+  y1: z.number(),
+});
+export type DishBox = z.infer<typeof DishBoxSchema>;
+
+export const AiDraftSchema = RecipeCoreSchema.extend({
+  tags: z.array(TagSchema),
   steps: z.array(AiStepSchema),
   gaps: z.array(z.string()),
+  dishPhoto: DishBoxSchema.nullable(),
 });
 /** Validates the model's output: links may be any numbers; toRecipeDraft drops the unusable ones. */
 export const AiDraftParseSchema = AiDraftSchema.extend({
@@ -43,10 +53,10 @@ function repairAmount(i: Ingredient): Ingredient {
     : { ...i, quantity: fromNote.quantity, unit: stranded.unit, item: stranded.item };
 }
 
-export function toRecipeDraft(ai: AiDraft): RecipeDraft {
+export function toRecipeDraft(ai: AiDraft): RecipeDraft & { dishPhoto: DishBox | null } {
   return {
     ...ai,
-    brand: ai.origin === 'mine' ? 'Mine' : null,
+    brand: canonicalBrand(ai.brand),
     tags: normaliseTags(ai.tags),
     ingredients: ai.ingredients.map(repairAmount),
     steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({
@@ -70,6 +80,14 @@ The rule that matters most: never add anything the input does not state. Quantit
 - Steps: if the user describes the method as a narrative (a paragraph or a run-on sentence) rather than a numbered or line-separated list, split it into separate steps at natural boundaries, one action or clause per step (for example "browned the mince", "added an onion, two tins of tomatoes and a splash of red wine", "simmered for an hour", "tossed it through spaghetti"). Write each step's text in the recipe style above, in the user's order, and add no detail the user did not say. Keep the order the user gave. If the user already gave separate steps (numbered or one per line), keep one step per given step, polishing the wording only: do not split, merge, reorder or add. Never add a step the user did not describe. No added tips, warnings, substitutions or serving suggestions; "notes" only holds notes the user stated.
 - Title: if the user stated a dish name, use it verbatim. If they did not, write a short, plain, descriptive title using only words or ingredients the user mentioned (for example "Beef mince and tomato spaghetti": the main protein or base and the main named ingredients; at most about 6 words; no marketing words, and no cuisine or dish type the user did not say), and add the gap "title chosen from your description" so the user knows to check it. Never leave the title as a single stray ingredient word.
 - "origin", "sourceName" and "sourceUrl" are always decided by the caller and overwritten afterwards: use "mine" and null for them. imageIds is always an empty array.
+- "brand" and "tags" come only from what is written on the card, page or description, never from what such a dish usually is. "brand" is a printed name or logo (a card) or the page's creator or site name (a link); otherwise it is null and you add the gap "brand". Each tag has a group and a name, and what counts as written depends on the group:
+  - "cuisine": a printed label or badge, or a cuisine word in the title ("Thai Green Chicken Curry" gives Thai).
+  - "main" (Main ingredient): the main protein or vegetable named in the title and also present in the ingredients (gives Chicken).
+  - "meal" (Meal: dinner, lunch, quick and so on): only when printed or said; a "Quick" badge counts. Never from the dish itself.
+  - "other": any other printed label or badge ("Calorie Smart", "Family"), or the page's JSON-LD keywords.
+  If nothing is written for a group, add no tag for it. Never invent a tag.
+- When the input is photos of a recipe card, the first photo is usually the front and the next ones the back or extra pages; read all of them as one recipe. Text you cannot read, or that is smudged or cut off, is never guessed: set it to null and add a gap naming it ("quantity for soy sauce (unreadable)").
+- "dishPhoto" is only for photos input: if one of the photos shows the finished dish, give {image, x0, y0, x1, y1} where image is the 0-based number of that photo (in the order given) and the box is its position in that image on a 0-1000 scale from the top left; otherwise null. For a description or page text, "dishPhoto" must always be null.
 - Only record a quantity as a number when the user gave a number (convert "half" to 0.5, "two" to 2). Vague amounts such as "a splash" or "a good glug" are not numbers: keep quantity null, put the phrase in "note", and add a gap.
 - A range is a number, not a vague amount. For "2-3 tablespoons of oil" or "1 to 1½ lb beef", record the lower end as the quantity ("2", "1") with its unit ("tablespoons", "lb"), put the range as written in "note", and name only the ingredient in the item ("oil", "beef"). Never leave quantity null and the unit at the front of the item: "tablespoons neutral oil" is wrong, and so is any item starting with a unit word.
 
@@ -131,7 +149,13 @@ function defang(text: string): string {
   return text.replace(/<(\s*\/?\s*)(page_text|user_description)(?=[\s>\/]|$)/gi, '&lt;$1$2');
 }
 
-export function buildUserMessage(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): string {
+export function buildUserMessage(
+  input: { kind: 'description' | 'page'; text: string; sourceUrl?: string } | { kind: 'photos'; text?: string; imageCount: number },
+): string {
+  if (input.kind === 'photos') {
+    const note = input.text?.trim() ? `\nThe person added this note:\n<user_description>\n${defang(input.text)}\n</user_description>` : '';
+    return `Read the recipe from these ${input.imageCount} photos of a recipe card (front, back, extra pages, in order), adding nothing that is not on them.${note}`;
+  }
   if (input.kind === 'page') {
     const attr = input.sourceUrl ? ` source_url="${input.sourceUrl.replace(/[<>"]/g, '')}"` : '';
     return `Extract the recipe from this page text.\n<page_text${attr}>\n${defang(input.text)}\n</page_text>`;

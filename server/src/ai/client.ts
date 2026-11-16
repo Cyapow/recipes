@@ -1,6 +1,6 @@
 import type { Config } from '../config.js';
 import type { RecipeDraft } from '../recipes/schema.js';
-import { AiDraftParseSchema, buildUserMessage, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
+import { AiDraftParseSchema, buildUserMessage, type DishBox, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
 import { createAnthropicProvider, type SdkLike } from './providers/anthropic.js';
 import { createGeminiProvider } from './providers/gemini.js';
 import { createOpenAiProvider } from './providers/openai.js';
@@ -10,7 +10,7 @@ import { providerOrder } from './registry.js';
 export type { SdkLike };
 export type { ProviderErrorCode, ProviderName };
 
-export type AiExtraction = { draft: RecipeDraft; provider: ProviderName; model: string };
+export type AiExtraction = { draft: RecipeDraft & { dishPhoto: DishBox | null }; provider: ProviderName; model: string };
 
 export interface AiClient {
   extractRecipe(input: { kind: 'description' | 'page'; text: string; sourceUrl?: string }): Promise<AiExtraction>;
