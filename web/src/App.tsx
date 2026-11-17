@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { Library } from './pages/Library';
 import { Editor } from './pages/Editor';
 import { Describe } from './pages/Describe';
+import { Photos } from './pages/Photos';
 import { Import } from './pages/Import';
 import { Cook } from './pages/Cook';
 import { RecipeOverview } from './pages/RecipeOverview';
@@ -18,6 +19,7 @@ export function App() {
       <Route path="/" element={<Library />} />
       <Route path="/new" element={<Editor />} />
       <Route path="/describe" element={<Describe />} />
+      <Route path="/photos" element={<Photos />} />
       <Route path="/import" element={<Import />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/shopping" element={<Shopping />} />

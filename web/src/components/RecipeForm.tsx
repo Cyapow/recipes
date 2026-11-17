@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { uploadImage, type Facets } from '../api';
+import { cropImage, uploadImage, type Box1000, type Facets } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { canonicalUnit } from '../../../server/src/recipes/amount';
 import { IngredientRows } from './IngredientRows';
@@ -7,6 +7,7 @@ import { KNOWN_BRANDS, TAG_GROUPS, normaliseTags, originForBrand, type TagGroup 
 import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
+import { CropDialog } from './CropDialog';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
@@ -18,6 +19,8 @@ export type RecipeFormProps = {
   onChange?(input: RecipeInput): void;
   /** Brands and tags already in use; offered as suggestions only. */
   facets?: Facets;
+  /** From a photos draft: the card photo the dish picture was cut from, and the box used. Offers Adjust / Use whole photo on the first photo. */
+  dishCrop?: ({ sourceImageId: string } & Box1000) | null;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -28,7 +31,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop }: RecipeFormProps) {
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -52,6 +55,32 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
   const [imageIds, setImageIds] = useState(initial.imageIds);
   const [pending, setPending] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [cropBox, setCropBox] = useState<Box1000 | null>(dishCrop ? { x0: dishCrop.x0, y0: dishCrop.y0, x1: dishCrop.x1, y1: dishCrop.y1 } : null);
+  const [adjusting, setAdjusting] = useState(false);
+  // The actions apply only while the first photo is still the crop made for this draft.
+  const sourceId = dishCrop?.sourceImageId;
+  const cropIsFirst = !!sourceId && !!cropBox && imageIds[0] !== undefined && imageIds[0] !== sourceId;
+
+  function useWholePhoto() {
+    if (!sourceId) return;
+    setImageIds((ids) => [sourceId, ...ids.slice(1).filter((x) => x !== sourceId)]);
+  }
+
+  async function saveAdjusted(box: Box1000) {
+    if (!sourceId) return;
+    setAdjusting(false);
+    setUploadError(null);
+    setPending((n) => n + 1);
+    try {
+      const id = await cropImage(sourceId, box);
+      setCropBox(box);
+      setImageIds((ids) => [id, ...ids.slice(1).filter((x) => x !== id)]);
+    } catch (err) {
+      setUploadError(`Could not crop the photo: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setPending((n) => n - 1);
+    }
+  }
 
   async function onPick(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -255,6 +284,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
                   >
                     Remove
                   </button>
+                  {i === 0 && cropIsFirst && (
+                    <>
+                      <button type="button" onClick={() => setAdjusting(true)}>Adjust</button>
+                      <button type="button" onClick={useWholePhoto}>Use whole photo</button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
@@ -264,6 +299,9 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
           {saving ? 'Saving…' : 'Save'}
         </button>
       </form>
+      {adjusting && sourceId && cropBox && (
+        <CropDialog imageId={sourceId} box={cropBox} onSave={saveAdjusted} onCancel={() => setAdjusting(false)} />
+      )}
     </>
   );
 }
