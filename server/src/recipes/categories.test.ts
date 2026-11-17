@@ -32,6 +32,12 @@ describe('normaliseTags', () => {
     ]);
     expect(normaliseTags('nope')).toEqual([]);
   });
+
+  it('drops a tag named "[object Object]" (a stale client stringified a tag)', () => {
+    expect(
+      normaliseTags(['[object Object]', { group: 'meal', name: '[object Object]' }, { group: 'meal', name: 'Dinner' }]),
+    ).toEqual([{ group: 'meal', name: 'Dinner' }]);
+  });
 });
 
 describe('tag keys', () => {

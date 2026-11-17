@@ -9,7 +9,10 @@ UPDATE recipes SET brand = CASE
   ELSE NULL
 END;
 
+UPDATE recipes SET tags_json = '[]' WHERE tags_json IS NULL OR NOT json_valid(tags_json);
+
 UPDATE recipes SET tags_json = (
   SELECT COALESCE(json_group_array(json_object('group', 'other', 'name', value)), '[]')
   FROM (SELECT value FROM json_each(recipes.tags_json) ORDER BY key)
-);
+)
+WHERE json_valid(tags_json);

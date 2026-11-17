@@ -21,6 +21,12 @@ describe('migration 007', () => {
     ins.run({ id: 'b', origin: 'other', source_name: 'Hello Fresh', tags: '[]' });
     ins.run({ id: 'c', origin: 'other', source_name: 'bbcgoodfood.com', tags: '[]' });
     ins.run({ id: 'd', origin: 'other', source_name: null, tags: '[]' });
+    ins.run({ id: 'e', origin: 'other', source_name: 'Gousto', tags: '[]' });
+    ins.run({ id: 'f', origin: 'other', source_name: 'simply cook', tags: '[]' });
+    ins.run({ id: 'g', origin: 'other', source_name: 'Hello-Fresh', tags: '[]' });
+    ins.run({ id: 'h', origin: 'other', source_name: '   ', tags: '[]' });
+    ins.run({ id: 'i', origin: 'other', source_name: '', tags: '[]' });
+    ins.run({ id: 'j', origin: 'other', source_name: null, tags: 'not json' });
     old.close();
 
     const db = openDb(file);
@@ -37,6 +43,12 @@ describe('migration 007', () => {
       '[{"group":"other","name":"pasta"},{"group":"other","name":"dinner"}]',
     );
     expect(row('b').tags_json).toBe('[]');
+    expect(row('e').brand).toBe('Gousto');
+    expect(row('f').brand).toBe('Simply Cook');
+    expect(row('g').brand).toBe('HelloFresh');
+    expect(row('h').brand).toBeNull();
+    expect(row('i').brand).toBeNull();
+    expect(row('j').tags_json).toBe('[]');
     db.close();
   });
 });

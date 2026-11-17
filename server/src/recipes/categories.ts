@@ -49,7 +49,8 @@ export function normaliseTags(raw: unknown): Tag[] {
       }
     }
     name = name.trim();
-    if (!group || !name) continue;
+    // A stale open tab once sent tags as "[object Object]"; never store that.
+    if (!group || !name || name === '[object Object]') continue;
     const key = `${group}:${name.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
