@@ -133,9 +133,11 @@ export function Photos() {
             {photoIds.map((id, i) => (
               <li key={id}>
                 <img src={`/api/images/${id}/thumb`} alt={`Photo ${i + 1}`} />
-                <button type="button" aria-label={`Move photo ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                <button type="button" aria-label={`Move photo ${i + 1} later`} disabled={i === photoIds.length - 1} onClick={() => move(i, 1)}>↓</button>
-                <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => setIds((ids) => ids.filter((x) => x !== id))}>Remove</button>
+                <button type="button" className="photo-remove" aria-label={`Remove photo ${i + 1}`} onClick={() => setIds((ids) => ids.filter((x) => x !== id))}>✕</button>
+                <div className="photo-move">
+                  <button type="button" aria-label={`Move photo ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, -1)}>←</button>
+                  <button type="button" aria-label={`Move photo ${i + 1} later`} disabled={i === photoIds.length - 1} onClick={() => move(i, 1)}>→</button>
+                </div>
               </li>
             ))}
           </ul>

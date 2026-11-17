@@ -302,15 +302,15 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
                   >
                     Remove
                   </button>
-                  {i === 0 && cropIsFirst && (
-                    <>
-                      <button type="button" onClick={() => setAdjusting(true)}>Adjust</button>
-                      <button type="button" onClick={useWholePhoto}>Use whole photo</button>
-                    </>
-                  )}
                 </li>
               ))}
             </ul>
+          )}
+          {cropIsFirst && (
+            <div className="photo-actions">
+              <button type="button" onClick={() => setAdjusting(true)}>Adjust</button>
+              <button type="button" onClick={useWholePhoto}>Use whole photo</button>
+            </div>
           )}
         </div>
         <button type="submit" className="primary" disabled={saving}>
