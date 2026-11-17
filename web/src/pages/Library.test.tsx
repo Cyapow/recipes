@@ -54,14 +54,74 @@ describe('Library', () => {
     expect(screen.getByRole('link', { name: /Carbonara/ }).getAttribute('href')).toBe('/recipe/a');
   });
 
-  it('re-queries with origin mine when Mine clicked', async () => {
-    const user = userEvent.setup();
+  it('has no Mine / From elsewhere segmented control', async () => {
     render(<MemoryRouter><Library /></MemoryRouter>);
     await screen.findByText('Carbonara');
-    await user.click(screen.getByRole('button', { name: 'Mine' }));
+    expect(screen.queryByRole('button', { name: 'From elsewhere' })).toBeNull();
+  });
+});
+
+describe('Library filters', () => {
+  beforeEach(() => {
+    try { sessionStorage.clear(); } catch { /* ignore */ }
+    vi.mocked(getFacets).mockResolvedValue({
+      brands: [{ name: 'Gousto', count: 2 }],
+      tags: [{ group: 'cuisine', name: 'Thai', count: 1 }],
+    });
+  });
+  async function apply(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByText('Carbonara');
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
+    await user.click(await screen.findByRole('button', { name: 'Gousto' }));
+    await user.click(screen.getByRole('button', { name: 'Thai' }));
+  }
+  it('queries with chosen brand and tag, shows Filters · 2 and the result count', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await apply(user);
     await waitFor(() =>
-      expect(vi.mocked(listRecipes)).toHaveBeenLastCalledWith(expect.objectContaining({ origin: 'mine' })),
+      expect(vi.mocked(listRecipes)).toHaveBeenLastCalledWith({
+        search: undefined, brands: ['Gousto'], tags: [{ group: 'cuisine', name: 'Thai' }],
+      }),
     );
+    expect(screen.getByRole('button', { name: 'Show 2 recipes' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show 2 recipes' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Filters · 2' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Filters · 2' }));
+  });
+  it('removes one filter via its pill', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await apply(user);
+    await user.click(screen.getByRole('button', { name: 'Show 2 recipes' }));
+    await user.click(screen.getByRole('button', { name: 'Remove filter Gousto' }));
+    await waitFor(() =>
+      expect(vi.mocked(listRecipes)).toHaveBeenLastCalledWith({
+        search: undefined, brands: undefined, tags: [{ group: 'cuisine', name: 'Thai' }],
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Filters · 1' })).toBeTruthy();
+  });
+  it('Clear all empties the filters', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await apply(user);
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+    await waitFor(() =>
+      expect(vi.mocked(listRecipes)).toHaveBeenLastCalledWith({ search: undefined, brands: undefined, tags: undefined }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Show 2 recipes' }));
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+  });
+  it('keeps filters across unmount and remount', async () => {
+    const user = userEvent.setup();
+    const first = render(<MemoryRouter><Library /></MemoryRouter>);
+    await apply(user);
+    first.unmount();
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: 'Filters · 2' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove filter Thai' })).toBeTruthy();
   });
 });
 
@@ -72,6 +132,7 @@ describe('Library redesign', () => {
     const href = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
     expect(href('Describe it')).toBe('/describe');
     expect(href('From a link')).toBe('/import');
+    expect(href('From photos')).toBe('/photos');
     expect(href('New recipe')).toBe('/new');
     expect(href('Settings')).toBe('/settings');
     expect(href('Shopping list')).toBe('/shopping');

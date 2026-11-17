@@ -8,7 +8,7 @@ export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingIte
 export type { Box1000, Tag };
 
 /** origin is interim: the Library's Mine / From elsewhere chips still use it until the Filters sheet replaces them. */
-export type ListQuery = { search?: string; origin?: 'mine' | 'other'; brands?: string[]; tags?: Tag[] };
+export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[] };
 
 /** What the library can be filtered by, with how many recipes each has. */
 export type Facets = { brands: { name: string; count: number }[]; tags: (Tag & { count: number })[] };
@@ -35,7 +35,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export function listRecipes(q: ListQuery = {}): Promise<RecipeSummary[]> {
   const p = new URLSearchParams();
   if (q.search) p.set('search', q.search);
-  if (q.origin) p.set('origin', q.origin);
   for (const b of q.brands ?? []) p.append('brand', b);
   for (const t of q.tags ?? []) p.append('tag', tagKey(t));
   const qs = p.toString();
