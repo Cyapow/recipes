@@ -1,5 +1,23 @@
 # Deploying Recipes
 
+## What's new
+
+Brands, filters and recipes from photos.
+
+Before upgrading, take a backup: open Settings and press "Back up now". If anything goes wrong, "Restoring from a Drive backup" below explains how to roll back (pass `--snapshot` with the pre-upgrade file name so you don't get a newer one).
+
+Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compose up -d --build`.
+
+- **Brand and grouped tags.** Migration 007 runs by itself when the container starts. Existing recipes are sorted like this:
+  - Recipes you described or wrote yourself get the brand Mine.
+  - Link recipes get a brand from the source name they stored. HelloFresh, Gousto and Simply Cook spellings are tidied up; any other site gets its host, for example `bbcgoodfood.com`. Rename it in the edit form; later imports from the same site reuse the new brand.
+  - Every existing tag goes under Other.
+- **Library filters.** The Filters button opens a sheet with Brand, Cuisine, Meal, Main ingredient and Other. Within one group a recipe matches any of your picks; across groups it must match all of them. Filters are kept while you browse in that tab.
+- **From photos.** Add up to 6 photos of a recipe card (front, back, extra pages) from the installed app's camera or photo library. The phone shrinks each photo before upload. The AI suggests the brand and tags only from what is printed on the card, and anything it couldn't read is listed under "Check these". The dish photo is cropped from the card; use Adjust, Use whole photo or Remove. The card photos are kept on the recipe (about 300 KB each).
+- **AI models must take images.** From photos needs an AI key whose model accepts images. The defaults in `.env.example` (`claude-sonnet-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) all do (checked against the provider docs on 2026-11-16). If you changed a model, make sure it accepts image input, or From photos moves on to the next provider.
+- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The box's `.env` currently has an invalid value.
+- **iPhone photos.** iOS normally gives the browser a JPEG. If a HEIC ever gets through and the phone can't shrink it, the upload may be refused as "not a supported image"; take the photo again with the camera button.
+
 1. Copy the repo to the box.
 2. `cp .env.example .env` and fill in the values.
 3. Make sure the `studioos-lan-edge` Docker network exists (created by the Studio OS stack), then `docker compose up -d --build`.
