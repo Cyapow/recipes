@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { RecipeInput } from '../api';
+import type { Box1000, RecipeInput } from '../api';
 
-export type DraftKind = 'new' | 'edit' | 'describe' | 'import';
+export type DraftKind = 'new' | 'edit' | 'describe' | 'import' | 'photos';
 
 /** Work in progress kept on this device so a refresh or an accidental navigation does not lose it. */
 export type Draft = {
@@ -19,6 +19,10 @@ export type Draft = {
   text?: string;
   /** Import: the page address. */
   url?: string;
+  /** Photos: the card photos picked, in order. */
+  photoIds?: string[];
+  /** Photos: the card photo the dish picture was cut from, and the box used. */
+  dishCrop?: ({ sourceImageId: string } & Box1000) | null;
 };
 
 const KEY = 'recipes.drafts';
@@ -72,7 +76,7 @@ export function draftTitle(d: Draft): string {
 }
 
 export const draftKindLabel = (k: DraftKind): string =>
-  k === 'edit' ? 'Editing' : k === 'describe' ? 'Described' : k === 'import' ? 'Imported' : 'New';
+  k === 'edit' ? 'Editing' : k === 'describe' ? 'Described' : k === 'import' ? 'Imported' : k === 'photos' ? 'From photos' : 'New';
 
 /** Where Resume goes. */
 export function draftHref(d: Draft): string {
@@ -83,7 +87,9 @@ export function draftHref(d: Draft): string {
       ? `/describe${q}`
       : d.kind === 'import'
         ? `/import${q}`
-        : `/new${q}`;
+        : d.kind === 'photos'
+          ? `/photos${q}`
+          : `/new${q}`;
 }
 
 const newId = (): string => globalThis.crypto?.randomUUID?.() ?? `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;

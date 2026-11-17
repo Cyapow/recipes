@@ -37,7 +37,7 @@ describe('parseRecipeJsonLd', () => {
     expect(r.steps.map((x) => x.text)).toEqual(['Put the flour, eggs & milk in a bowl and whisk.', 'Heat the oil in a pan.', 'Pour in some batter and cook for 1 min each side.']);
     expect(r.steps.every((x) => x.imageId === null)).toBe(true);
     expect(r.steps.map((x) => x.ingredients)).toEqual([[1, 2], [], []]); // 'plain flour' and 'sunflower oil' need both words
-    expect(r.tags).toEqual(['breakfast', 'brunch', 'british', 'pancakes', 'shrove tuesday', 'easy']);
+    expect(r.tags.map((t) => t.name)).toEqual(['Breakfast', 'Brunch', 'British', 'pancakes', 'Shrove Tuesday', 'easy']);
     expect(r.imageIds).toEqual([]);
   });
   it('handles @graph, @type arrays, HowToSection flattening, array yield, P0DT45M, and survives malformed JSON in another block', () => {
@@ -77,7 +77,19 @@ describe('parseRecipeJsonLd', () => {
   it('caps and normalises tags', () => {
     const r = parseRecipeJsonLd(ld(recipe({ keywords: Array.from({ length: 20 }, (_, i) => ` Tag${i} `).join(','), recipeCategory: 'Dinner' })))!;
     expect(r.tags).toHaveLength(8);
-    expect(r.tags[0]).toBe('dinner');
+    expect(r.tags[0]).toEqual({ group: 'meal', name: 'Dinner' });
+  });
+  it('groups tags by where the page puts them and reads the author', () => {
+    const r = parseRecipeJsonLd(ld(recipe({ recipeCuisine: 'Thai', recipeCategory: 'Dinner', keywords: 'easy, quick', author: { '@type': 'Person', name: 'Jane Cook' } })))!;
+    expect(r.tags).toEqual([
+      { group: 'meal', name: 'Dinner' },
+      { group: 'cuisine', name: 'Thai' },
+      { group: 'other', name: 'easy' },
+      { group: 'other', name: 'quick' },
+    ]);
+    expect(r.author).toEqual({ name: 'Jane Cook', organization: false });
+    expect(parseRecipeJsonLd(ld(recipe({ author: { '@type': 'Organization', name: 'BBC' } })))!.author).toEqual({ name: 'BBC', organization: true });
+    expect(parseRecipeJsonLd(ld(recipe()))!.author).toBeNull();
   });
   it('accepts an array of top-level nodes', () => {
     expect(parseRecipeJsonLd(ld([{ '@type': 'Thing' }, recipe()]))!.title).toBe('R');

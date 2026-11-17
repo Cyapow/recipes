@@ -4,14 +4,16 @@ import { deleteRecipe, getRecipe, saveRecipe, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
+import { useFacets } from '../lib/useFacets';
 
 const EMPTY: RecipeInput = {
-  title: '', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: '', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null, ingredients: [], steps: [],
   notes: null, tags: [], imageIds: [],
 };
 
 export function Editor() {
+  const facets = useFacets();
   const { id } = useParams();
   const nav = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function Editor() {
         <Link className="btn small" to="/">Cancel</Link>
       </header>
       {error && <p className="field-error" role="alert">{error}</p>}
-      {initial && <RecipeForm key={`${id ?? 'new'}:${draft.existing?.id ?? ''}`} initial={initial} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
+      {initial && <RecipeForm facets={facets} key={`${id ?? 'new'}:${draft.existing?.id ?? ''}`} initial={initial} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
       {id && initial && (
         <button type="button" className="danger" onClick={onDelete}>
           Delete

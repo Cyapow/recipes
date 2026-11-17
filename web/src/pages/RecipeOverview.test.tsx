@@ -16,7 +16,7 @@ vi.mock('./Cook', () => ({ Cook: () => <p>COOK PAGE</p> }));
 import { App } from '../App';
 
 const base: Recipe = {
-  id: 'a', title: 'Carbonara', description: '', origin: 'mine', sourceName: null, sourceUrl: null,
+  id: 'a', title: 'Carbonara', description: '', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 2, prepMinutes: 5, cookMinutes: 70,
   ingredients: [
     { group: null, quantity: 200, unit: 'g', item: 'spaghetti', note: null },
@@ -47,6 +47,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('RecipeOverview', () => {
+  it('shows the brand as the label', async () => {
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, origin: 'other', brand: 'Gousto', sourceName: 'bbc.co.uk' });
+    renderAt();
+    await screen.findByRole('heading', { name: 'Carbonara' });
+    expect(screen.getByText('Gousto')).toBeTruthy();
+    expect(screen.queryByText('bbc.co.uk')).toBeNull();
+  });
+
   it('shows header, title, meta, hero and links', async () => {
     vi.mocked(getRecipe).mockResolvedValue({ ...base, imageIds: ['h.jpg'] });
     renderAt();

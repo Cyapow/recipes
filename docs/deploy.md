@@ -1,5 +1,32 @@
 # Deploying Recipes
 
+## What's new
+
+Brands, filters and recipes from photos.
+
+Before upgrading, take a backup: open Settings and press "Back up now". If anything goes wrong, "Restoring from a Drive backup" below explains how to roll back (pass `--snapshot` with the pre-upgrade file name so you don't get a newer one).
+
+Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compose up -d --build`.
+
+- **Brand and grouped tags.** Migration 007 runs by itself when the container starts. Existing recipes are sorted like this:
+  - Recipes you described or wrote yourself get the brand Mine.
+  - Link recipes get a brand from the source name they stored. HelloFresh, Gousto and Simply Cook spellings are tidied up; any other site gets its host, for example `bbcgoodfood.com`. Rename it in the edit form; later imports from the same site reuse the new brand.
+  - Every existing tag goes under Other.
+- **Library filters.** The Filters button opens a sheet with Brand, Cuisine, Meal, Main ingredient and Other. Within one group a recipe matches any of your picks; across groups it must match all of them. Filters are kept while you browse in that tab.
+- **From photos.** Add up to 6 photos of a recipe card (front, back, extra pages) from the installed app's camera or photo library. The phone shrinks each photo before upload. The AI suggests the brand and tags only from what is printed on the card, and anything it couldn't read is listed under "Check these". The dish photo is cropped from the card; use Adjust, Use whole photo or Remove. The card photos are kept on the recipe (about 300 KB each).
+- **AI models must take images.** From photos needs an AI key whose model accepts images. The defaults in `.env.example` (`claude-sonnet-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) all do (checked against the provider docs on 2026-11-16). If you changed a model, make sure it accepts image input, or From photos moves on to the next provider.
+- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The box's `.env` currently has an invalid value.
+- **Fully close and reopen the app on every phone after upgrading.** A tab or installed app that stayed open keeps running the old code and can send tags the new server doesn't expect. Swipe the app away completely, then open it again.
+- **iPhone photos.** iOS normally gives the browser a JPEG. If a HEIC ever gets through and the phone can't shrink it, the upload may be refused as "not a supported image"; take the photo again with the camera button.
+
+Rolling back:
+
+- An older version can't read the new `{group, name}` tags, so rebuilding the old commit is not enough once the upgrade has run.
+- Check out the old commit AND restore the pre-upgrade snapshot explicitly with `--snapshot <name>` (the file you noted before upgrading). Never use the restore default, which picks the newest snapshot, and that one has the new tag format. See "Restoring from a Drive backup" below.
+- Edits made after the upgrade are lost.
+
+## First install
+
 1. Copy the repo to the box.
 2. `cp .env.example .env` and fill in the values.
 3. Make sure the `studioos-lan-edge` Docker network exists (created by the Studio OS stack), then `docker compose up -d --build`.
@@ -37,9 +64,29 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
 
 5. Google Drive is not restored (the token is deliberately not part of a backup): open Settings and connect Drive again.
 
-## What's new in this release
+## AI providers
 
-Release: shopping list and step slides
+"Describe a recipe" and the page-reading fallback in import can use Claude, ChatGPT (OpenAI) or Gemini. Set any one or more of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY` in `.env` (models are `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`; the defaults in `.env.example` are cheap ones and can be changed), then restart.
+
+- The first provider with a key is used, in the order Claude, ChatGPT, Gemini. Set `AI_PROVIDER=anthropic|openai|gemini` to try a different one first. An unknown value is ignored with a warning in the log.
+- Fallback: if the provider fails because of the provider (key rejected, no credit, rate limit, overloaded or down, timeout) the next provider with a key is tried. A refusal, a recipe that is still invalid after the one retry, or a request error of our own is shown rather than passed on.
+- If a later provider fails with something that is not a provider failure (a refusal, invalid output after the retry, or a request error of our own), that is the error you see. Only when every provider fails with a provider failure is the first provider's code reported.
+- One overall time limit (`AI_TOTAL_TIMEOUT_MS`, default 100000 ms, minimum 10000) covers the whole request across providers and retries, so a slow provider cannot run past a proxy's timeout. Once less than 15 seconds remain, no further provider or retry is started and the message is "The AI didn't respond. Try again.".
+- `OPENAI_REASONING_EFFORT` (default `low`; none, minimal, low, medium, high, xhigh, max) and `GEMINI_THINKING_LEVEL` (default `low`; minimal, low, medium, high) keep reasoning cheap and fast. The values are model-specific and an unsupported one is a 400 error, shown as "AI request failed". If you change `OPENAI_MODEL` to a model without reasoning, set `OPENAI_REASONING_EFFORT=default`; for a Gemini model older than 3 set `GEMINI_THINKING_LEVEL=default` (empty or `default` means the field is not sent).
+- A wrong model name (HTTP 404) is reported as "The AI model name isn't available. Check the model setting in .env." and the next provider is tried.
+- Settings shows which providers have a key and which is in use (never the keys). Drafts say "Drafted by ..." above the form; that is never saved with the recipe.
+- If every provider fails, the page shows a plain message: "The AI account is out of credit. Add credit or switch provider." (no credit), "The AI key was rejected. Check the key in .env." (bad key), "The AI is busy right now. Try again in a minute." (rate limit), or "The AI didn't respond. Try again.". The message follows the first provider tried.
+- Quality and the no-invention behaviour can differ by provider, so run the live test for each one you set a key for (it runs once per key present and skips the rest): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`.
+
+Describe splits a spoken narrative ("I browned the mince, added an onion, simmered for an hour...") into separate steps in your own words, without adding any detail you didn't say; steps you already list are kept exactly. If you give no dish name it picks a plain title from what you said and flags it in "Check these" ("title chosen from your description").
+
+## Installing as an app
+
+The site is an installable PWA (manifest plus a small service worker that only caches the page shell, built assets and recipe photos, never other API calls). On a phone open the site and use "Add to Home Screen" / "Install app". Icons are generated from `web/public/icon.svg` by `npm run icons`.
+
+## Release history
+
+### Previous release: shopping list and step slides
 
 Before upgrading:
 
@@ -83,23 +130,3 @@ Checks after deploying:
 3. Press "Back up now" and confirm step photos appear in the Drive images folder.
 4. Do a restore drill (see above). Note it restores the newest snapshot by default and replaces the live database, so only do it when you are happy to go back to that backup.
 5. Run the live AI test once per provider key you have (see AI providers below): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real APIs, and the AI step-link schema changed.
-
-## AI providers
-
-"Describe a recipe" and the page-reading fallback in import can use Claude, ChatGPT (OpenAI) or Gemini. Set any one or more of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY` in `.env` (models are `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`; the defaults in `.env.example` are cheap ones and can be changed), then restart.
-
-- The first provider with a key is used, in the order Claude, ChatGPT, Gemini. Set `AI_PROVIDER=anthropic|openai|gemini` to try a different one first. An unknown value is ignored with a warning in the log.
-- Fallback: if the provider fails because of the provider (key rejected, no credit, rate limit, overloaded or down, timeout) the next provider with a key is tried. A refusal, a recipe that is still invalid after the one retry, or a request error of our own is shown rather than passed on.
-- If a later provider fails with something that is not a provider failure (a refusal, invalid output after the retry, or a request error of our own), that is the error you see. Only when every provider fails with a provider failure is the first provider's code reported.
-- One overall time limit (`AI_TOTAL_TIMEOUT_MS`, default 100000 ms, minimum 10000) covers the whole request across providers and retries, so a slow provider cannot run past a proxy's timeout. Once less than 15 seconds remain, no further provider or retry is started and the message is "The AI didn't respond. Try again.".
-- `OPENAI_REASONING_EFFORT` (default `low`; none, minimal, low, medium, high, xhigh, max) and `GEMINI_THINKING_LEVEL` (default `low`; minimal, low, medium, high) keep reasoning cheap and fast. The values are model-specific and an unsupported one is a 400 error, shown as "AI request failed". If you change `OPENAI_MODEL` to a model without reasoning, set `OPENAI_REASONING_EFFORT=default`; for a Gemini model older than 3 set `GEMINI_THINKING_LEVEL=default` (empty or `default` means the field is not sent).
-- A wrong model name (HTTP 404) is reported as "The AI model name isn't available. Check the model setting in .env." and the next provider is tried.
-- Settings shows which providers have a key and which is in use (never the keys). Drafts say "Drafted by ..." above the form; that is never saved with the recipe.
-- If every provider fails, the page shows a plain message: "The AI account is out of credit. Add credit or switch provider." (no credit), "The AI key was rejected. Check the key in .env." (bad key), "The AI is busy right now. Try again in a minute." (rate limit), or "The AI didn't respond. Try again.". The message follows the first provider tried.
-- Quality and the no-invention behaviour can differ by provider, so run the live test for each one you set a key for (it runs once per key present and skips the rest): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`.
-
-Describe splits a spoken narrative ("I browned the mince, added an onion, simmered for an hour...") into separate steps in your own words, without adding any detail you didn't say; steps you already list are kept exactly. If you give no dish name it picks a plain title from what you said and flags it in "Check these" ("title chosen from your description").
-
-## Installing as an app
-
-The site is an installable PWA (manifest plus a small service worker that only caches the page shell, built assets and recipe photos, never other API calls). On a phone open the site and use "Add to Home Screen" / "Install app". Icons are generated from `web/public/icon.svg` by `npm run icons`.

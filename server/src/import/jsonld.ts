@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { splitAmount } from '../recipes/amount.js';
+import { normaliseTags, type Tag, type TagGroup } from '../recipes/categories.js';
 import { linkIngredients } from '../recipes/links.js';
 import type { RecipeInput } from '../recipes/schema.js';
 
@@ -101,22 +102,36 @@ function asList(v: Json): string[] {
   return [];
 }
 
-export function parseRecipeJsonLd(html: string): RecipeInput | null {
+/** Who the page credits with the recipe; `organization` tells a publisher from a person. */
+export type LdAuthor = { name: string; organization: boolean };
+
+function authorOf(v: Json): LdAuthor | null {
+  const first = Array.isArray(v) ? v[0] : v;
+  if (typeof first === 'string') return clean(first) ? { name: clean(first), organization: false } : null;
+  if (!isObj(first)) return null;
+  const name = clean(first.name);
+  return name ? { name, organization: hasType(first, 'Organization') } : null;
+}
+
+export function parseRecipeJsonLd(html: string): (RecipeInput & { author: LdAuthor | null }) | null {
   const r = findRecipe(html);
   if (!r) return null;
   const ingredients = (Array.isArray(r.recipeIngredient) ? r.recipeIngredient : [])
     .map(clean)
     .filter(Boolean)
     .map((line) => ({ group: null, ...splitAmount(line) }));
-  const tags: string[] = [];
-  for (const t of [...asList(r.recipeCategory), ...asList(r.recipeCuisine), ...asList(r.keywords)]) {
-    const tag = clean(t).toLowerCase();
-    if (tag && !tags.includes(tag)) tags.push(tag);
-  }
+  const tags: Tag[] = [];
+  const add = (group: TagGroup, v: Json) => {
+    for (const t of asList(v)) tags.push({ group, name: clean(t) });
+  };
+  add('meal', r.recipeCategory);
+  add('cuisine', r.recipeCuisine);
+  add('other', r.keywords);
   return {
     title: clean(r.name),
     description: clean(r.description) || null,
     origin: 'other',
+    brand: null,
     sourceName: null,
     sourceUrl: null,
     servings: parseServings(r.recipeYield),
@@ -126,8 +141,9 @@ export function parseRecipeJsonLd(html: string): RecipeInput | null {
     // The photos themselves are downloaded by the importer, which fills the ids in; see stepImageUrls.
     steps: stepsOf(r).map(({ text }) => ({ text, imageId: null, ingredients: linkIngredients(text, ingredients) })),
     notes: null,
-    tags: tags.slice(0, 8),
+    tags: normaliseTags(tags).slice(0, 8),
     imageIds: [],
+    author: authorOf(r.author),
   };
 }
 

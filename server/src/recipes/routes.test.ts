@@ -68,7 +68,35 @@ describe('recipe routes', () => {
     expect(mine).toHaveLength(1);
     expect(mine[0].title).toBe('Toast');
     expect((await app.inject({ url: '/api/recipes?origin=bogus' })).statusCode).toBe(400);
-    expect((await app.inject({ url: '/api/tags' })).json()).toEqual(['quick', 'x']);
+    expect((await app.inject({ url: '/api/tags' })).json()).toEqual({
+      brands: [{ name: 'Mine', count: 1 }],
+      tags: [{ group: 'other', name: 'quick', count: 1 }, { group: 'other', name: 'x', count: 1 }],
+    });
+  });
+
+  describe('brand and tag filters', () => {
+    const post = (app: ReturnType<typeof make>, title: string, brand: string | null, tags: unknown[]) =>
+      app.inject({ method: 'POST', url: '/api/recipes', payload: { ...base, title, brand, origin: 'other', tags } });
+
+    it('rejects an invalid tag key and passes repeated brands', async () => {
+      const app = make();
+      await post(app, 'A', 'Gousto', []);
+      await post(app, 'B', 'HelloFresh', []);
+      await post(app, 'C', 'Simply Cook', []);
+      expect((await app.inject({ url: '/api/recipes?tag=bogus' })).statusCode).toBe(400);
+      const both = (await app.inject({ url: '/api/recipes?brand=Gousto&brand=HelloFresh' })).json();
+      expect(both.map((r: { title: string }) => r.title).sort()).toEqual(['A', 'B']);
+      const one = (await app.inject({ url: '/api/recipes?brand=Gousto' })).json();
+      expect(one.map((r: { title: string }) => r.title)).toEqual(['A']);
+    });
+
+    it('finds a tag with a colon in its name, splitting on the first colon', async () => {
+      const app = make();
+      await post(app, 'Spicy', null, [{ group: 'other', name: 'Middle Eastern: spicy' }]);
+      await post(app, 'Plain', null, []);
+      const res = await app.inject({ url: '/api/recipes?tag=other:Middle%20Eastern%3A%20spicy' });
+      expect(res.json().map((r: { title: string }) => r.title)).toEqual(['Spicy']);
+    });
   });
 
   describe('steps', () => {

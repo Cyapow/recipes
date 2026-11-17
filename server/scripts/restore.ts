@@ -98,6 +98,10 @@ function check(file: string, migrationsDir: string | undefined): Checked {
         `schema version ${version} is newer than this app supports (${latest}); upgrade the app before restoring it`,
       );
     }
+    const badTags = db.prepare('SELECT COUNT(*) AS n FROM recipes WHERE tags_json IS NOT NULL AND NOT json_valid(tags_json)').get() as { n: number };
+    if (badTags.n > 0) {
+      throw new RestoreError(`${badTags.n} recipe(s) in this snapshot have unreadable tags_json; refusing to restore it`);
+    }
     const rows = db.prepare('SELECT image_ids_json, ingredients_json, steps_json FROM recipes').all() as {
       image_ids_json: string;
       ingredients_json: string;

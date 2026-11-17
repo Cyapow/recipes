@@ -47,4 +47,20 @@ export function registerImageRoutes(app: FastifyInstance, store: ImageStore) {
     const full = store.path(req.params.id);
     return serve(full && path.join(store.dir, `thumb-${req.params.id}`), reply);
   });
+
+  app.post<{ Params: { id: string } }>('/api/images/:id/crop', async (req, reply) => {
+    if (!IMAGE_ID_RE.test(req.params.id)) return reply.code(400).send({ error: 'Invalid image id' });
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const nums = [b.x0, b.y0, b.x1, b.y1];
+    if (!nums.every((n) => typeof n === 'number' && Number.isFinite(n))) return reply.code(400).send({ error: 'x0, y0, x1 and y1 are required numbers' });
+    if (!store.path(req.params.id)) return reply.code(404).send({ error: 'Not found' });
+    let id: string | null;
+    try {
+      id = await store.crop(req.params.id, { x0: b.x0 as number, y0: b.y0 as number, x1: b.x1 as number, y1: b.y1 as number });
+    } catch {
+      return reply.code(422).send({ error: 'Could not crop this image' });
+    }
+    if (!id) return reply.code(422).send({ error: 'The crop is too small' });
+    return { id };
+  });
 }

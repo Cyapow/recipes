@@ -175,6 +175,15 @@ describe('restoreFromDirectory', () => {
     expect(existsSync(dataDir)).toBe(false);
   });
 
+  it('rejects a snapshot with unreadable tags_json, naming the problem, and leaves dataDir untouched', async () => {
+    const f = path.join(snapDir(), readdirSync(snapDir()).find((n) => n.endsWith('.sqlite'))!);
+    const d = new Database(f);
+    d.prepare("UPDATE recipes SET tags_json = 'not json' WHERE id = (SELECT id FROM recipes LIMIT 1)").run();
+    d.close();
+    await expect(restoreFromDirectory(backupDir, dataDir)).rejects.toThrow(/tags_json/);
+    expect(existsSync(dataDir)).toBe(false);
+  });
+
   it('rejects a database without a recipes table', async () => {
     const f = path.join(snapDir(), 'recipes-20260301-030000.sqlite');
     const d = new Database(f);
@@ -280,6 +289,8 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
   it('restores a snapshot from before the shopping migration and openDb migrates it', async () => {
     withSnapshot((d) => {
       d.exec('DROP TABLE shopping_items; DROP TABLE IF EXISTS ingredient_packs; DROP TABLE IF EXISTS ingredient_info; DROP TABLE IF EXISTS shops; DROP TABLE IF EXISTS ingredient_prices');
+      // Back to the 001 recipes shape too: migration 007 adds brand and rewrites tags.
+      d.exec("ALTER TABLE recipes DROP COLUMN brand; UPDATE recipes SET tags_json = '[]'");
       d.pragma('user_version = 1');
     });
     await restoreFromDirectory(backupDir, dataDir);

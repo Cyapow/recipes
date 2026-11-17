@@ -69,7 +69,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     images,
   };
   registerAiRoutes(app, ai, deps.config, web);
-  registerImportRoutes(app, { ...web, ai });
+  registerImportRoutes(app, { ...web, ai, brandForHost: (host) => recipeRepo.brandForHost(host) });
 
   const google = deps.google ?? createGoogleAuth(deps.config, path.join(deps.config.dataDir, 'google-token.json'));
   const service = createBackupService({

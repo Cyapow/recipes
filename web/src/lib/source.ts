@@ -1,8 +1,7 @@
+import { VIDEO_HOSTS } from '../../../server/src/import/videoHosts';
+
 /** Where an imported recipe came from, ready to put on screen. Null when there is nothing safe to link to. */
 export type SourceLink = { href: string; host: string; label: string; video: boolean };
-
-// Posts on these sites are a video with the recipe in the caption: the page is worth watching, not reading.
-const VIDEO_HOSTS = ['facebook.com', 'instagram.com', 'tiktok.com', 'youtube.com', 'youtu.be'];
 
 export function sourceLink(r: { sourceUrl: string | null; sourceName: string | null }): SourceLink | null {
   if (!r.sourceUrl) return null;

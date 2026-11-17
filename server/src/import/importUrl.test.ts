@@ -186,3 +186,43 @@ describe('a page that renders in the browser', () => {
     expect(sent.text).toContain('Fry an onion, add stock and simmer for 20 minutes.');
   });
 });
+
+describe('importFromUrl brand', () => {
+  const recipeLd = (author?: object) =>
+    `<script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', name: 'R', recipeIngredient: ['1 egg'], recipeInstructions: ['Cook.'], ...(author ? { author } : {}) })}</script>`;
+  const run = (html: string, url: string, brandForHost?: (h: string) => string | null) =>
+    importFromUrl(url, { fetchPage: async () => ({ html, finalUrl: url }), fetchBytes: img().fetchBytes, ai: undefined, images: images(), brandForHost });
+  const site = (name: string) => `<meta property="og:site_name" content="${name}">`;
+  const jane = { '@type': 'Person', name: 'Jane Cook' };
+
+  it('uses the page site name, then what the library already calls the host', async () => {
+    const html = site('BBC Good Food') + recipeLd(jane);
+    expect((await run(html, 'https://www.bbcgoodfood.com/r')).draft).toMatchObject({ brand: 'BBC Good Food', sourceName: 'BBC Good Food', origin: 'other' });
+    const lookup = vi.fn(() => 'bbcgoodfood.com');
+    expect((await run(html, 'https://www.bbcgoodfood.com/r', lookup)).draft.brand).toBe('bbcgoodfood.com');
+    expect(lookup).toHaveBeenCalledWith('bbcgoodfood.com');
+  });
+  it('falls back to an organisation author, then the host', async () => {
+    expect((await run(recipeLd({ '@type': 'Organization', name: 'Pub Co' }), 'https://a.test/r')).draft.brand).toBe('Pub Co');
+    expect((await run(recipeLd(jane), 'https://www.a.test/r')).draft.brand).toBe('a.test');
+  });
+  it('credits a video post to its creator, else the platform, ignoring the site name', async () => {
+    const withAuthor = site('Instagram') + recipeLd({ '@type': 'Person', name: 'Pasta Queen' });
+    expect((await run(withAuthor, 'https://www.instagram.com/reel/1/')).draft).toMatchObject({ brand: 'Pasta Queen', sourceName: 'Pasta Queen' });
+    expect((await run(recipeLd(), 'https://www.instagram.com/reel/1/')).draft.brand).toBe('Instagram');
+    expect((await run(`<meta name="author" content="Cook Dave">${recipeLd()}`, 'https://www.tiktok.com/@a/video/1')).draft.brand).toBe('Cook Dave');
+    expect((await run(recipeLd(), 'https://youtu.be/x')).draft.brand).toBe('YouTube');
+    const lookup = vi.fn(() => 'nope');
+    await run(recipeLd(), 'https://www.facebook.com/reel/1', lookup);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+  it('only an exact canonical match changes a known brand', async () => {
+    expect((await run(site('HelloFresh UK') + recipeLd(), 'https://hf.test/r')).draft.brand).toBe('HelloFresh UK');
+    expect((await run(site('hello fresh') + recipeLd(), 'https://hf.test/r')).draft.brand).toBe('HelloFresh');
+  });
+  it('the AI path gets the page brand too', async () => {
+    const r = await importFromUrl('https://x.test/p', { fetchPage: async () => ({ html: `${site('X Site')}<main>Soup recipe with onions and more words</main>`, finalUrl: 'https://x.test/p' }), fetchBytes: img().fetchBytes, ai: fakeAi(), images: images() });
+    expect(r.usedAi).toBe(true);
+    expect(r.draft).toMatchObject({ brand: 'X Site', sourceName: 'X Site' });
+  });
+});

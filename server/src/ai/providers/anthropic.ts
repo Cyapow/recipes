@@ -12,7 +12,12 @@ function toMessages(messages: ProviderMessage[]): Msg[] {
   const out: Msg[] = [];
   for (const m of messages) {
     if (m.role === 'user') {
-      out.push({ role: 'user', content: m.text });
+      out.push({
+        role: 'user',
+        content: m.images?.length
+          ? [...m.images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.base64 } })), { type: 'text' as const, text: m.text }]
+          : m.text,
+      });
       continue;
     }
     const content = m.raw as Anthropic.ContentBlock[];

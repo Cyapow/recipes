@@ -1,19 +1,30 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { parseTagKey, type Tag } from './categories.js';
 import { RecipeInputSchema } from './schema.js';
 import type { createRecipeRepo } from './repo.js';
+
+const many = z.union([z.string(), z.array(z.string())]).optional();
+const arr = (v: string | string[] | undefined) => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
 const ListQuerySchema = z.object({
   search: z.string().optional(),
   origin: z.enum(['mine', 'other']).optional(),
-  tag: z.string().optional(),
+  brand: many,
+  tag: many,
 });
 
 export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<typeof createRecipeRepo>) {
   app.get('/api/recipes', async (req, reply) => {
     const q = ListQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'Invalid query', issues: q.error.issues });
-    return repo.list(q.data);
+    const tags: Tag[] = [];
+    for (const key of arr(q.data.tag)) {
+      const t = parseTagKey(key);
+      if (!t) return reply.code(400).send({ error: `Invalid tag: ${key}` });
+      tags.push(t);
+    }
+    return repo.list({ search: q.data.search, origin: q.data.origin, brands: arr(q.data.brand), tags });
   });
 
   app.get<{ Params: { id: string } }>('/api/recipes/:id', async (req, reply) => {
@@ -40,5 +51,5 @@ export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<type
       : reply.code(404).send({ error: 'Not found' });
   });
 
-  app.get('/api/tags', async () => repo.tags());
+  app.get('/api/tags', async () => repo.facets());
 }

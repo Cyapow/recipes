@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { IMAGE_ID_RE } from '../images/ids.js';
+import { canonicalBrand, normaliseTags, originForBrand, TAG_GROUPS, type Tag } from './categories.js';
+
+export const TagSchema = z.object({
+  group: z.enum(TAG_GROUPS.map((g) => g.id) as [Tag['group'], ...Tag['group'][]]),
+  name: z.string(),
+});
 
 export const IngredientSchema = z.object({
   group: z.string().nullable(),
@@ -49,6 +55,7 @@ export const RecipeCoreSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable(),
   origin: z.enum(['mine', 'other']),
+  brand: z.string().nullable(),
   sourceName: z.string().nullable(),
   sourceUrl: z.string().nullable(),
   servings: z.number().nullable(),
@@ -57,7 +64,7 @@ export const RecipeCoreSchema = z.object({
   ingredients: z.array(IngredientSchema),
   steps: z.array(StepSchema),
   notes: z.string().nullable(),
-  tags: z.array(z.string()),
+  tags: z.array(TagSchema),
   imageIds: z.array(z.string()),
 });
 
@@ -68,6 +75,8 @@ const MAX_STEP_CHARS = 5000;
 /** Request body: steps may be legacy strings or Steps; output always has Step[]. */
 export const RecipeInputSchema = RecipeCoreSchema.extend({
   steps: z.array(z.union([z.string(), StepSchema])).max(MAX_STEPS),
+  tags: z.array(z.union([z.string(), TagSchema])),
+  brand: z.string().nullable().optional(),
 })
   .superRefine((r, ctx) => {
     r.steps.forEach((s, i) => {
@@ -91,7 +100,17 @@ export const RecipeInputSchema = RecipeCoreSchema.extend({
       });
     });
   })
-  .transform((r) => ({ ...r, steps: normaliseSteps(r.steps, r.ingredients.length) }));
+  .transform((r) => {
+    // "brand present" means the key was submitted (even as null); otherwise it follows origin.
+    const brand = 'brand' in r ? canonicalBrand(r.brand) : r.origin === 'mine' ? 'Mine' : null;
+    return {
+      ...r,
+      brand,
+      origin: 'brand' in r ? originForBrand(brand) : r.origin,
+      steps: normaliseSteps(r.steps, r.ingredients.length),
+      tags: normaliseTags(r.tags),
+    };
+  });
 export type RecipeInput = z.infer<typeof RecipeInputSchema>;
 
 export const RecipeSchema = RecipeCoreSchema.extend({
@@ -111,8 +130,9 @@ export type RecipeSummary = {
   id: string;
   title: string;
   origin: 'mine' | 'other';
+  brand: string | null;
   sourceName: string | null;
-  tags: string[];
+  tags: Tag[];
   thumbnailId: string | null;
   totalMinutes: number | null;
 };

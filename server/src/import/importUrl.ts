@@ -2,7 +2,9 @@ import * as cheerio from 'cheerio';
 import { AiRequestError, type AiClient, type ProviderErrorCode, type ProviderName } from '../ai/client.js';
 import type { ImageStore } from '../images/store.js';
 import type { RecipeDraft, RecipeInput } from '../recipes/schema.js';
-import { findImageUrl, parseRecipeJsonLd, stepImageUrls } from './jsonld.js';
+import { canonicalBrand } from '../recipes/categories.js';
+import { findImageUrl, parseRecipeJsonLd, stepImageUrls, type LdAuthor } from './jsonld.js';
+import { PLATFORM_LABELS, videoHostOf } from './videoHosts.js';
 
 export const MAX_PAGE_TEXT_CHARS = 20_000;
 const STEP_IMAGE_CONCURRENCY = 4;
@@ -12,6 +14,8 @@ export type ImportDeps = {
   fetchBytes: (url: string) => Promise<{ bytes: Buffer; contentType: string; finalUrl: string }>;
   ai?: AiClient;
   images: ImageStore;
+  /** The brand the library already uses for recipes from this host (www stripped), if any. */
+  brandForHost?: (host: string) => string | null;
 };
 
 export type ImportResult = {
@@ -66,6 +70,24 @@ const hostName = (u: string) => {
   }
 };
 
+const metaContent = (html: string, selector: string): string | null =>
+  cheerio.load(html)(selector).first().attr('content')?.replace(/\s+/g, ' ').trim() || null;
+
+/**
+ * The brand a link import is filed under. A video post is credited to its creator (never the site name, which is
+ * just the platform), falling back to the platform. Any other page uses the brand the library already has for
+ * that host, else the page's own site name, else a publisher credited as author, else the host.
+ */
+export function importBrand(html: string, finalUrl: string, ld: { author: LdAuthor | null } | null, deps: Pick<ImportDeps, 'brandForHost'>): string | null {
+  const host = hostName(finalUrl).toLowerCase();
+  const video = videoHostOf(host);
+  if (video) {
+    return canonicalBrand(ld?.author?.name ?? metaContent(html, 'meta[name="author"]') ?? PLATFORM_LABELS[video]);
+  }
+  const author = ld?.author?.organization ? ld.author.name : null;
+  return canonicalBrand(deps.brandForHost?.(host) ?? metaContent(html, 'meta[property="og:site_name"]') ?? author ?? host);
+}
+
 /** Save one image and return its id, or null if anything about it fails: a missing photo must never fail an import. */
 async function saveImage(url: string, deps: ImportDeps): Promise<string | null> {
   try {
@@ -102,16 +124,19 @@ async function downloadStepImages(steps: RecipeInput['steps'], urls: (string | n
 
 export async function importFromUrl(url: string, deps: ImportDeps): Promise<ImportResult> {
   const { html, finalUrl } = await deps.fetchPage(url);
-  const sourceName = hostName(finalUrl);
-  const source = { origin: 'other' as const, sourceUrl: finalUrl, sourceName };
-
+  const host = hostName(finalUrl);
   const ld = parseRecipeJsonLd(html);
+  const brand = importBrand(html, finalUrl, ld, deps);
+  const sourceName = brand ?? host;
+  const source = { origin: 'other' as const, brand, sourceUrl: finalUrl, sourceName };
+
   if (ld && (ld.ingredients.length > 0 || ld.steps.length > 0)) {
     const [imageIds, steps] = await Promise.all([
       downloadImage(html, finalUrl, deps),
       downloadStepImages(ld.steps, stepImageUrls(html, finalUrl), deps),
     ]);
-    return { draft: { ...ld, ...source, steps, imageIds, gaps: [] }, usedAi: false, usable: true };
+    const { author: _author, ...recipe } = ld;
+    return { draft: { ...recipe, ...source, steps, imageIds, gaps: [] }, usedAi: false, usable: true };
   }
 
   // A page whose body renders in the browser gives no visible text; its metadata may still hold the whole recipe.
@@ -121,7 +146,8 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
   let aiError: ImportResult['aiError'];
   if (deps.ai && text !== '') {
     try {
-      const { draft: ai, provider, model } = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
+      const { draft: aiWithPhoto, provider, model } = await deps.ai.extractRecipe({ kind: 'page', text, sourceUrl: finalUrl });
+      const { dishPhoto: _dishPhoto, ...ai } = aiWithPhoto;
       if (ai.ingredients.length > 0 || ai.steps.length > 0) {
         const imageIds = await downloadImage(html, finalUrl, deps);
         return { draft: { ...ai, ...source, imageIds }, usedAi: true, usable: true, provider, model };
@@ -134,7 +160,7 @@ export async function importFromUrl(url: string, deps: ImportDeps): Promise<Impo
 
   // The editor needs a draft that passes RecipeInputSchema (title is required), so the hostname stands in as the title.
   const empty: RecipeDraft = {
-    title: sourceName, description: null, ...source, servings: null, prepMinutes: null, cookMinutes: null,
+    title: host, description: null, ...source, servings: null, prepMinutes: null, cookMinutes: null,
     ingredients: [], steps: [], notes: null, tags: [], imageIds: [], gaps: [],
   };
   return { draft: empty, usedAi: false, usable: false, ...(aiError ? { aiError } : {}) };

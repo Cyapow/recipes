@@ -13,7 +13,7 @@ vi.mock('../api', async () => {
 import { getRecipe } from '../api';
 
 const base: Recipe = {
-  id: 'a', title: 'Spag bol', description: 'Better the next day.', origin: 'mine', sourceName: null, sourceUrl: null,
+  id: 'a', title: 'Spag bol', description: 'Better the next day.', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 4, prepMinutes: 10, cookMinutes: 40,
   ingredients: [
     { group: null, quantity: 500, unit: 'g', item: 'beef mince', note: null },
@@ -89,6 +89,16 @@ describe('the printable card', () => {
   it('credits the site an imported recipe came from', async () => {
     show({ origin: 'other', sourceName: 'slowcookerclub.com', sourceUrl: 'https://www.slowcookerclub.com/chilli/' });
     expect(await screen.findByText('From slowcookerclub.com')).toBeTruthy();
+  });
+
+  it('credits the brand of a recipe with no source', async () => {
+    show({ origin: 'other', brand: 'Gousto', sourceName: null, sourceUrl: null });
+    expect(await screen.findByText('From Gousto')).toBeTruthy();
+  });
+
+  it('calls a Mine recipe with no source "My recipe"', async () => {
+    show();
+    expect(await screen.findByText('My recipe')).toBeTruthy();
   });
 
   it('opens the print dialog when you ask it to', async () => {

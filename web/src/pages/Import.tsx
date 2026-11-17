@@ -5,6 +5,7 @@ import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
+import { useFacets } from '../lib/useFacets';
 
 const hostOf = (u: string) => {
   try {
@@ -18,13 +19,14 @@ const hostOf = (u: string) => {
 function emptyDraft(url: string): ImportResult['draft'] {
   const host = hostOf(url);
   return {
-    title: host, description: null, origin: 'other', sourceName: host, sourceUrl: url,
+    title: host, description: null, origin: 'other', brand: null, sourceName: host, sourceUrl: url,
     servings: null, prepMinutes: null, cookMinutes: null,
     ingredients: [], steps: [], notes: null, tags: [], imageIds: [], gaps: [],
   };
 }
 
 export function Import() {
+  const facets = useFacets();
   const nav = useNavigate();
   const kept = useDraft('import');
   const resumed = kept.existing;
@@ -120,7 +122,7 @@ export function Import() {
       {result?.value.usable && draftedBy(result.value.provider) && <p className="hint">{draftedBy(result.value.provider)}</p>}
       {result && !fetchFailed && !result.value.usable && !result.value.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
-        <RecipeForm key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
+        <RecipeForm facets={facets} key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
       )}
     </main>
   );

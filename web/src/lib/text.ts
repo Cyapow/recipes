@@ -41,8 +41,8 @@ export function formatMinutes(total: number | null | undefined): string | null {
   return [h ? `${h}h` : null, m ? `${m}m` : null].filter(Boolean).join(' ');
 }
 
-export function originLabel(r: { origin: 'mine' | 'other'; sourceName: string | null }): string {
-  return r.origin === 'mine' ? 'Mine' : (r.sourceName ?? 'From elsewhere');
+export function originLabel(r: { brand: string | null; origin: 'mine' | 'other' }): string {
+  return r.brand ?? (r.origin === 'mine' ? 'Mine' : 'From elsewhere');
 }
 
 /**

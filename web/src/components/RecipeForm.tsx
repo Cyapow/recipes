@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { uploadImage } from '../api';
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { cropImage, uploadImage, type Box1000, type Facets } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { canonicalUnit } from '../../../server/src/recipes/amount';
 import { IngredientRows } from './IngredientRows';
+import { KNOWN_BRANDS, TAG_GROUPS, canonicalBrand, normaliseTags, originForBrand, type TagGroup } from '../../../server/src/recipes/categories';
 import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
+import { CropDialog } from './CropDialog';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
@@ -15,6 +17,12 @@ export type RecipeFormProps = {
   saving?: boolean;
   /** Called (debounced) with the form's current contents after the user changes something, so a draft can be kept. */
   onChange?(input: RecipeInput): void;
+  /** Brands and tags already in use; offered as suggestions only. */
+  facets?: Facets;
+  /** From a photos draft: the card photo the dish picture was cut from, and the box used. Offers Adjust / Use whole photo on the first photo. */
+  dishCrop?: ({ sourceImageId: string } & Box1000) | null;
+  /** Called when the dish crop changes: the new box after Adjust, null once the crop photo is replaced or removed. */
+  onDishCropChange?(crop: ({ sourceImageId: string } & Box1000) | null): void;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -25,10 +33,14 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange }: RecipeFormProps) {
+  const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
-  const [origin, setOrigin] = useState(initial.origin);
+  const [brand, setBrand] = useState(
+    // A draft kept from before brands existed has no brand key: seed it the way migration 007 does.
+    initial.brand !== undefined ? (initial.brand ?? '') : initial.origin === 'mine' ? 'Mine' : (canonicalBrand(initial.sourceName) ?? ''),
+  );
   const [sourceName, setSourceName] = useState(initial.sourceName ?? '');
   const [sourceUrl, setSourceUrl] = useState(initial.sourceUrl ?? '');
   const [servings, setServings] = useState(initial.servings?.toString() ?? '');
@@ -38,11 +50,49 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [stepsBusy, setStepsBusy] = useState(false);
   const [notes, setNotes] = useState(initial.notes ?? '');
-  const [tags, setTags] = useState(initial.tags.join(', '));
+  const [tags, setTags] = useState<Record<TagGroup, string>>(() => {
+    const out: Record<TagGroup, string> = { cuisine: '', meal: '', main: '', other: '' };
+    const all = normaliseTags(initial.tags);
+    for (const g of TAG_GROUPS) out[g.id] = all.filter((t) => t.group === g.id).map((t) => t.name).join(', ');
+    return out;
+  });
   const [error, setError] = useState<string | null>(null);
   const [imageIds, setImageIds] = useState(initial.imageIds);
   const [pending, setPending] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [cropBox, setCropBox] = useState<Box1000 | null>(dishCrop ? { x0: dishCrop.x0, y0: dishCrop.y0, x1: dishCrop.x1, y1: dishCrop.y1 } : null);
+  const [adjusting, setAdjusting] = useState(false);
+  // The id of the crop made for this draft; the actions apply only while it is still the first photo.
+  const sourceId = dishCrop?.sourceImageId;
+  const [cropId, setCropId] = useState<string | null>(
+    dishCrop && initial.imageIds[0] !== undefined && initial.imageIds[0] !== dishCrop.sourceImageId ? initial.imageIds[0] : null,
+  );
+  const cropIsFirst = !!sourceId && !!cropBox && cropId !== null && imageIds[0] === cropId;
+
+  function useWholePhoto() {
+    if (!sourceId) return;
+    setCropId(null);
+    onDishCropChange?.(null);
+    setImageIds((ids) => [sourceId, ...ids.slice(1).filter((x) => x !== sourceId)]);
+  }
+
+  async function saveAdjusted(box: Box1000) {
+    if (!sourceId) return;
+    setAdjusting(false);
+    setUploadError(null);
+    setPending((n) => n + 1);
+    try {
+      const id = await cropImage(sourceId, box);
+      setCropBox(box);
+      setCropId(id);
+      onDishCropChange?.({ sourceImageId: sourceId, ...box });
+      setImageIds((ids) => [id, ...ids.slice(1).filter((x) => x !== id)]);
+    } catch (err) {
+      setUploadError(`Could not crop the photo: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setPending((n) => n - 1);
+    }
+  }
 
   async function onPick(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -73,11 +123,12 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
     const parsedIngredients = ingredients
       .map((i) => ({ ...i, item: i.item.trim(), unit: canonicalUnit(i.unit) }))
       .filter((i) => i.item !== '');
+    const brandValue = str(brand);
     return {
       ...initial,
       title: title.trim(),
       description: str(description),
-      origin,
+      origin: originForBrand(brandValue),
       sourceName: str(sourceName),
       sourceUrl: str(sourceUrl),
       servings: num(servings),
@@ -92,7 +143,8 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
         }))
         .filter((st) => st.text !== '' || st.imageId !== null || st.ingredients.length > 0),
       notes: str(notes),
-      tags: parseTags(tags),
+      tags: normaliseTags(TAG_GROUPS.flatMap((g) => parseTags(tags[g.id]).map((name) => ({ group: g.id, name })))),
+      brand: brandValue,
       imageIds,
     };
   }
@@ -113,7 +165,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
     if (!onChangeRef.current) return;
     const t = setTimeout(() => onChangeRef.current?.(latest.current()), 400);
     return () => clearTimeout(t);
-  }, [title, description, origin, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
+  }, [title, description, brand, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
   useEffect(
     () => () => {
       if (touched.current) onChangeRef.current?.(latest.current());
@@ -163,11 +215,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
           <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
         <label>
-          Origin
-          <select value={origin} onChange={(e) => setOrigin(e.target.value as 'mine' | 'other')}>
-            <option value="mine">Mine</option>
-            <option value="other">From elsewhere</option>
-          </select>
+          Brand
+          <input list={`${listId}-brand`} value={brand} onChange={(e) => setBrand(e.target.value)} />
+          <datalist id={`${listId}-brand`}>
+            {[...new Set([...KNOWN_BRANDS, ...(facets?.brands.map((b) => b.name) ?? [])])].map((b) => (
+              <option key={b} value={b} />
+            ))}
+          </datalist>
         </label>
         <label>
           Source name
@@ -203,11 +257,24 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
           Notes
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
-        <div className="field">
-          <label htmlFor="f-tags">Tags</label>
-          <input id="f-tags" aria-describedby="h-tags" value={tags} onChange={(e) => setTags(e.target.value)} />
-          <small id="h-tags">Comma-separated.</small>
-        </div>
+        {TAG_GROUPS.map((g) => (
+          <div className="field" key={g.id}>
+            <label htmlFor={`${listId}-${g.id}`}>{g.label}</label>
+            <input
+              id={`${listId}-${g.id}`}
+              list={`${listId}-${g.id}-list`}
+              aria-describedby={`${listId}-tags-hint`}
+              value={tags[g.id]}
+              onChange={(e) => setTags((cur) => ({ ...cur, [g.id]: e.target.value }))}
+            />
+            <datalist id={`${listId}-${g.id}-list`}>
+              {(facets?.tags ?? []).filter((t) => t.group === g.id).map((t) => (
+                <option key={t.name} value={t.name} />
+              ))}
+            </datalist>
+          </div>
+        ))}
+        <small id={`${listId}-tags-hint`}>Tags are comma-separated.</small>
         <div className="field photos">
           <label htmlFor="f-photos">Add photos</label>
           <input id="f-photos" type="file" accept="image/*" multiple onChange={onPick} />
@@ -225,7 +292,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
                   <button
                     type="button"
                     aria-label={`Remove photo ${i + 1}`}
-                    onClick={() => setImageIds((ids) => ids.filter((x) => x !== imgId))}
+                    onClick={() => {
+                      if (imgId === cropId) {
+                        setCropId(null);
+                        onDishCropChange?.(null);
+                      }
+                      setImageIds((ids) => ids.filter((x) => x !== imgId));
+                    }}
                   >
                     Remove
                   </button>
@@ -233,11 +306,20 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange }: 
               ))}
             </ul>
           )}
+          {cropIsFirst && (
+            <div className="photo-actions">
+              <button type="button" onClick={() => setAdjusting(true)}>Adjust</button>
+              <button type="button" onClick={useWholePhoto}>Use whole photo</button>
+            </div>
+          )}
         </div>
         <button type="submit" className="primary" disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </form>
+      {adjusting && sourceId && cropBox && (
+        <CropDialog imageId={sourceId} box={cropBox} onSave={saveAdjusted} onCancel={() => setAdjusting(false)} />
+      )}
     </>
   );
 }

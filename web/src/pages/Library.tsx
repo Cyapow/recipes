@@ -1,28 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getBackupStatus, listRecipes, listTags, type BackupStatus, type RecipeSummary } from '../api';
+import { getBackupStatus, listRecipes, getFacets, type BackupStatus, type Facets, type RecipeSummary } from '../api';
+import { tagKey, type Tag } from '../../../server/src/recipes/categories';
+import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { BackupBanner } from '../components/BackupBanner';
-import { CartIcon, ChevronIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { formatMinutes, originLabel } from '../lib/text';
 import { monogram, monogramColors } from '../lib/monogram';
 import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
 
-type Origin = 'mine' | 'other' | undefined;
-const CHIPS: { label: string; origin: Origin }[] = [
-  { label: 'All', origin: undefined },
-  { label: 'Mine', origin: 'mine' },
-  { label: 'From elsewhere', origin: 'other' },
-];
+const STORAGE_KEY = 'recipes.libraryFilters';
+
+function isTag(t: unknown): t is Tag {
+  return !!t && typeof t === 'object' && typeof (t as Tag).group === 'string' && typeof (t as Tag).name === 'string';
+}
+
+function loadFilters(): Filters {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null');
+    if (raw && Array.isArray(raw.brands) && Array.isArray(raw.tags)) {
+      return {
+        brands: raw.brands.filter((b: unknown) => typeof b === 'string'),
+        tags: raw.tags.filter(isTag),
+      };
+    }
+  } catch { /* storage unavailable or malformed */ }
+  return { brands: [], tags: [] };
+}
 
 export function subtitle(r: RecipeSummary): string {
-  return [originLabel(r), r.tags[0], formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
+  return [originLabel(r), r.tags[0]?.name, formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
 }
 
 export function Library() {
   const [search, setSearch] = useState('');
-  const [origin, setOrigin] = useState<Origin>(undefined);
-  const [tag, setTag] = useState<string | undefined>(undefined);
-  const [tags, setTags] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Filters>(loadFilters);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const filtersBtn = useRef<HTMLButtonElement>(null);
+  const [facets, setFacets] = useState<Facets>({ brands: [], tags: [] });
   const [rows, setRows] = useState<RecipeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupStatus | null>(null);
@@ -34,18 +49,32 @@ export function Library() {
   }, []);
 
   useEffect(() => {
-    listTags().then(setTags).catch(() => {});
+    getFacets().then(setFacets).catch(() => {});
   }, []);
 
   useEffect(() => {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(filters)); } catch { /* ignore */ }
+  }, [filters]);
+
+  useEffect(() => {
     let live = true;
-    listRecipes({ search: search || undefined, origin, tag })
+    listRecipes({
+      search: search || undefined,
+      brands: filters.brands.length ? filters.brands : undefined,
+      tags: filters.tags.length ? filters.tags : undefined,
+    })
       .then((r) => live && (setRows(r), setError(null)))
       .catch(() => live && setError('Could not load recipes'));
     return () => {
       live = false;
     };
-  }, [search, origin, tag]);
+  }, [search, filters]);
+
+  const activeCount = filters.brands.length + filters.tags.length;
+  const closeSheet = () => {
+    setSheetOpen(false);
+    filtersBtn.current?.focus();
+  };
 
   return (
     <main className="page">
@@ -73,35 +102,43 @@ export function Library() {
       <div className="cta-row">
         <Link className="btn cta primary" to="/describe"><SparklesIcon />Describe it</Link>
         <Link className="btn cta outline" to="/import"><LinkIcon />From a link</Link>
+        <Link className="btn cta outline" to="/photos"><CameraIcon />From photos</Link>
       </div>
-      <div className="segmented">
-        {CHIPS.map((c) => (
+      <div className="filter-bar">
+        <button ref={filtersBtn} type="button" className="btn small filter-btn" aria-haspopup="dialog" onClick={() => setSheetOpen(true)}>
+          {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
+        </button>
+        {filters.brands.map((b) => (
           <button
-            key={c.label}
+            key={`b:${b}`}
             type="button"
-            className={origin === c.origin ? 'active' : undefined}
-            aria-pressed={origin === c.origin}
-            onClick={() => setOrigin(c.origin)}
+            className="chip active pill"
+            aria-label={`Remove filter ${b}`}
+            onClick={() => setFilters({ ...filters, brands: filters.brands.filter((x) => x !== b) })}
           >
-            {c.label}
+            {b}<CloseIcon />
+          </button>
+        ))}
+        {filters.tags.map((t) => (
+          <button
+            key={`t:${tagKey(t)}`}
+            type="button"
+            className="chip active pill"
+            aria-label={`Remove filter ${t.name}`}
+            onClick={() => setFilters({ ...filters, tags: filters.tags.filter((x) => tagKey(x) !== tagKey(t)) })}
+          >
+            {t.name}<CloseIcon />
           </button>
         ))}
       </div>
-      {tags.length > 0 && (
-        <div className="chips tags">
-          {tags.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`chip${tag === t ? ' active' : ''}`}
-              aria-pressed={tag === t}
-              onClick={() => setTag(tag === t ? undefined : t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+      <FilterSheet
+        open={sheetOpen}
+        facets={facets}
+        filters={filters}
+        count={rows?.length ?? 0}
+        onChange={setFilters}
+        onClose={closeSheet}
+      />
       {drafts.length > 0 && (
         <section className="drafts" aria-label="Drafts">
           <h2>Drafts</h2>

@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 const draft: RecipeDraft = {
-  title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],

@@ -135,7 +135,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
     <main className="page overview">
       <header className="cook-bar">
         <Link className="btn round-btn" to="/" aria-label="Back to library"><BackIcon /></Link>
-        <span className="cook-label">{originLabel(recipe)}{recipe.tags[0] ? ` · ${recipe.tags[0]}` : ''}</span>
+        <span className="cook-label">{originLabel(recipe)}{recipe.tags[0] ? ` · ${recipe.tags[0].name}` : ''}</span>
         <Link className="btn" to={`/recipe/${encodeURIComponent(recipe.id)}/edit`}>Edit</Link>
         <Link className="btn round-btn" to={`/recipe/${encodeURIComponent(recipe.id)}/print`} aria-label="Print recipe card"><PrinterIcon /></Link>
         <Link className="btn round-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>

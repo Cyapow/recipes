@@ -10,7 +10,7 @@ vi.mock('../api', () => ({ getRecipe: vi.fn() }));
 import { getRecipe } from '../api';
 
 const base: Recipe = {
-  id: 'a', title: 'Bolognese', description: 'Classic.', origin: 'mine', sourceName: null, sourceUrl: null,
+  id: 'a', title: 'Bolognese', description: 'Classic.', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 4, prepMinutes: 5, cookMinutes: 60,
   ingredients: [
     { group: 'Base', quantity: 1, unit: null, item: 'onion', note: null },
@@ -23,7 +23,7 @@ const base: Recipe = {
     { text: 'Brown the mince.', imageId: 'p2.jpg', ingredients: [1, 2] },
     { text: 'Simmer gently.', imageId: null, ingredients: [] },
   ],
-  notes: 'Use good mince.', tags: ['Pasta'], imageIds: [], createdAt: '', updatedAt: '',
+  notes: 'Use good mince.', tags: [{ group: 'other', name: 'Pasta' }], imageIds: [], createdAt: '', updatedAt: '',
 };
 
 function Jump({ to }: { to: string }) {

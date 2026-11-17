@@ -14,10 +14,13 @@ export function geminiSchema(): Record<string, unknown> {
 }
 
 function toContents(messages: ProviderMessage[]) {
-  const out: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  const out: Array<{ role: 'user' | 'model'; parts: Array<{ text: string } | { inline_data: { mime_type: string; data: string } }> }> = [];
   for (const m of messages) {
     if (m.role === 'user') {
-      out.push({ role: 'user', parts: [{ text: m.text }] });
+      out.push({
+        role: 'user',
+        parts: [...(m.images ?? []).map((i) => ({ inline_data: { mime_type: i.mediaType, data: i.base64 } })), { text: m.text }],
+      });
       continue;
     }
     out.push({ role: 'model', parts: [{ text: typeof m.raw === 'string' && m.raw !== '' ? m.raw : '(no recipe returned)' }] });

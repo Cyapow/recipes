@@ -10,10 +10,15 @@ export function openaiSchema(): Record<string, unknown> {
 }
 
 function toMessages(system: string, messages: ProviderMessage[]) {
-  const out: Array<{ role: string; content: string }> = [{ role: 'developer', content: `${system}\n\n${JSON_MODE_NOTE}` }];
+  const out: Array<{ role: string; content: string | unknown[] }> = [{ role: 'developer', content: `${system}\n\n${JSON_MODE_NOTE}` }];
   for (const m of messages) {
     if (m.role === 'user') {
-      out.push({ role: 'user', content: m.text });
+      out.push({
+        role: 'user',
+        content: m.images?.length
+          ? [{ type: 'text', text: m.text }, ...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mediaType};base64,${i.base64}` } }))]
+          : m.text,
+      });
       continue;
     }
     out.push({ role: 'assistant', content: typeof m.raw === 'string' && m.raw !== '' ? m.raw : '(no recipe returned)' });

@@ -8,11 +8,12 @@ import { recipeToolSchema } from '../draft.js';
 
 const KEY = 'sk-test-SECRET-123';
 const draft = {
-  title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
+const expected = draft;
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
@@ -111,7 +112,7 @@ describe.each(specs)('$name provider', (spec) => {
   it('sends the key only in a header, the schema, system prompt and defanged user text', async () => {
     const { ai, sent } = client(spec, reply(200, spec.ok(draft)));
     const out = await ai.extractRecipe(input);
-    expect(out.draft).toEqual(draft);
+    expect(out.draft).toEqual(expected);
     expect(out.provider).toBe(spec.name);
     expect(out.model).toBe(spec.model);
     const s = sent(0);
@@ -135,7 +136,7 @@ describe.each(specs)('$name provider', (spec) => {
 
   it('retries truncation with a larger limit and fails safely when truncated twice', async () => {
     const a = client(spec, reply(200, spec.truncated), reply(200, spec.ok(draft)));
-    expect((await a.ai.extractRecipe(input)).draft).toEqual(draft);
+    expect((await a.ai.extractRecipe(input)).draft).toEqual(expected);
     expect(spec.body.maxTokens(a.sent(1).body)).toBeGreaterThan(spec.body.maxTokens(a.sent(0).body));
     expect(spec.body.userTexts(a.sent(1).body)).toHaveLength(1);
     const b = client(spec, reply(200, spec.truncated), reply(200, spec.truncated));
@@ -153,7 +154,7 @@ describe.each(specs)('$name provider', (spec) => {
 
   it('retries once on invalid output with the validation error, then succeeds', async () => {
     const { ai, sent } = client(spec, reply(200, spec.ok({ title: 'x' })), reply(200, spec.ok(draft)));
-    expect((await ai.extractRecipe(input)).draft).toEqual(draft);
+    expect((await ai.extractRecipe(input)).draft).toEqual(expected);
     const second = JSON.stringify(sent(1).body);
     expect(second).toContain('valid fields');
     expect(second).toContain('do not add anything the user did not say');
@@ -324,5 +325,70 @@ describe('Gemini thinkingLevel', () => {
   });
   it('omits thinkingConfig when unset', async () => {
     expect((await bodyFor({ geminiThinkingLevel: undefined })).generationConfig).not.toHaveProperty('thinkingConfig');
+  });
+});
+
+describe('image input', () => {
+  const imgs = [
+    { mediaType: 'image/jpeg' as const, base64: 'AAAA' },
+    { mediaType: 'image/jpeg' as const, base64: 'BBBB' },
+  ];
+  const photos = { kind: 'photos' as const, images: imgs };
+  const note = 'Read the recipe from these 2 photos of a recipe card (front, back, extra pages, in order), adding nothing that is not on them.';
+
+  it('openai: text part first, then image_url data URLs', async () => {
+    const openai = specs[0]!;
+    const { ai, sent } = client(openai, reply(200, openai.ok(draft)));
+    await ai.extractRecipe(photos);
+    const user = sent(0).body.messages.find((m: any) => m.role === 'user');
+    expect(user.content).toEqual([
+      { type: 'text', text: note },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,BBBB' } },
+    ]);
+  });
+  it('openai: a text-only request keeps string content', async () => {
+    const openai = specs[0]!;
+    const { ai, sent } = client(openai, reply(200, openai.ok(draft)));
+    await ai.extractRecipe(input);
+    expect(sent(0).body.messages.map((m: any) => [m.role, typeof m.content])).toEqual([['developer', 'string'], ['user', 'string']]);
+  });
+  it('gemini: inline_data parts first, then the text part', async () => {
+    const gemini = specs[1]!;
+    const { ai, sent } = client(gemini, reply(200, gemini.ok(draft)));
+    await ai.extractRecipe(photos);
+    expect(sent(0).body.contents).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { inline_data: { mime_type: 'image/jpeg', data: 'AAAA' } },
+          { inline_data: { mime_type: 'image/jpeg', data: 'BBBB' } },
+          { text: note },
+        ],
+      },
+    ]);
+  });
+  it('gemini: a text-only request is a single text part', async () => {
+    const gemini = specs[1]!;
+    const { ai, sent } = client(gemini, reply(200, gemini.ok(draft)));
+    await ai.extractRecipe(input);
+    const contents = sent(0).body.contents;
+    expect(contents).toHaveLength(1);
+    expect(contents[0].parts).toHaveLength(1);
+    expect(Object.keys(contents[0].parts[0])).toEqual(['text']);
+  });
+  it('anthropic: image blocks first, then the text block; text-only stays a string', async () => {
+    const toolUse = { content: [{ type: 'tool_use', id: 't1', name: 'record_recipe', input: draft }] };
+    const stream = vi.fn(() => ({ finalMessage: async () => toolUse }));
+    const ai = createAiClient({ anthropicApiKey: 'k', anthropicModel: 'm' } as never, { sdk: { messages: { stream } } as never });
+    await ai.extractRecipe(photos);
+    await ai.extractRecipe(input);
+    const calls = stream.mock.calls as unknown as Array<[{ messages: Array<{ content: unknown }> }]>;
+    expect(calls[0]![0].messages[0]!.content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'BBBB' } },
+      { type: 'text', text: note },
+    ]);
+    expect(typeof calls[1]![0].messages[0]!.content).toBe('string');
   });
 });

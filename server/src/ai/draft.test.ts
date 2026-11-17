@@ -3,11 +3,12 @@ import { AiInvalidOutputError, AiRefusedError, AiRequestError, createAnthropicCl
 import { AiDraftSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
 
 const draft = {
-  title: 'Spag bol', description: null, origin: 'mine', sourceName: null, sourceUrl: null,
+  title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
+const expected = draft;
 const toolUse = (input: unknown) => ({ content: [{ type: 'tool_use', id: 't1', name: 'record_recipe', input }] });
 const config = { anthropicApiKey: 'sk-secret', anthropicModel: 'test-model' } as never;
 
@@ -17,6 +18,42 @@ function fake(...replies: Array<unknown | Error>) {
   const create = vi.fn(() => ({ finalMessage }));
   return { sdk: { messages: { stream: create } } as never, create };
 }
+
+describe('brand, grouped tags and the dish photo', () => {
+  const ai = (over: object) => AiDraftSchema.parse({ ...draft, ...over });
+  it('toRecipeDraft canonicalises the brand and normalises tags', () => {
+    const out = toRecipeDraft(ai({ brand: 'hello fresh', tags: [{ group: 'main', name: ' Chicken ' }, { group: 'main', name: 'chicken' }] }));
+    expect(out.brand).toBe('HelloFresh');
+    expect(out.tags).toEqual([{ group: 'main', name: 'Chicken' }]);
+    expect(toRecipeDraft(ai({ brand: '  ' })).brand).toBeNull();
+  });
+  it('passes the dish box through', () => {
+    const box = { image: 1, x0: 10, y0: 20, x1: 500, y1: 600 };
+    expect(toRecipeDraft(ai({ dishPhoto: box })).dishPhoto).toEqual(box);
+    expect(toRecipeDraft(ai({ dishPhoto: null })).dishPhoto).toBeNull();
+  });
+  it('the tool schema requires brand and dishPhoto and groups tags by an enum', () => {
+    const s = recipeToolSchema() as { required: string[]; properties: Record<string, any> };
+    expect(s.required).toEqual(expect.arrayContaining(['brand', 'dishPhoto', 'tags']));
+    expect(JSON.stringify(s.properties.tags)).toContain('"main"');
+    expect(JSON.stringify(s.properties.dishPhoto)).toContain('x0');
+  });
+  it('the prompt states the per-group rules and the dish photo rule', () => {
+    expect(SYSTEM_PROMPT).toContain('Main ingredient');
+    expect(SYSTEM_PROMPT).toContain('dishPhoto');
+    expect(SYSTEM_PROMPT).toContain('"brand"');
+    expect(SYSTEM_PROMPT).toContain('(unreadable)');
+    expect(SYSTEM_PROMPT).toContain('the caller sets the brand');
+  });
+  it('buildUserMessage describes a set of photos', () => {
+    expect(buildUserMessage({ kind: 'photos', imageCount: 2 })).toContain('2 photos');
+    expect(buildUserMessage({ kind: 'photos', imageCount: 1 })).not.toContain('<user_description>');
+  });
+  it('the prompt keeps description to stated text and gaps a single total time', () => {
+    expect(SYSTEM_PROMPT).toContain('"description" only holds a description stated in the input');
+    expect(SYSTEM_PROMPT).toContain('prep and cook time (card says 30 mins total)');
+  });
+});
 
 describe('SYSTEM_PROMPT', () => {
   it('states the no-invention rule', () => {
@@ -160,7 +197,7 @@ describe('recipeToolSchema (strict-safe)', () => {
 describe('createAnthropicClient', () => {
   it('skips thinking blocks and finds the tool_use block', async () => {
     const { sdk } = fake({ content: [{ type: 'thinking', thinking: 'hm', signature: 's' }, { type: 'tool_use', id: 't1', name: 'record_recipe', input: draft }] });
-    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
   });
 
   it('retries with the full assistant content (thinking included) after invalid output', async () => {
@@ -185,7 +222,7 @@ describe('createAnthropicClient', () => {
 
   it('recovers when the retry after a text reply calls the tool', async () => {
     const { sdk } = fake({ content: [{ type: 'text', text: 'hi' }] }, toolUse(draft));
-    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+    expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
   });
 
   it('throws AiRefusedError on refusal without retrying', async () => {
@@ -197,7 +234,7 @@ describe('createAnthropicClient', () => {
   it('asks for the record_recipe tool without forcing it, delimits user text and returns the validated draft', async () => {
     const { sdk, create } = fake(toolUse(draft));
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 'my spag bol' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     const [params, opts] = create.mock.calls[0]!;
     expect(params.model).toBe('test-model');
     expect(params.system).toBe(SYSTEM_PROMPT);
@@ -223,7 +260,7 @@ describe('createAnthropicClient', () => {
   it('retries once on invalid output, feeding the error back', async () => {
     const { sdk, create } = fake(toolUse({ title: 'x' }), toolUse(draft));
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     expect(create).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(create.mock.calls[1]![0].messages)).toContain('tool_result');
   });
@@ -248,7 +285,7 @@ describe('createAnthropicClient', () => {
   it('never accepts a max_tokens-truncated result; retries with a larger budget', async () => {
     const { sdk, create } = fake({ ...toolUse(draft), stop_reason: 'max_tokens' }, { ...toolUse(draft), stop_reason: 'tool_use' });
     const out = await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' });
-    expect(out).toEqual(draft);
+    expect(out).toEqual(expected);
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1]![0].max_tokens).toBeGreaterThan(create.mock.calls[0]![0].max_tokens);
     expect(create.mock.calls[1]![0].messages).toHaveLength(1);
@@ -266,7 +303,7 @@ describe('createAnthropicClient', () => {
   it('leaves normal stop reasons unaffected', async () => {
     for (const stop_reason of ['end_turn', 'tool_use']) {
       const { sdk, create } = fake({ ...toolUse(draft), stop_reason });
-      expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(draft);
+      expect(await createAnthropicClient(config, sdk).extractRecipe({ kind: 'description', text: 't' })).toEqual(expected);
       expect(create).toHaveBeenCalledTimes(1);
     }
   });
