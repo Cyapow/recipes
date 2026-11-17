@@ -4,6 +4,13 @@ import type { Box1000 } from '../api';
 
 type Area = { x: number; y: number; width: number; height: number };
 
+const SHAPES: { label: string; ratio?: number }[] = [
+  { label: 'Original' },
+  { label: 'Square', ratio: 1 },
+  { label: '4:3', ratio: 4 / 3 },
+  { label: '3:4', ratio: 3 / 4 },
+];
+
 const toBox = (a: Area): Box1000 => ({
   x0: Math.round(a.x * 10),
   y0: Math.round(a.y * 10),
@@ -21,7 +28,9 @@ export function CropDialog({ imageId, box, onSave, onCancel }: {
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [aspect, setAspect] = useState((box.x1 - box.x0) / Math.max(1, box.y1 - box.y0));
+  const [original, setOriginal] = useState((box.x1 - box.x0) / Math.max(1, box.y1 - box.y0));
+  const [shape, setShape] = useState<string>('Original');
+  const aspect = SHAPES.find((s) => s.label === shape)?.ratio ?? original;
   const area = useRef<Box1000>(box);
   const heading = useRef<HTMLHeadingElement>(null);
   const cancelRef = useRef(onCancel);
@@ -52,13 +61,20 @@ export function CropDialog({ imageId, box, onSave, onCancel }: {
           onMediaLoaded={(m) => {
             const w = (box.x1 - box.x0) * m.naturalWidth;
             const h = (box.y1 - box.y0) * m.naturalHeight;
-            if (w > 0 && h > 0) setAspect(w / h);
+            if (w > 0 && h > 0) setOriginal(w / h);
           }}
           initialCroppedAreaPercentages={{ x: box.x0 / 10, y: box.y0 / 10, width: (box.x1 - box.x0) / 10, height: (box.y1 - box.y0) / 10 }}
           onCropComplete={(percent) => {
             area.current = toBox(percent);
           }}
         />
+      </div>
+      <div className="crop-dialog-shapes" role="group" aria-label="Shape">
+        {SHAPES.map((o) => (
+          <button key={o.label} type="button" className="chip" aria-pressed={shape === o.label} onClick={() => setShape(o.label)}>
+            {o.label}
+          </button>
+        ))}
       </div>
       <p className="hint">Drag to move, pinch or scroll to zoom.</p>
       <div className="crop-dialog-foot">

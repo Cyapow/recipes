@@ -489,3 +489,4 @@ body.cook-scroll-lock { overflow: hidden; }
 .crop-dialog-area { position: relative; flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; background: #000; }
 .crop-dialog-foot { display: flex; justify-content: space-between; gap: 12px; }
 .crop-dialog-foot > * { flex: 1; min-height: 48px; }
+.crop-dialog-shapes { display: flex; flex-wrap: wrap; gap: 8px; }

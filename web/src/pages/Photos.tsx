@@ -24,6 +24,7 @@ export function Photos() {
   );
   const [pending, setPending] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState(0);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +41,11 @@ export function Photos() {
   }
 
   async function onPick(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
+    const picked = Array.from(e.target.files ?? []);
     e.target.value = ''; // allow picking the same file again
+    if (picked.length === 0) return;
+    const files = picked.slice(0, Math.max(0, MAX_PHOTOS - photoIds.length));
+    setSkipped(picked.length - files.length);
     if (files.length === 0) return;
     setUploadError(null);
     setPending((n) => n + files.length);
@@ -118,10 +122,11 @@ export function Photos() {
       </header>
       <p className="hint">Photograph the front and back of the recipe card. Only what is on the card is used; anything missing is flagged, not filled in.</p>
       <div className="photo-picker">
-        <input id="photos-input" className="visually-hidden" type="file" accept="image/*" multiple onChange={onPick} disabled={full} />
+        <input id="photos-input" className="visually-hidden" type="file" accept="image/*" multiple onChange={onPick} disabled={full || pending > 0} />
         <label htmlFor="photos-input" className={`btn${full ? ' disabled' : ''}`}>Add photos</label>
         <p className="hint">Up to {MAX_PHOTOS} photos</p>
         {pending > 0 && <small role="status">Uploading…</small>}
+        {skipped > 0 && <small role="status">Only {MAX_PHOTOS} photos — {skipped} skipped</small>}
         {uploadError && <p className="field-error" role="alert">{uploadError}</p>}
         {photoIds.length > 0 && (
           <ul className="photo-list">
@@ -148,6 +153,7 @@ export function Photos() {
           initial={initial as RecipeInput}
           gaps={gaps}
           dishCrop={dishCrop}
+          onDishCropChange={(c) => kept.save({ dishCrop: c })}
           onSave={onSave}
           saving={saving}
           onChange={(input) => kept.save({ photoIds, input })}

@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Photos } from './Photos';
-import { putDraft } from '../lib/drafts';
+import { getDraft, listDrafts, putDraft } from '../lib/drafts';
 import type { PhotosDraft } from '../api';
 
 vi.mock('../api', async () => ({
@@ -116,6 +116,23 @@ describe('Photos', () => {
     expect(picker().disabled).toBe(true);
   });
 
+  it('uploads only the free slots, says how many were skipped, and blocks a second pick while uploading', async () => {
+    let n = 0;
+    let release: () => void = () => {};
+    vi.mocked(uploadImage).mockImplementation(async () => {
+      if (n === 0) await new Promise<void>((r) => { release = r; });
+      return `p${n++}.jpg`;
+    });
+    const user = userEvent.setup();
+    app();
+    await user.upload(picker(), Array.from({ length: 7 }, (_, i) => jpg(`f${i}`)));
+    expect(screen.getByText('Only 6 photos — 1 skipped').getAttribute('role')).toBe('status');
+    expect(picker().disabled).toBe(true);
+    release();
+    await waitFor(() => expect(thumbs()).toHaveLength(6));
+    expect(uploadImage).toHaveBeenCalledTimes(6);
+  });
+
   it('creates a draft from the photos in order and shows the form with gaps', async () => {
     vi.mocked(photosRecipe).mockResolvedValue(draft);
     const user = userEvent.setup();
@@ -160,6 +177,20 @@ describe('Photos', () => {
     expect(saved.imageIds).toEqual(['crop.jpg', 'front.jpg', 'back.jpg']);
     expect(saved).not.toHaveProperty('dishCrop');
     expect(saved).not.toHaveProperty('gaps');
+  });
+
+  it('clears the kept draft after a successful save', async () => {
+    vi.mocked(photosRecipe).mockResolvedValue(draft);
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    const user = userEvent.setup();
+    app();
+    await pickTwo(user);
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    expect(listDrafts()).toHaveLength(1);
+    await user.click(await screen.findByRole('button', { name: /^save/i }));
+    await screen.findByText('cook page');
+    cleanup();
+    expect(listDrafts()).toEqual([]);
   });
 
   it('resumes a kept draft with its photos and form', () => {
@@ -209,6 +240,43 @@ describe('Photos', () => {
         ]),
       );
       expect(screen.getByRole('button', { name: 'Adjust' })).toBeTruthy();
+    });
+
+    it('shows no actions once the crop photo is removed, even if another photo moves to the front', async () => {
+      vi.mocked(photosRecipe).mockResolvedValue({ ...draft, dishCrop: { sourceImageId: 'back.jpg', x0: 100, y0: 100, x1: 600, y1: 600 } });
+      const user = userEvent.setup();
+      app();
+      await pickTwo(user);
+      await user.click(screen.getByRole('button', { name: /create draft/i }));
+      await screen.findByText('quantity for chicken');
+      await user.click(within(document.querySelector('.recipe-form') as HTMLElement).getByRole('button', { name: 'Remove photo 1' }));
+      expect(formPhotos().getAllByRole('img')).toHaveLength(2);
+      expect(screen.queryByRole('button', { name: 'Adjust' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Use whole photo' })).toBeNull();
+      expect(listDrafts()[0]!.dishCrop).toBeNull();
+    });
+
+    it('keeps the adjusted box in the draft, and a resume starts from it', async () => {
+      vi.mocked(cropImage).mockResolvedValue('crop2.jpg');
+      const user = await withDraft();
+      await user.click(screen.getByRole('button', { name: 'Adjust' }));
+      await user.click(screen.getByText('move crop'));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(formPhotos().getAllByRole('img')[0]!.getAttribute('src')).toBe('/api/images/crop2.jpg/thumb'));
+      const id = listDrafts()[0]!.id;
+      cleanup();
+      expect(getDraft(id)!.dishCrop).toEqual({ sourceImageId: 'front.jpg', x0: 100, y0: 200, x1: 600, y1: 600 });
+      app(`/photos?draft=${id}`);
+      await user.click(screen.getByRole('button', { name: 'Adjust' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(cropImage).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(cropImage).mock.calls[1]![1]).toEqual({ x0: 100, y0: 200, x1: 600, y1: 600 });
+    });
+
+    it('Use whole photo clears the kept crop', async () => {
+      const user = await withDraft();
+      await user.click(screen.getByRole('button', { name: 'Use whole photo' }));
+      expect(listDrafts()[0]!.dishCrop).toBeNull();
     });
 
     it('Adjust starts from the box last saved', async () => {

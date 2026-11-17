@@ -21,6 +21,8 @@ export type RecipeFormProps = {
   facets?: Facets;
   /** From a photos draft: the card photo the dish picture was cut from, and the box used. Offers Adjust / Use whole photo on the first photo. */
   dishCrop?: ({ sourceImageId: string } & Box1000) | null;
+  /** Called when the dish crop changes: the new box after Adjust, null once the crop photo is replaced or removed. */
+  onDishCropChange?(crop: ({ sourceImageId: string } & Box1000) | null): void;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -31,7 +33,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange }: RecipeFormProps) {
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -57,12 +59,17 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [cropBox, setCropBox] = useState<Box1000 | null>(dishCrop ? { x0: dishCrop.x0, y0: dishCrop.y0, x1: dishCrop.x1, y1: dishCrop.y1 } : null);
   const [adjusting, setAdjusting] = useState(false);
-  // The actions apply only while the first photo is still the crop made for this draft.
+  // The id of the crop made for this draft; the actions apply only while it is still the first photo.
   const sourceId = dishCrop?.sourceImageId;
-  const cropIsFirst = !!sourceId && !!cropBox && imageIds[0] !== undefined && imageIds[0] !== sourceId;
+  const [cropId, setCropId] = useState<string | null>(
+    dishCrop && initial.imageIds[0] !== undefined && initial.imageIds[0] !== dishCrop.sourceImageId ? initial.imageIds[0] : null,
+  );
+  const cropIsFirst = !!sourceId && !!cropBox && cropId !== null && imageIds[0] === cropId;
 
   function useWholePhoto() {
     if (!sourceId) return;
+    setCropId(null);
+    onDishCropChange?.(null);
     setImageIds((ids) => [sourceId, ...ids.slice(1).filter((x) => x !== sourceId)]);
   }
 
@@ -74,6 +81,8 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
     try {
       const id = await cropImage(sourceId, box);
       setCropBox(box);
+      setCropId(id);
+      onDishCropChange?.({ sourceImageId: sourceId, ...box });
       setImageIds((ids) => [id, ...ids.slice(1).filter((x) => x !== id)]);
     } catch (err) {
       setUploadError(`Could not crop the photo: ${err instanceof Error ? err.message : 'unknown error'}`);
@@ -280,7 +289,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
                   <button
                     type="button"
                     aria-label={`Remove photo ${i + 1}`}
-                    onClick={() => setImageIds((ids) => ids.filter((x) => x !== imgId))}
+                    onClick={() => {
+                      if (imgId === cropId) {
+                        setCropId(null);
+                        onDishCropChange?.(null);
+                      }
+                      setImageIds((ids) => ids.filter((x) => x !== imgId));
+                    }}
                   >
                     Remove
                   </button>
