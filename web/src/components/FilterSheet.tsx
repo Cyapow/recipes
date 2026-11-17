@@ -48,15 +48,15 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
 
   return (
     <>
-      <div className="sheet-backdrop" data-testid="filter-backdrop" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
-        <div className="sheet-grab" aria-hidden="true" />
-        <h2 id="filter-sheet-title" className="sheet-title" tabIndex={-1} ref={heading}>Filters</h2>
-        <div className="sheet-body">
+      <div className="filter-sheet-backdrop" data-testid="filter-backdrop" onClick={onClose} />
+      <div className="filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
+        <div className="filter-sheet-grab" aria-hidden="true" />
+        <h2 id="filter-sheet-title" className="filter-sheet-title" tabIndex={-1} ref={heading}>Filters</h2>
+        <div className="filter-sheet-body">
           {brands.length > 0 && (
             <section>
               <h3>Brand</h3>
-              <div className="sheet-chips">
+              <div className="filter-sheet-chips">
                 {shownBrands.map((b) => (
                   <button
                     key={b.name}
@@ -80,7 +80,7 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
             return (
               <section key={g.id}>
                 <h3>{g.label}</h3>
-                <div className="sheet-chips">
+                <div className="filter-sheet-chips">
                   {tags.map((t) => {
                     const tag: Tag = { group: t.group, name: t.name };
                     const on = filters.tags.some((x) => tagKey(x) === tagKey(tag));
@@ -101,7 +101,7 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
             );
           })}
         </div>
-        <div className="sheet-foot">
+        <div className="filter-sheet-foot">
           <button type="button" className="btn small" disabled={active === 0} onClick={() => onChange({ brands: [], tags: [] })}>
             Clear all
           </button>

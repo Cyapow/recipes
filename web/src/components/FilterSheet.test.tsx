@@ -71,6 +71,11 @@ describe('FilterSheet', () => {
     await user.click(screen.getByTestId('filter-backdrop'));
     expect(p.onClose).toHaveBeenCalledTimes(2);
   });
+  it('does not reuse the print-card .sheet class', () => {
+    setup();
+    expect(screen.getByRole('dialog').classList.contains('sheet')).toBe(false);
+    expect(document.querySelector('.sheet')).toBeNull();
+  });
   it('singular count', () => {
     setup({ count: 1 });
     expect(screen.getByRole('button', { name: 'Show 1 recipe' })).toBeTruthy();

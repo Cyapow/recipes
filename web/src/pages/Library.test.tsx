@@ -114,6 +114,24 @@ describe('Library filters', () => {
     await user.click(screen.getByRole('button', { name: 'Show 2 recipes' }));
     expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
   });
+  it('starts empty when stored filters are corrupt JSON', async () => {
+    sessionStorage.setItem('recipes.libraryFilters', '{not json');
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+  });
+  it('starts empty and does not crash when sessionStorage throws', async () => {
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
+    try {
+      render(<MemoryRouter><Library /></MemoryRouter>);
+      await screen.findByText('Carbonara');
+      expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
+  });
   it('keeps filters across unmount and remount', async () => {
     const user = userEvent.setup();
     const first = render(<MemoryRouter><Library /></MemoryRouter>);

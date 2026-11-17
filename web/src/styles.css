@@ -466,14 +466,14 @@ body.cook-scroll-lock { overflow: hidden; }
 .filter-btn { min-height: 44px; border-radius: 14px; border: 1px solid var(--border-strong); background: var(--card); }
 .chip.pill { display: inline-flex; align-items: center; gap: 6px; }
 .chip.pill svg { width: 14px; height: 14px; }
-.sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .4); }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 80vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
-  padding: 10px 20px calc(16px + env(safe-area-inset-bottom)); background: var(--card); border: 1px solid var(--line); border-bottom: 0; border-radius: 22px 22px 0 0;
+.filter-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .4); }
+.filter-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 80vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 10px 20px 16px; background: var(--card); border: 1px solid var(--line); border-bottom: 0; border-radius: 22px 22px 0 0;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, .18); }
-.sheet-grab { width: 40px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 0 auto; flex: none; }
-.sheet-title { margin: 0; font-size: 1.125rem; outline: 0; }
-.sheet-body { display: flex; flex-direction: column; gap: 14px; }
-.sheet-body h3 { margin: 0 0 6px; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.sheet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.sheet-foot { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 10px; background: var(--card); }
-.sheet-foot .btn { min-height: 48px; }
+.filter-sheet-grab { width: 40px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 0 auto; flex: none; }
+.filter-sheet-title { margin: 0; font-size: 1.125rem; outline: 0; }
+.filter-sheet-body { display: flex; flex-direction: column; gap: 14px; }
+.filter-sheet-body h3 { margin: 0 0 6px; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.filter-sheet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-sheet-foot { position: sticky; bottom: 0; padding-bottom: env(safe-area-inset-bottom); display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 10px; background: var(--card); }
+.filter-sheet-foot .btn { min-height: 48px; }

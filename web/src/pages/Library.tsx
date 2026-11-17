@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getBackupStatus, listRecipes, getFacets, type BackupStatus, type Facets, type RecipeSummary } from '../api';
-import { tagKey } from '../../../server/src/recipes/categories';
+import { tagKey, type Tag } from '../../../server/src/recipes/categories';
 import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { BackupBanner } from '../components/BackupBanner';
 import { CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
@@ -11,13 +11,17 @@ import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Dr
 
 const STORAGE_KEY = 'recipes.libraryFilters';
 
+function isTag(t: unknown): t is Tag {
+  return !!t && typeof t === 'object' && typeof (t as Tag).group === 'string' && typeof (t as Tag).name === 'string';
+}
+
 function loadFilters(): Filters {
   try {
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null');
     if (raw && Array.isArray(raw.brands) && Array.isArray(raw.tags)) {
       return {
         brands: raw.brands.filter((b: unknown) => typeof b === 'string'),
-        tags: raw.tags.filter((t: any) => t && typeof t.group === 'string' && typeof t.name === 'string'),
+        tags: raw.tags.filter(isTag),
       };
     }
   } catch { /* storage unavailable or malformed */ }
