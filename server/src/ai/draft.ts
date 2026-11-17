@@ -87,6 +87,7 @@ The rule that matters most: never add anything the input does not state. Quantit
   - "other": any other printed label or badge ("Calorie Smart", "Family"), or the page's JSON-LD keywords.
   If nothing is written for a group, add no tag for it. Never invent a tag.
 - When the input is photos of a recipe card, the first photo is usually the front and the next ones the back or extra pages; read all of them as one recipe. Text you cannot read, or that is smudged or cut off, is never guessed: set it to null and add a gap naming it ("quantity for soy sauce (unreadable)").
+- "description" only holds a description stated in the input (a blurb printed on the card, the page or the person's words); never write one yourself, otherwise it is null. When the input gives a single total time with no prep and cook split, leave prepMinutes and cookMinutes null and add a gap such as "prep and cook time (card says 30 mins total)".
 - "dishPhoto" is only for photos input: if one of the photos shows the finished dish, give {image, x0, y0, x1, y1} where image is the 0-based number of that photo (in the order given) and the box is its position in that image on a 0-1000 scale from the top left; otherwise null. For a description or page text, "dishPhoto" must always be null.
 - Only record a quantity as a number when the user gave a number (convert "half" to 0.5, "two" to 2). Vague amounts such as "a splash" or "a good glug" are not numbers: keep quantity null, put the phrase in "note", and add a gap.
 - A range is a number, not a vague amount. For "2-3 tablespoons of oil" or "1 to 1½ lb beef", record the lower end as the quantity ("2", "1") with its unit ("tablespoons", "lb"), put the range as written in "note", and name only the ingredient in the item ("oil", "beef"). Never leave quantity null and the unit at the front of the item: "tablespoons neutral oil" is wrong, and so is any item starting with a unit word.
@@ -150,11 +151,10 @@ function defang(text: string): string {
 }
 
 export function buildUserMessage(
-  input: { kind: 'description' | 'page'; text: string; sourceUrl?: string } | { kind: 'photos'; text?: string; imageCount: number },
+  input: { kind: 'description' | 'page'; text: string; sourceUrl?: string } | { kind: 'photos'; imageCount: number },
 ): string {
   if (input.kind === 'photos') {
-    const note = input.text?.trim() ? `\nThe person added this note:\n<user_description>\n${defang(input.text)}\n</user_description>` : '';
-    return `Read the recipe from these ${input.imageCount} photos of a recipe card (front, back, extra pages, in order), adding nothing that is not on them.${note}`;
+    return `Read the recipe from these ${input.imageCount} photos of a recipe card (front, back, extra pages, in order), adding nothing that is not on them.`;
   }
   if (input.kind === 'page') {
     const attr = input.sourceUrl ? ` source_url="${input.sourceUrl.replace(/[<>"]/g, '')}"` : '';

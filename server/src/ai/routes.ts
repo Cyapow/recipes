@@ -68,7 +68,10 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
       // A box for a photo that does not exist, or one too small to crop, just means no crop.
       const sourceImageId = dishPhoto ? imageIds[dishPhoto.image] : undefined;
       const cropId = dishPhoto && sourceImageId
-        ? await store.crop(sourceImageId, { x0: dishPhoto.x0, y0: dishPhoto.y0, x1: dishPhoto.x1, y1: dishPhoto.y1 }).catch(() => null)
+        ? await store.crop(sourceImageId, { x0: dishPhoto.x0, y0: dishPhoto.y0, x1: dishPhoto.x1, y1: dishPhoto.y1 }).catch((e) => {
+          req.log.warn({ err: (e as Error).message }, 'dish crop failed');
+          return null;
+        })
         : null;
       const brand = rest.brand;
       return {

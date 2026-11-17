@@ -14,7 +14,7 @@ export type AiExtraction = { draft: RecipeDraft & { dishPhoto: DishBox | null };
 
 export type ExtractInput =
   | { kind: 'description' | 'page'; text: string; sourceUrl?: string }
-  | { kind: 'photos'; images: ProviderImage[]; text?: string };
+  | { kind: 'photos'; images: ProviderImage[] };
 
 export interface AiClient {
   extractRecipe(input: ExtractInput): Promise<AiExtraction>;
@@ -108,7 +108,7 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
   async function extractWith(budget: Budget, provider: Provider, input: ExtractInput): Promise<AiExtraction> {
     const first: ProviderMessage =
       input.kind === 'photos'
-        ? { role: 'user', text: buildUserMessage({ kind: 'photos', text: input.text, imageCount: input.images.length }), images: input.images }
+        ? { role: 'user', text: buildUserMessage({ kind: 'photos', imageCount: input.images.length }), images: input.images }
         : { role: 'user', text: buildUserMessage(input) };
     const messages: ProviderMessage[] = [first];
     let lastError = '';
