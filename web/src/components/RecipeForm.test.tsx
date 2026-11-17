@@ -250,6 +250,21 @@ describe('RecipeForm', () => {
       expect(onSave.mock.calls[0][0]).toMatchObject({ brand: null, origin: 'other' });
     });
 
+    it('seeds a missing brand from origin and source name, like migration 007', async () => {
+      const user = userEvent.setup();
+      const run = async (over: Partial<RecipeInput>) => {
+        const onSave = vi.fn();
+        const { brand: _b, ...noBrand } = { ...empty, title: 'Soup', ...over };
+        const { unmount } = render(<RecipeForm initial={noBrand as unknown as RecipeInput} onSave={onSave} />);
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        unmount();
+        return onSave.mock.calls[0][0];
+      };
+      expect(await run({ origin: 'mine' })).toMatchObject({ brand: 'Mine', origin: 'mine' });
+      expect(await run({ origin: 'other', sourceName: 'gousto' })).toMatchObject({ brand: 'Gousto', origin: 'other' });
+      expect(await run({ origin: 'other', sourceName: 'bbc.co.uk' })).toMatchObject({ brand: 'bbc.co.uk', origin: 'other' });
+    });
+
     it('saves a typed brand and derives the origin from it', async () => {
       const onSave = vi.fn();
       const user = userEvent.setup();

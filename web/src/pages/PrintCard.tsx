@@ -25,17 +25,17 @@ function metaLine(r: Recipe): string {
   ].filter(Boolean).join(' · ');
 }
 
-/**
- * The recipe as it goes on paper: A4 landscape, the photo on its own side and the cooking side holding the
- * ingredients once down the left with the method beside them. Printing is the browser's own, so what is on
- * screen here is what comes out of the printer.
- */
 /** Who the card credits: the brand if it has one, else the site it came from, else it is the cook's own. */
 function footerCredit(r: { brand: string | null; sourceName: string | null }, source: { host: string } | null): string {
   if (r.brand && r.brand !== 'Mine') return `From ${r.brand}`;
   return source ? `From ${r.sourceName ?? source.host}` : 'My recipe';
 }
 
+/**
+ * The recipe as it goes on paper: A4 landscape, the photo on its own side and the cooking side holding the
+ * ingredients once down the left with the method beside them. Printing is the browser's own, so what is on
+ * screen here is what comes out of the printer.
+ */
 export function PrintCard() {
   const { id = '' } = useParams();
   const [raw, setRecipe] = useState<Recipe | null>(null);

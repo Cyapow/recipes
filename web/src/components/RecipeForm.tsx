@@ -3,7 +3,7 @@ import { cropImage, uploadImage, type Box1000, type Facets } from '../api';
 import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { canonicalUnit } from '../../../server/src/recipes/amount';
 import { IngredientRows } from './IngredientRows';
-import { KNOWN_BRANDS, TAG_GROUPS, normaliseTags, originForBrand, type TagGroup } from '../../../server/src/recipes/categories';
+import { KNOWN_BRANDS, TAG_GROUPS, canonicalBrand, normaliseTags, originForBrand, type TagGroup } from '../../../server/src/recipes/categories';
 import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
@@ -37,7 +37,10 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
-  const [brand, setBrand] = useState(initial.brand ?? '');
+  const [brand, setBrand] = useState(
+    // A draft kept from before brands existed has no brand key: seed it the way migration 007 does.
+    initial.brand !== undefined ? (initial.brand ?? '') : initial.origin === 'mine' ? 'Mine' : (canonicalBrand(initial.sourceName) ?? ''),
+  );
   const [sourceName, setSourceName] = useState(initial.sourceName ?? '');
   const [sourceUrl, setSourceUrl] = useState(initial.sourceUrl ?? '');
   const [servings, setServings] = useState(initial.servings?.toString() ?? '');

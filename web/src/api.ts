@@ -7,7 +7,6 @@ export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingIte
 
 export type { Box1000, Tag };
 
-/** origin is interim: the Library's Mine / From elsewhere chips still use it until the Filters sheet replaces them. */
 export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[] };
 
 /** What the library can be filtered by, with how many recipes each has. */
