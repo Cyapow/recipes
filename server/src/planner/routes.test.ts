@@ -5,8 +5,12 @@ import { describe, it, expect } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import type { RecipeInput } from '../recipes/schema.js';
+import { signedIn } from '../auth/testing.js';
 
-const make = () => buildApp({ config: { dataDir: mkdtempSync(path.join(tmpdir(), 'planner-')) } as never, db: openDb(':memory:') });
+const make = () => {
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config: { dataDir: mkdtempSync(path.join(tmpdir(), 'planner-')) } as never, db }), db);
+};
 type App = ReturnType<typeof make>;
 
 const line = (item: string, quantity: number | null = 1, unit: string | null = null) =>

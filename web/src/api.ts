@@ -108,7 +108,7 @@ export async function describeRecipe(text: string): Promise<AiDraft> {
 export type PhotosDraft = AiDraft & { dishCrop: ({ sourceImageId: string } & Box1000) | null };
 
 export async function photosRecipe(imageIds: string[]): Promise<PhotosDraft> {
-  const res = await fetch('/api/ai/photos', {
+  const res = await apiFetch('/api/ai/photos', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ imageIds }),

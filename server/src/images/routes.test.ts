@@ -122,7 +122,8 @@ describe('POST /api/images/:id/crop', () => {
   it('422 when the stored file cannot be decoded', async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), 'img-routes-'));
     dirs.push(dataDir);
-    const app = buildApp({ config: { dataDir } as never, db: openDb(':memory:') });
+    const db = openDb(':memory:');
+    const app = signedIn(buildApp({ config: { dataDir } as never, db }), db);
     const id = 'e'.repeat(64) + '.jpg';
     mkdirSync(path.join(dataDir, 'images'), { recursive: true });
     writeFileSync(path.join(dataDir, 'images', id), 'not an image');
