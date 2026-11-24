@@ -6,7 +6,7 @@ The box also runs the unrelated "docwright beta" containers. Nothing here touche
 
 ## What's new
 
-Public hosting on Hetzner, with Google sign-in.
+This release moves Recipes from the LAN box to the public Hetzner server behind nginx, with Google sign-in. Because this branch was rebased onto the LAN box's deployed branch, it also carries that branch's features (brands, grouped tags, prices, shops, ingredient packs, recipe-card photos, a planner and library filters; see "Previous release" below). The LAN data is migrated on first start.
 
 Before upgrading:
 
@@ -19,10 +19,10 @@ What changed:
 - **Everyone must sign in.** The app had no login before. Set `ALLOWED_EMAILS` in `.env` to your own Google address before the first start. The server refuses to start when that is empty and the allowlist is empty too, and prints `Refusing to start: nobody can sign in. Set ALLOWED_EMAILS in .env to your own Google address.`
 - `ALLOWED_EMAILS` is break-glass only: your own address and nobody else. Addresses set there cannot be removed in Settings. Everyone else you want to let in (your wife, say) is added in Settings > "Who can get in", by typing their Google address; they then sign in themselves. The last address and your own address cannot be removed, so you cannot lock yourself out.
 - Sessions last 90 days from sign-in and then expire, whatever you do in between. They are stored hashed, so a backup in Drive does not contain usable credentials. Removing someone in Settings ends their access immediately.
-- The allowlist is part of the backup, and the backup fingerprint now includes it, so the first nightly backup after this deploy uploads once even if nothing else changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
+- The allowlist is part of the backup, and the backup fingerprint now includes it, so the first nightly backup after this deploy uploads once even if no recipe changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
 - Signed-out requests to `/api` paths that do not exist now answer 401, not 404. This is deliberate: it stops a signed-out client from finding out which routes exist.
 - The app moves from the LAN box to Hetzner behind nginx, replacing the LAN-only Caddy guard (`deploy/recipes.caddy` is gone). Sign-in is what protects it now. The domain, `PUBLIC_BASE_URL` and the Google redirect URI for Drive are unchanged.
-- Migration `008_auth.sql` takes the database to schema version 8 (the allowlist and the sessions). It runs on first start.
+- Migration `008_auth.sql` takes the database to schema version 8 (the allowlist and the sessions). It runs on first start, on top of the LAN box's schema version 7. Once it has run, a snapshot taken by the new build cannot be restored into an older build.
 
 After deploying:
 
@@ -37,6 +37,8 @@ Rolling back:
 - The shortest rollback: the LAN `recipes_recipes_data` volume was stopped before the copy, mounted read-only for it, and never migrated, so it is still the pre-upgrade database. Check out the old commit on the LAN box and start it on that volume (steps A below). No download and no restore.
 - If that volume is gone, check out the old commit AND restore the pre-upgrade snapshot you noted and downloaded before upgrading (steps B below).
 - In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-8 one that the old build cannot take.
+
+The quick rollback depends on the existing LAN install: the app's checkout in `/opt/recipes`, its `.env`, the `recipes-app` container and the `recipes_recipes_data` volume. That install was set up before this release and this release does not touch it: step 4 of the first-deploy sequence only stops the container and copies the volume out read-only. Leave all of it in place, untouched, until Hetzner has proven itself (see step 10). Deleting or rebuilding it turns a quick rollback into a restore from Drive.
 
 Steps A (LAN volume intact):
 
@@ -62,7 +64,7 @@ Do not leave both boxes running. Two instances backing up to one Drive folder is
 
 Checks after deploying:
 
-1. Over the SSH tunnel, step 6 of the first-deploy sequence: every `/api` route except `/api/health` and `/api/auth/config` answers 401.
+1. Over the SSH tunnel, step 6 of the first-deploy sequence: every route in the list answers 401 except `/api/health`, `/api/auth/config` and `/api/auth/google`.
 2. Sign in over https from off the home network. Add a second address in Settings, sign in as that person on another device, then remove them and confirm that device is signed out at its next request.
 3. Press "Back up now" and confirm it succeeds without reconnecting Drive.
 4. The next morning, confirm a nightly backup ran (Settings shows the last backup).
@@ -102,7 +104,7 @@ ssh mat@ubuntu 'cat /opt/recipes/.env' | ssh deploy@hetzner 'cat > /home/deploy/
 ssh deploy@hetzner "printf '\nALLOWED_EMAILS=%s\n' you@gmail.com >> /home/deploy/recipes/.env"
 ```
 
-Use your own Google address in place of `you@gmail.com`. Then check, on the box, that the file has what it needs:
+Use your own Google address in place of `you@gmail.com`. The LAN `.env` currently has the unedited placeholder `AI_PROVIDER=anthropic|openai|gemini` (copied from the comment in `.env.example`). `server/src/config.ts` logs a warning and ignores an unknown value, so the app still works and uses the first provider that has a key (Claude, then ChatGPT, then Gemini), but do not carry the junk to the new box: edit `/home/deploy/recipes/.env` there and set `AI_PROVIDER` to one of `anthropic`, `openai`, `gemini`, or leave it empty. Then check, on the box, that the file has what it needs:
 
 ```sh
 grep -E '^(ALLOWED_EMAILS|PUBLIC_BASE_URL|GOOGLE_CLIENT_ID|TZ)=' /home/deploy/recipes/.env
@@ -193,11 +195,57 @@ ssh -N -L 3006:127.0.0.1:3006 deploy@hetzner
 
 In another:
 
+Every route the app registers, each with its own method (a wrong method on a real path would reach no route at all, which only proves the catch-all). `:id`-style segments use a dummy value, and `curl` sends no `Origin`, so the same-origin guard lets the mutating calls through to the sign-in guard:
+
 ```sh
-for p in /api/health /api/auth/config /api/recipes /api/shopping /api/tags /api/backup/status /api/ai/status /api/auth/allowed /api/auth/me /api/no-such-route; do printf '%s ' "$p"; curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3006$p"; done
+while read -r m p; do printf '%s %s ' "$m" "$p"; curl -s -o /dev/null -X "$m" -w '%{http_code}\n' "http://127.0.0.1:3006$p"; done <<'EOF'
+GET /api/health
+GET /api/auth/config
+POST /api/auth/google
+GET /api/auth/me
+POST /api/auth/signout
+GET /api/auth/allowed
+POST /api/auth/allowed
+DELETE /api/auth/allowed/x@example.com
+GET /api/recipes
+GET /api/recipes/1
+POST /api/recipes
+PUT /api/recipes/1
+DELETE /api/recipes/1
+GET /api/tags
+GET /api/shopping
+POST /api/shopping/add
+DELETE /api/shopping/1
+DELETE /api/shopping
+GET /api/planner/shops
+POST /api/planner/shops
+PUT /api/planner/shops/1
+DELETE /api/planner/shops/1
+GET /api/planner/ingredients
+PUT /api/planner/ingredient
+DELETE /api/planner/ingredient
+GET /api/planner/budget
+PUT /api/planner/budget
+POST /api/planner/add-to-shopping
+POST /api/planner/plan
+POST /api/images
+GET /api/images/1
+GET /api/images/1/thumb
+POST /api/images/1/crop
+POST /api/import
+GET /api/ai/status
+POST /api/ai/describe
+POST /api/ai/photos
+GET /api/backup/status
+POST /api/backup/run
+GET /api/backup/google/start
+GET /api/backup/google/callback
+POST /api/backup/google/disconnect
+GET /api/no-such-route
+EOF
 ```
 
-Expected: `/api/health` and `/api/auth/config` answer `200`; **every other line answers `401`**, including `/api/no-such-route`. Any other `/api` route answering `200` means stop: do not move DNS. Close the tunnel with Ctrl-C afterwards.
+Expected: `GET /api/health` and `GET /api/auth/config` answer `200`; `POST /api/auth/google` is deliberately open (it is the sign-in call) and answers a client error from its own validation, never `200`; **every other line answers `401`**, including `/api/no-such-route`. Any other line answering `200` (or `403`, `404` or `5xx`, which would mean the request never reached the guard) means stop: do not move DNS. The list comes from the route registrations in `server/src/app.ts` and the `register*Routes` functions it calls; when a route is added, add it here. Close the tunnel with Ctrl-C afterwards.
 
 This check is deliberately narrow. The Google sign-in button cannot be used here: `http://127.0.0.1:3006` is not one of the Authorized JavaScript origins on the Google client, and Google only accepts plain http for `localhost` origins you have registered. The sign-in itself is checked at step 9, over https.
 
@@ -234,8 +282,13 @@ This is the first moment the site is public. The guard has been running and chec
 From a phone off the home wifi, or any machine other than the LAN box: open `https://recipes.matchapman.dev`, sign in with the allowlisted Google account, and check:
 
 1. The recipe list shows the same number of recipes you noted on the LAN app, and a recipe with a photo opens with its photo.
-2. Settings > Who can get in lists your address; add anyone else who should have access.
-3. Settings shows Drive still connected. Press "Back up now" and confirm success.
+2. Brands and tags: open Filters, pick a Brand and a tag from another group, and confirm the list narrows. Open a recipe and check its brand and grouped tags match the LAN app.
+3. Edit a recipe: change a price or tag, save, reload, and confirm it stuck. Then change it back.
+4. From photos: add one or two photos of a recipe card from a phone. Confirm a draft appears with a brand, tags and a cropped dish photo, then discard it. This needs a working AI key on the new box.
+5. Shopping list: add a recipe's ingredients and confirm they appear.
+6. Planner: confirm your shops, ingredient packs and budget came across, plan a couple of recipes, and add the result to the shopping list.
+7. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
+8. Settings shows Drive still connected. Press "Back up now" and confirm success.
 
 Done means the site is running on Hetzner and you have signed in over https from off the home network.
 
@@ -313,7 +366,7 @@ Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compo
 - **Library filters.** The Filters button opens a sheet with Brand, Cuisine, Meal, Main ingredient and Other. Within one group a recipe matches any of your picks; across groups it must match all of them. Filters are kept while you browse in that tab.
 - **From photos.** Add up to 6 photos of a recipe card (front, back, extra pages) from the installed app's camera or photo library. The phone shrinks each photo before upload. The AI suggests the brand and tags only from what is printed on the card, and anything it couldn't read is listed under "Check these". The dish photo is cropped from the card; use Adjust, Use whole photo or Remove. The card photos are kept on the recipe (about 300 KB each).
 - **AI models must take images.** From photos needs an AI key whose model accepts images. The defaults in `.env.example` (`claude-sonnet-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) all do (checked against the provider docs on 2026-11-16). If you changed a model, make sure it accepts image input, or From photos moves on to the next provider.
-- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The box's `.env` currently has an invalid value.
+- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The LAN box's `.env` has the unedited placeholder; the Hetzner deploy fixes it on the copy (step 2 of the first-deploy sequence).
 - **Fully close and reopen the app on every phone after upgrading.** A tab or installed app that stayed open keeps running the old code and can send tags the new server doesn't expect. Swipe the app away completely, then open it again.
 - **iPhone photos.** iOS normally gives the browser a JPEG. If a HEIC ever gets through and the phone can't shrink it, the upload may be refused as "not a supported image"; take the photo again with the camera button.
 

@@ -303,3 +303,7 @@ including the fact that everyone must sign in after this deploy.
   in its own service-worker cache. They are that device's own cached images, and the data
   behind them is not reachable.
 - Where the allowlist UI sits within the existing Settings page layout.
+
+## Amendment, 2026-11-24: migration renumbered to 008
+
+This design specified the auth migration as `003_auth.sql`; it is now `008_auth.sql`. The branch was cut from a stale `main`, so `003` collided with the existing `003_prices.sql`, and the live LAN database turned out to be at `user_version = 7` on the `feat/recipe-categories-and-card-photos` branch. The owner decided to rebase this branch onto that branch and renumber the migration to `008`, so the deployed database upgrades in order from 7 to 8.
