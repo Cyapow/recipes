@@ -4,7 +4,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
 
-vi.mock('./api', () => ({ listShopping: vi.fn().mockResolvedValue([]) }));
+vi.mock('./api', () => ({
+  listShopping: vi.fn().mockResolvedValue([]),
+  getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }),
+}));
 afterEach(cleanup);
 
 describe('App routes', () => {
@@ -13,9 +16,9 @@ describe('App routes', () => {
     expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeTruthy();
   });
 
-  it('renders Page not found with a link back for an unknown URL', () => {
+  it('renders Page not found with a link back for an unknown URL', async () => {
     render(<MemoryRouter initialEntries={['/nope/at/all']}><App /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to library' }).getAttribute('href')).toBe('/');
   });
 

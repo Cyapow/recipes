@@ -266,3 +266,17 @@ export type AddPlanResult = { added: number; alreadyOnList: string[]; elsewhere:
 /** Puts the recipes on the shopping list, each ingredient in the section of its shop. */
 export const addPlanToShopping = (recipeIds: string[]): Promise<AddPlanResult> =>
   putJson('/api/planner/add-to-shopping', { recipeIds }, 'POST') as Promise<AddPlanResult>;
+
+export const getAuthConfig = (): Promise<{ clientId: string | null }> => request('/api/auth/config');
+
+export const getMe = (): Promise<{ email: string }> => request('/api/auth/me');
+
+export const signInWithGoogle = (credential: string): Promise<{ email: string }> =>
+  request('/api/auth/google', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  });
+
+export const signOut = (): Promise<void> =>
+  request<unknown>('/api/auth/signout', { method: 'POST' }).then(() => undefined);

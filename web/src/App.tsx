@@ -12,24 +12,27 @@ import { Shopping } from './pages/Shopping';
 import { Planner } from './pages/Planner';
 import { Ingredients } from './pages/Ingredients';
 import { NotFound } from './pages/NotFound';
+import { AuthGate } from './components/AuthGate';
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Library />} />
-      <Route path="/new" element={<Editor />} />
-      <Route path="/describe" element={<Describe />} />
-      <Route path="/photos" element={<Photos />} />
-      <Route path="/import" element={<Import />} />
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/shopping" element={<Shopping />} />
-      <Route path="/planner" element={<Planner />} />
-      <Route path="/ingredients" element={<Ingredients />} />
-      <Route path="/recipe/:id" element={<RecipeOverview />} />
-      <Route path="/recipe/:id/cook" element={<Cook />} />
-      <Route path="/recipe/:id/edit" element={<Editor />} />
-      <Route path="/recipe/:id/print" element={<PrintCard />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <AuthGate>
+      <Routes>
+        <Route path="/" element={<Library />} />
+        <Route path="/new" element={<Editor />} />
+        <Route path="/describe" element={<Describe />} />
+        <Route path="/photos" element={<Photos />} />
+        <Route path="/import" element={<Import />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/shopping" element={<Shopping />} />
+        <Route path="/planner" element={<Planner />} />
+        <Route path="/ingredients" element={<Ingredients />} />
+        <Route path="/recipe/:id" element={<RecipeOverview />} />
+        <Route path="/recipe/:id/cook" element={<Cook />} />
+        <Route path="/recipe/:id/edit" element={<Editor />} />
+        <Route path="/recipe/:id/print" element={<PrintCard />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AuthGate>
   );
 }
