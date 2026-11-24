@@ -1,37 +1,249 @@
 # Deploying Recipes
 
+Recipes runs on the Hetzner box (`hetzner`, 46.224.82.225) as its own compose project in `/home/deploy/recipes`. The container listens on `127.0.0.1:3006` only. The host's nginx owns ports 80 and 443 and proxies `recipes.matchapman.dev` to it, with a Let's Encrypt certificate from certbot, exactly as it does for the other sites on that box. Everything is behind Google sign-in: only addresses on the allowlist get in.
+
+The box also runs the unrelated "docwright beta" containers. Nothing here touches them: do not run `docker system prune`, `docker compose down` or anything else outside `/home/deploy/recipes`. The one prune below is `docker builder prune`, which only clears build cache.
+
 ## What's new
 
-Brands, filters and recipes from photos.
+Public hosting on Hetzner, with Google sign-in.
 
-Before upgrading, take a backup: open Settings and press "Back up now". If anything goes wrong, "Restoring from a Drive backup" below explains how to roll back (pass `--snapshot` with the pre-upgrade file name so you don't get a newer one).
+Before upgrading:
 
-Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compose up -d --build`.
+- In the running app (on the LAN box, still the old version) open Settings, press "Back up now" and confirm it reports success.
+- In Drive open "Recipes backup/snapshots" and note the exact file name of that backup (`recipes-<stamp>.sqlite`, the newest one). Download it, together with the `images/` folder, and keep a copy somewhere safe, with the name written down. The rollback below needs exactly this file, and Drive retention keeps only the newest 14 snapshots, so Drive will eventually delete it.
+- Have your own Google address ready for `ALLOWED_EMAILS`, and add the Authorized JavaScript origins in [setup-google.md](setup-google.md).
 
-- **Brand and grouped tags.** Migration 007 runs by itself when the container starts. Existing recipes are sorted like this:
-  - Recipes you described or wrote yourself get the brand Mine.
-  - Link recipes get a brand from the source name they stored. HelloFresh, Gousto and Simply Cook spellings are tidied up; any other site gets its host, for example `bbcgoodfood.com`. Rename it in the edit form; later imports from the same site reuse the new brand.
-  - Every existing tag goes under Other.
-- **Library filters.** The Filters button opens a sheet with Brand, Cuisine, Meal, Main ingredient and Other. Within one group a recipe matches any of your picks; across groups it must match all of them. Filters are kept while you browse in that tab.
-- **From photos.** Add up to 6 photos of a recipe card (front, back, extra pages) from the installed app's camera or photo library. The phone shrinks each photo before upload. The AI suggests the brand and tags only from what is printed on the card, and anything it couldn't read is listed under "Check these". The dish photo is cropped from the card; use Adjust, Use whole photo or Remove. The card photos are kept on the recipe (about 300 KB each).
-- **AI models must take images.** From photos needs an AI key whose model accepts images. The defaults in `.env.example` (`claude-sonnet-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) all do (checked against the provider docs on 2026-11-16). If you changed a model, make sure it accepts image input, or From photos moves on to the next provider.
-- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The box's `.env` currently has an invalid value.
-- **Fully close and reopen the app on every phone after upgrading.** A tab or installed app that stayed open keeps running the old code and can send tags the new server doesn't expect. Swipe the app away completely, then open it again.
-- **iPhone photos.** iOS normally gives the browser a JPEG. If a HEIC ever gets through and the phone can't shrink it, the upload may be refused as "not a supported image"; take the photo again with the camera button.
+What changed:
+
+- **Everyone must sign in.** The app had no login before. Set `ALLOWED_EMAILS` in `.env` to your own Google address before the first start. The server refuses to start when that is empty and the allowlist is empty too, and prints `Refusing to start: nobody can sign in. Set ALLOWED_EMAILS in .env to your own Google address.`
+- `ALLOWED_EMAILS` is break-glass only: your own address and nobody else. Addresses set there cannot be removed in Settings. Everyone else you want to let in (your wife, say) is added in Settings > "Who can get in", by typing their Google address; they then sign in themselves. The last address and your own address cannot be removed, so you cannot lock yourself out.
+- Sessions last 90 days from sign-in and then expire, whatever you do in between. They are stored hashed, so a backup in Drive does not contain usable credentials. Removing someone in Settings ends their access immediately.
+- The allowlist is part of the backup, and the backup fingerprint now includes it, so the first nightly backup after this deploy uploads once even if nothing else changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
+- Signed-out requests to `/api` paths that do not exist now answer 401, not 404. This is deliberate: it stops a signed-out client from finding out which routes exist.
+- The app moves from the LAN box to Hetzner behind nginx, replacing the LAN-only Caddy guard (`deploy/recipes.caddy` is gone). Sign-in is what protects it now. The domain, `PUBLIC_BASE_URL` and the Google redirect URI for Drive are unchanged.
+- Migration `003_auth.sql` takes the database to schema version 3 (the allowlist and the sessions). It runs on first start.
+
+After deploying:
+
+- Every phone and tablet, and the installed app, asks for a Google sign-in once. After that it stays signed in for 90 days. Offline, the installed app keeps working from its cache and does not ask you to sign in.
+- Fully close and reopen the installed app so it picks up the new version.
 
 Rolling back:
 
-- An older version can't read the new `{group, name}` tags, so rebuilding the old commit is not enough once the upgrade has run.
-- Check out the old commit AND restore the pre-upgrade snapshot explicitly with `--snapshot <name>` (the file you noted before upgrading). Never use the restore default, which picks the newest snapshot, and that one has the new tag format. See "Restoring from a Drive backup" below.
-- Edits made after the upgrade are lost.
+- Rebuilding the old commit is NOT enough. The database has been migrated to schema version 3, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
+- Roll back by checking out the old commit AND restoring the pre-upgrade snapshot you noted and downloaded before upgrading. Recipes added after the upgrade are lost.
+- NEVER roll back with the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-3 one that the old build cannot take.
+- The old build must never sit behind the public nginx vhost: it would be a site with no login. Take the Hetzner container down first, and roll back on the LAN box, where it is LAN-only again.
 
-## First install
+Steps:
 
-1. Copy the repo to the box.
-2. `cp .env.example .env` and fill in the values.
-3. Make sure the `studioos-lan-edge` Docker network exists (created by the Studio OS stack), then `docker compose up -d --build`.
-4. Copy `deploy/recipes.caddy` into the fronting Caddy's `sites/` directory and reload Caddy.
-5. Add a DNS A record for `recipes.matchapman.dev` pointing at the box's LAN IP.
+1. Stop the new app so nothing else is writing to Drive: on Hetzner, `docker compose stop recipes` in `/home/deploy/recipes`.
+2. Cloudflare (owner): point the `recipes` A record back at the LAN IP.
+3. On the LAN box, put the downloaded pre-upgrade `recipes-<stamp>.sqlite` in a folder (for example `/path/to/downloaded/backup`) together with the `images/` folder from Drive. Ideally the folder holds only that one snapshot.
+4. Check out the old commit in the LAN project directory and stop the app: `docker compose stop recipes` (the old container, `recipes-app`, has been stopped since the move).
+5. Restore that exact file, with `--snapshot` and `--force`:
+
+   ```sh
+   docker compose run --rm --no-deps -v /path/to/downloaded/backup:/restore:ro recipes npm run restore -- /restore --snapshot recipes-<stamp>.sqlite --force
+   ```
+
+6. Rebuild and start the old version: `docker compose up -d --build`. This recreates the container with its normal restart policy.
+
+Do not leave both boxes running. Two instances backing up to one Drive folder is the failure to avoid.
+
+Checks after deploying:
+
+1. Over the SSH tunnel, step 6 of the first-deploy sequence: every `/api` route except `/api/health` and `/api/auth/config` answers 401.
+2. Sign in over https from off the home network. Add a second address in Settings, sign in as that person on another device, then remove them and confirm that device is signed out at its next request.
+3. Press "Back up now" and confirm it succeeds without reconnecting Drive.
+4. The next morning, confirm a nightly backup ran (Settings shows the last backup).
+5. Do a restore drill (see above). Note it restores the newest snapshot by default and replaces the live database, so only do it when you are happy to go back to that backup.
+
+## First deploy, or moving from the LAN box
+
+Who runs what: the `docker` and data steps need only `deploy@hetzner` (and `mat@ubuntu` for the LAN box). The nginx and certbot commands need root, and `deploy` has to type a sudo password for them, so they are for the box's owner to run by hand. The Cloudflare record and the Google Cloud origins are the owner's too.
+
+**The order matters.** The app starts on the loopback address with the sign-in guard already live and `ALLOWED_EMAILS` set, and is checked there. Only after that does DNS move and a certificate get issued. At no step is a Recipes without a login reachable from the internet.
+
+Before you start: do the "Before upgrading" steps in "What's new" above (a "Back up now" and a downloaded copy of the snapshot), and add the Authorized JavaScript origins in [setup-google.md](setup-google.md).
+
+### 1. Prepare the box (as `deploy`)
+
+```sh
+ssh deploy@hetzner
+docker builder prune -f
+df -h /
+ss -ltn | grep ':3006 ' || echo "3006 is free"
+```
+
+The disk is about 86% full, and most of that is Docker build cache, so the prune is what makes room for the image build. After it, `df` should show well over 10G free. The `ss` line must print `3006 is free`; if something is listening there, stop and pick another host port in `docker-compose.yml` (and in `deploy/recipes.nginx.conf`).
+
+### 2. Put the code and `.env` on the box
+
+From your checkout of this repo (not on the box):
+
+```sh
+rsync -a --exclude node_modules --exclude dist --exclude .git --exclude .env ./ deploy@hetzner:/home/deploy/recipes/
+```
+
+Copy the `.env` from the LAN box (it holds the Google client and AI keys), then add the allowlist. `<LAN repo dir>` is wherever the LAN box keeps this project:
+
+```sh
+ssh mat@ubuntu 'cat <LAN repo dir>/.env' | ssh deploy@hetzner 'cat > /home/deploy/recipes/.env && chmod 600 /home/deploy/recipes/.env'
+ssh deploy@hetzner "echo 'ALLOWED_EMAILS=you@gmail.com' >> /home/deploy/recipes/.env"
+```
+
+Use your own Google address in place of `you@gmail.com`. Then check, on the box, that the file has what it needs:
+
+```sh
+grep -E '^(ALLOWED_EMAILS|PUBLIC_BASE_URL|GOOGLE_CLIENT_ID|TZ)=' /home/deploy/recipes/.env
+```
+
+`ALLOWED_EMAILS` must appear exactly once and not be empty: with it empty (and an empty allowlist) the server refuses to start, printing `Refusing to start: nobody can sign in. Set ALLOWED_EMAILS in .env to your own Google address.` `PUBLIC_BASE_URL` stays `https://recipes.matchapman.dev`: the domain does not change, so the Google redirect URI for Drive backups stays valid.
+
+### 3. Build, and create the volume without starting
+
+```sh
+cd /home/deploy/recipes
+docker compose build
+docker compose up --no-start
+docker volume ls | grep recipes_recipes_data
+```
+
+`--no-start` creates the container and the empty `recipes_recipes_data` volume but does not run the app. That matters: if the app started now it would create a fresh empty database, which the data copy would then have to overwrite.
+
+### 4. Copy the data across
+
+The LAN box's volume is `recipes_recipes_data`; the new one on Hetzner has the same name. The copy carries the database, the photos in `images/` **and** `google-token.json`, so Drive stays connected and you do not reconnect it.
+
+On the LAN box (`ssh mat@ubuntu`), first note the counts to compare against later:
+
+```sh
+docker exec recipes-app node -e "const D=require('better-sqlite3');console.log(new D('/data/recipes.sqlite',{readonly:true}).prepare('select count(*) n from recipes').get())"
+docker exec recipes-app sh -c 'ls /data/images | wc -l'
+```
+
+Then stop the LAN app. The SQLite file must not be open while it is copied, so do not skip this:
+
+```sh
+docker stop recipes-app
+docker update --restart=no recipes-app
+cd ~
+docker run --rm -v recipes_recipes_data:/from:ro -v "$PWD":/out alpine tar -czf /out/recipes-data.tgz -C /from .
+ls -lh recipes-data.tgz
+```
+
+Now the LAN app is down. From your own machine, stream the tarball to the Hetzner box:
+
+```sh
+ssh mat@ubuntu 'cat recipes-data.tgz' | ssh deploy@hetzner 'cat > recipes-data.tgz'
+```
+
+On Hetzner (`ssh deploy@hetzner`), unpack it into the new volume and look at what arrived:
+
+```sh
+cd ~
+docker run --rm -v recipes_recipes_data:/to -v "$PWD":/in:ro alpine tar -xzf /in/recipes-data.tgz -C /to
+docker run --rm -v recipes_recipes_data:/to:ro alpine ls -la /to
+```
+
+You should see `recipes.sqlite` (plus `recipes.sqlite-wal` and `-shm` if they were present), the `images` directory, and `google-token.json`. Once you are happy, remove the tarballs from both boxes (`rm recipes-data.tgz`); the one on the LAN box is root-owned but sits in your own home directory, so `rm` works.
+
+### 5. Start it, bound to loopback only
+
+```sh
+cd /home/deploy/recipes
+docker compose start recipes
+docker logs recipes-app
+docker port recipes-app
+ss -ltn | grep ':3006 '
+```
+
+The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 3 (`003_auth.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
+
+Check the data made it. These must match the counts you noted on the LAN box:
+
+```sh
+docker exec recipes-app node -e "const D=require('better-sqlite3');console.log(new D('/data/recipes.sqlite',{readonly:true}).prepare('select count(*) n from recipes').get())"
+docker exec recipes-app sh -c 'ls /data/images | wc -l'
+```
+
+And confirm nothing outside the box can reach the port. From your own machine this must fail (connection refused or a timeout), not answer:
+
+```sh
+curl -m 5 http://46.224.82.225:3006/api/health
+```
+
+### 6. Check the guard over an SSH tunnel
+
+In one terminal on your own machine:
+
+```sh
+ssh -N -L 3006:127.0.0.1:3006 deploy@hetzner
+```
+
+In another:
+
+```sh
+for p in /api/health /api/auth/config /api/recipes /api/shopping /api/tags /api/backup/status /api/ai/status /api/auth/allowed /api/auth/me /api/no-such-route; do printf '%s ' "$p"; curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:3006$p"; done
+```
+
+Expected: `/api/health` and `/api/auth/config` answer `200`; **every other line answers `401`**, including `/api/no-such-route`. Any other `/api` route answering `200` means stop: do not move DNS. Close the tunnel with Ctrl-C afterwards.
+
+This check is deliberately narrow. The Google sign-in button cannot be used here, because Google refuses plain-http and raw-IP origins. The sign-in itself is checked at step 9, over https.
+
+### 7. Point DNS at the box (owner, Cloudflare)
+
+Change the `recipes` A record for `matchapman.dev` from the LAN IP to `46.224.82.225`, and set it to **DNS only (grey cloud)**. Grey keeps certificate issuance and renewal working (they use plain HTTP on port 80) and keeps photo uploads out of Cloudflare's request size limit.
+
+Wait until it resolves, from any machine:
+
+```sh
+dig +short recipes.matchapman.dev @1.1.1.1
+```
+
+It must print `46.224.82.225`. Certbot's check fails if the name does not resolve to this box yet.
+
+### 8. Install the nginx vhost and get the certificate (owner, needs sudo)
+
+As `deploy` on the box (sudo asks for the password). First look at how the existing sites are laid out, so the new one matches:
+
+```sh
+ls -l /etc/nginx/sites-enabled/
+```
+
+If those entries are symlinks into `/etc/nginx/sites-available/`, follow this. If they are plain files, put the new file straight into `sites-enabled/` and skip the `ln`.
+
+```sh
+sudo cp /home/deploy/recipes/deploy/recipes.nginx.conf /etc/nginx/sites-available/recipes.matchapman.dev
+sudo ln -s /etc/nginx/sites-available/recipes.matchapman.dev /etc/nginx/sites-enabled/recipes.matchapman.dev
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot --nginx -d recipes.matchapman.dev
+```
+
+`nginx -t` must say the test is successful before you reload. When certbot asks, choose to redirect HTTP to HTTPS. It adds the `listen 443 ssl` lines, the certificate paths and the redirect to the vhost, the same as it did for `regex-builder.com`. Afterwards `sudo certbot renew --dry-run` confirms renewal will work.
+
+This is the first moment the site is public. The guard has been running and checked since step 6.
+
+### 9. Sign in over https
+
+From a phone off the home wifi, or any machine other than the LAN box: open `https://recipes.matchapman.dev`, sign in with the allowlisted Google account, and check:
+
+1. The recipes and photos are all there.
+2. Settings > Who can get in lists your address; add anyone else who should have access.
+3. Settings shows Drive still connected. Press "Back up now" and confirm success.
+
+Done means the site is running on Hetzner and you have signed in over https from off the home network.
+
+### 10. The LAN box stays off
+
+**The LAN container stays stopped, and its `recipes_recipes_data` volume stays exactly where it is, as a cold copy.** Do not start it, do not delete it, and do not run `docker compose up` in the old project directory on the LAN box. Two live instances would both back up to the same Drive folder, and the nightly backup overwrites a shared snapshot set. SQLite also has a single writer, and two copies would drift apart. Delete the old volume only after Hetzner has run for a while and has produced a nightly backup.
+
+## Everyday operations
+
+Redeploy after a code change (as `deploy`, in `/home/deploy/recipes`, after syncing the code as in step 2): `docker compose up -d --build`. Logs: `docker logs -f recipes-app`. After an `.env` change: `docker compose up -d --force-recreate`.
 
 ## Restoring from a Drive backup
 
@@ -85,6 +297,29 @@ Describe splits a spoken narrative ("I browned the mince, added an onion, simmer
 The site is an installable PWA (manifest plus a small service worker that only caches the page shell, built assets and recipe photos, never other API calls). On a phone open the site and use "Add to Home Screen" / "Install app". Icons are generated from `web/public/icon.svg` by `npm run icons`.
 
 ## Release history
+
+### Previous release: brands, filters and recipes from photos
+
+Before upgrading, take a backup: open Settings and press "Back up now". If anything goes wrong, "Restoring from a Drive backup" below explains how to roll back (pass `--snapshot` with the pre-upgrade file name so you don't get a newer one).
+
+Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compose up -d --build`.
+
+- **Brand and grouped tags.** Migration 007 runs by itself when the container starts. Existing recipes are sorted like this:
+  - Recipes you described or wrote yourself get the brand Mine.
+  - Link recipes get a brand from the source name they stored. HelloFresh, Gousto and Simply Cook spellings are tidied up; any other site gets its host, for example `bbcgoodfood.com`. Rename it in the edit form; later imports from the same site reuse the new brand.
+  - Every existing tag goes under Other.
+- **Library filters.** The Filters button opens a sheet with Brand, Cuisine, Meal, Main ingredient and Other. Within one group a recipe matches any of your picks; across groups it must match all of them. Filters are kept while you browse in that tab.
+- **From photos.** Add up to 6 photos of a recipe card (front, back, extra pages) from the installed app's camera or photo library. The phone shrinks each photo before upload. The AI suggests the brand and tags only from what is printed on the card, and anything it couldn't read is listed under "Check these". The dish photo is cropped from the card; use Adjust, Use whole photo or Remove. The card photos are kept on the recipe (about 300 KB each).
+- **AI models must take images.** From photos needs an AI key whose model accepts images. The defaults in `.env.example` (`claude-sonnet-5-5`, `gpt-6-luna`, `gemini-3.5-flash-lite`) all do (checked against the provider docs on 2026-11-16). If you changed a model, make sure it accepts image input, or From photos moves on to the next provider.
+- **Check `AI_PROVIDER` in `.env`.** An invalid value isn't an error: the app quietly uses the first provider with a key (order Claude, ChatGPT, Gemini). Set it to `anthropic`, `openai` or `gemini`, or leave it empty. The box's `.env` currently has an invalid value.
+- **Fully close and reopen the app on every phone after upgrading.** A tab or installed app that stayed open keeps running the old code and can send tags the new server doesn't expect. Swipe the app away completely, then open it again.
+- **iPhone photos.** iOS normally gives the browser a JPEG. If a HEIC ever gets through and the phone can't shrink it, the upload may be refused as "not a supported image"; take the photo again with the camera button.
+
+Rolling back:
+
+- An older version can't read the new `{group, name}` tags, so rebuilding the old commit is not enough once the upgrade has run.
+- Check out the old commit AND restore the pre-upgrade snapshot explicitly with `--snapshot <name>` (the file you noted before upgrading). Never use the restore default, which picks the newest snapshot, and that one has the new tag format. See "Restoring from a Drive backup" below.
+- Edits made after the upgrade are lost.
 
 ### Previous release: shopping list and step slides
 

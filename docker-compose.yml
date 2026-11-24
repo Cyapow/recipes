@@ -8,7 +8,9 @@ services:
       TZ: ${TZ:-Europe/London}
     volumes:
       - recipes_data:/data
-    networks: [edge]
+    # Loopback only: the host's nginx is the one thing that faces the internet (see deploy/recipes.nginx.conf).
+    ports:
+      - '127.0.0.1:3006:3000'
     restart: unless-stopped
     labels:
       # Built locally on the box; there is no registry image for Watchtower to pull.
@@ -16,8 +18,3 @@ services:
 
 volumes:
   recipes_data:
-
-networks:
-  edge:
-    external: true
-    name: studioos-lan-edge
