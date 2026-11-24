@@ -6,7 +6,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { Settings } from './Settings';
 import type { AiStatus, BackupStatus } from '../api';
 
-vi.mock('../api', () => ({ getBackupStatus: vi.fn(), runBackupNow: vi.fn(), disconnectGoogle: vi.fn(), getAiStatus: vi.fn() }));
+vi.mock('../api', () => ({ getBackupStatus: vi.fn(), runBackupNow: vi.fn(), disconnectGoogle: vi.fn(), getAiStatus: vi.fn(),
+  listAllowed: vi.fn().mockResolvedValue([]), getMe: vi.fn().mockResolvedValue({ email: 'me@x.com' }), addAllowed: vi.fn(), removeAllowed: vi.fn(), signOut: vi.fn(),
+  ApiError: class extends Error {},
+}));
 import { disconnectGoogle, getAiStatus, getBackupStatus, runBackupNow } from '../api';
 
 afterEach(cleanup);

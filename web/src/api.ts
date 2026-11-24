@@ -295,3 +295,18 @@ export const signInWithGoogle = (credential: string): Promise<{ email: string }>
 
 export const signOut = (): Promise<void> =>
   request<unknown>('/api/auth/signout', { method: 'POST' }).then(() => undefined);
+
+export type AllowedEmailRow = { email: string; addedAt: string; fromEnv: boolean };
+
+export const listAllowed = (): Promise<AllowedEmailRow[]> =>
+  request<{ emails: AllowedEmailRow[] }>('/api/auth/allowed').then((r) => r.emails);
+
+export const addAllowed = (email: string): Promise<void> =>
+  request<unknown>('/api/auth/allowed', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email }),
+  }).then(() => undefined);
+
+export const removeAllowed = (email: string): Promise<void> =>
+  request<unknown>(`/api/auth/allowed/${encodeURIComponent(email)}`, { method: 'DELETE' }).then(() => undefined);
