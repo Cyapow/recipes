@@ -87,10 +87,10 @@ From your checkout of this repo (not on the box):
 rsync -a --exclude node_modules --exclude dist --exclude .git --exclude .env ./ deploy@hetzner:/home/deploy/recipes/
 ```
 
-Copy the `.env` from the LAN box (it holds the Google client and AI keys), then add the allowlist. `<LAN repo dir>` is wherever the LAN box keeps this project:
+Copy the `.env` from the LAN box (it holds the Google client and AI keys), then add the allowlist. The LAN project is in `/opt/recipes`:
 
 ```sh
-ssh mat@ubuntu 'cat <LAN repo dir>/.env' | ssh deploy@hetzner 'cat > /home/deploy/recipes/.env && chmod 600 /home/deploy/recipes/.env'
+ssh mat@ubuntu 'cat /opt/recipes/.env' | ssh deploy@hetzner 'cat > /home/deploy/recipes/.env && chmod 600 /home/deploy/recipes/.env'
 ssh deploy@hetzner "echo 'ALLOWED_EMAILS=you@gmail.com' >> /home/deploy/recipes/.env"
 ```
 
@@ -117,10 +117,9 @@ docker volume ls | grep recipes_recipes_data
 
 The LAN box's volume is `recipes_recipes_data`; the new one on Hetzner has the same name. The copy carries the database, the photos in `images/` **and** `google-token.json`, so Drive stays connected and you do not reconnect it.
 
-On the LAN box (`ssh mat@ubuntu`), first note the counts to compare against later:
+First, in the LAN app in your browser, note how many recipes the list shows and open one with a photo, so you can compare after step 9. Then on the LAN box (`ssh mat@ubuntu`), note the photo count:
 
 ```sh
-docker exec recipes-app node -e "const D=require('better-sqlite3');console.log(new D('/data/recipes.sqlite',{readonly:true}).prepare('select count(*) n from recipes').get())"
 docker exec recipes-app sh -c 'ls /data/images | wc -l'
 ```
 
@@ -162,10 +161,9 @@ ss -ltn | grep ':3006 '
 
 The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 3 (`003_auth.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
 
-Check the data made it. These must match the counts you noted on the LAN box:
+Check the photo files made it. This must match the count you noted on the LAN box (the recipes themselves are checked through the app at step 9):
 
 ```sh
-docker exec recipes-app node -e "const D=require('better-sqlite3');console.log(new D('/data/recipes.sqlite',{readonly:true}).prepare('select count(*) n from recipes').get())"
 docker exec recipes-app sh -c 'ls /data/images | wc -l'
 ```
 
@@ -207,13 +205,7 @@ It must print `46.224.82.225`. Certbot's check fails if the name does not resolv
 
 ### 8. Install the nginx vhost and get the certificate (owner, needs sudo)
 
-As `deploy` on the box (sudo asks for the password). First look at how the existing sites are laid out, so the new one matches:
-
-```sh
-ls -l /etc/nginx/sites-enabled/
-```
-
-If those entries are symlinks into `/etc/nginx/sites-available/`, follow this. If they are plain files, put the new file straight into `sites-enabled/` and skip the `ln`.
+As `deploy` on the box (sudo asks for the password). The existing sites in `sites-enabled/` are symlinks into `sites-available/`, and the new one follows the same layout:
 
 ```sh
 sudo cp /home/deploy/recipes/deploy/recipes.nginx.conf /etc/nginx/sites-available/recipes.matchapman.dev
@@ -231,7 +223,7 @@ This is the first moment the site is public. The guard has been running and chec
 
 From a phone off the home wifi, or any machine other than the LAN box: open `https://recipes.matchapman.dev`, sign in with the allowlisted Google account, and check:
 
-1. The recipes and photos are all there.
+1. The recipe list shows the same number of recipes you noted on the LAN app, and a recipe with a photo opens with its photo.
 2. Settings > Who can get in lists your address; add anyone else who should have access.
 3. Settings shows Drive still connected. Press "Back up now" and confirm success.
 
@@ -322,6 +314,10 @@ Rolling back:
 - Edits made after the upgrade are lost.
 
 ### Previous release: shopping list and step slides
+
+Kept because its rollback is the only record of how to get back past the step-format migration. If you roll back past it, do the rollbacks above first, newest first, then this one, each time with that release's own pre-upgrade snapshot.
+
+(Its commands use the compose project directory, as in the first-deploy runbook.)
 
 Before upgrading:
 
