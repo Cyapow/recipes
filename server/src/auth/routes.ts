@@ -6,12 +6,6 @@ import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './verify.js';
 export const SESSION_COOKIE = 'recipes_session';
 const REFUSAL = "This Google account isn't on the list";
 
-declare module 'fastify' {
-  interface FastifyRequest {
-    email?: string;
-  }
-}
-
 /** null yields the clearing cookie. */
 export function sessionCookie(token: string | null, secure: boolean): string {
   const maxAge = token === null ? 0 : SESSION_TTL_MS / 1000;

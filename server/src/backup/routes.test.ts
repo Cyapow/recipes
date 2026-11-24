@@ -7,6 +7,7 @@ import { loadConfig } from '../config.js';
 import { openDb } from '../db.js';
 import type { GoogleAuth } from './google.js';
 import { FakeDrive } from './fakeDrive.js';
+import { signedIn } from '../auth/testing.js';
 
 function fakeGoogle(o: { configured?: boolean; connectedAt?: string | null } = {}) {
   const calls = { callback: [] as string[], disconnects: 0 };
@@ -31,7 +32,7 @@ function setup(o: Parameters<typeof fakeGoogle>[0] = {}, driveFactory?: () => Pr
   const { g, calls } = fakeGoogle(o);
   const dataDir = mkdtempSync(path.join(tmpdir(), 'rt-'));
   const db = openDb(':memory:');
-  const app = buildApp({ config: { ...loadConfig({}), dataDir }, db, google: g, driveFactory: driveFactory ?? (async () => (o.connectedAt === null ? null : new FakeDrive())) });
+  const app = signedIn(buildApp({ config: { ...loadConfig({}), dataDir }, db, google: g, driveFactory: driveFactory ?? (async () => (o.connectedAt === null ? null : new FakeDrive())) }), db);
   return { app, calls, db, dataDir };
 }
 const cookieOf = (res: { headers: Record<string, any> }) => String(res.headers['set-cookie']).split(';')[0];
@@ -70,7 +71,8 @@ describe('google oauth routes', () => {
     expect(c).toContain('Max-Age=600');
     expect(c).not.toContain('Secure'); // default config is http://localhost
     const dataDir = mkdtempSync(path.join(tmpdir(), 'rt-'));
-    const secure = buildApp({ config: { ...loadConfig({ PUBLIC_BASE_URL: 'https://recipes.matchapman.dev' }), dataDir }, db: openDb(':memory:'), google: fakeGoogle({ connectedAt: null }).g });
+    const secureDb = openDb(':memory:');
+    const secure = signedIn(buildApp({ config: { ...loadConfig({ PUBLIC_BASE_URL: 'https://recipes.matchapman.dev' }), dataDir }, db: secureDb, google: fakeGoogle({ connectedAt: null }).g }), secureDb);
     expect(String((await secure.inject('/api/backup/google/start')).headers['set-cookie'])).toContain('Secure');
   });
 
@@ -237,10 +239,11 @@ describe('backup status and run', () => {
     let n = 0;
     let runs = 0;
     const g = fakeGoogle();
-    const app = buildApp({
-      config: { ...loadConfig({}), dataDir: mkdtempSync(path.join(tmpdir(), 'rt-')) }, db: openDb(':memory:'), google: g.g,
+    const db = openDb(':memory:');
+    const app = signedIn(buildApp({
+      config: { ...loadConfig({}), dataDir: mkdtempSync(path.join(tmpdir(), 'rt-')) }, db, google: g.g,
       backupDeadlineMs: () => (runs++ === 0 ? 50 : 60_000), driveFactory: async () => (n++ === 0 ? hung : good),
-    });
+    }), db);
     const t = await app.inject({ method: 'POST', url: '/api/backup/run' });
     expect(t.statusCode).toBe(200);
     expect(t.json()).toEqual({ ok: false, error: 'Backup timed out' });

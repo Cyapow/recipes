@@ -7,6 +7,10 @@ import type { Database } from 'better-sqlite3';
 import { createAiClient, type AiClient } from './ai/client.js';
 import { providerOrder } from './ai/registry.js';
 import { registerAiRoutes } from './ai/routes.js';
+import { registerAuthGuard } from './auth/guard.js';
+import { createAuthRepo } from './auth/repo.js';
+import { registerAuthRoutes } from './auth/routes.js';
+import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './auth/verify.js';
 import type { ImportDeps } from './import/importUrl.js';
 import type { Config } from './config.js';
 import { registerImageRoutes } from './images/routes.js';
@@ -36,6 +40,8 @@ export type AppDeps = { config: Config; db: Database; webDir?: string; images?: 
   driveFactory?: () => Promise<DriveClient | null>;
   /** Overall deadline for one backup run (tests inject a tiny one). */
   backupDeadlineMs?: number | (() => number);
+  /** Test seam for Google ID-token verification: default is built from config.googleClientId when one is set. */
+  verify?: IdTokenVerifier;
 };
 
 /** SPA fallback only for extensionless page routes: a missing asset must 404, never come back as index.html. */
@@ -52,6 +58,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: loggerOptions(process.env) });
   app.decorate('deps', deps);
   registerSameOriginGuard(app, deps.config);
+  const authRepo = createAuthRepo(deps.db);
+  registerAuthGuard(app, { repo: authRepo });
+  registerAuthRoutes(app, {
+    repo: authRepo,
+    verify: deps.verify ?? (deps.config.googleClientId ? createGoogleIdTokenVerifier(deps.config.googleClientId) : undefined),
+    clientId: deps.config.googleClientId,
+    envEmails: deps.config.allowedEmails,
+    secureCookie: Boolean(deps.config.publicBaseUrl?.startsWith('https://')),
+  });
   app.get('/api/health', async () => ({ ok: true }));
   const recipeRepo = createRecipeRepo(deps.db);
   registerRecipeRoutes(app, recipeRepo);

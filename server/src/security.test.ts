@@ -6,6 +6,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { openDb } from './db.js';
 import type { GoogleAuth } from './backup/google.js';
+import { signedIn } from './auth/testing.js';
 
 function setup() {
   let disconnects = 0;
@@ -19,11 +20,12 @@ function setup() {
     account: async () => { backupAccountChecks++; return null; },
   };
   const dataDir = mkdtempSync(path.join(tmpdir(), 'sec-'));
-  const app = buildApp({
+  const db = openDb(':memory:');
+  const app = signedIn(buildApp({
     config: { ...loadConfig({}), dataDir, publicBaseUrl: 'https://recipes.example.dev' },
-    db: openDb(':memory:'),
+    db,
     google,
-  });
+  }), db);
   return { app, disconnects: () => disconnects, accountChecks: () => backupAccountChecks };
 }
 

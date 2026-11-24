@@ -5,12 +5,14 @@ import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
+import { signedIn } from '../auth/testing.js';
 
 const dirs: string[] = [];
 function make() {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'img-routes-'));
   dirs.push(dataDir);
-  return buildApp({ config: { dataDir } as never, db: openDb(':memory:') });
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config: { dataDir } as never, db }), db);
 }
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });

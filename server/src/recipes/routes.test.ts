@@ -5,10 +5,12 @@ import { describe, it, expect } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import type { RecipeInput } from './schema.js';
+import { signedIn } from '../auth/testing.js';
 
 function make() {
   const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
-  return buildApp({ config, db: openDb(':memory:') });
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config, db }), db);
 }
 
 const base: RecipeInput = {
@@ -169,7 +171,7 @@ describe('recipe routes', () => {
     it('(h) a stored legacy row containing "[object Object]" still reads without throwing', async () => {
       const db = openDb(':memory:');
       const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
-      const app = buildApp({ config, db });
+      const app = signedIn(buildApp({ config, db }), db);
       const { id } = (await post(app, ['x'])).json();
       db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run('["[object Object]"]', id);
       const res = await app.inject({ url: `/api/recipes/${id}` });
@@ -180,7 +182,7 @@ describe('recipe routes', () => {
     it('(e) a legacy row is served as a Step and saved back in Step shape', async () => {
       const db = openDb(':memory:');
       const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
-      const app = buildApp({ config, db });
+      const app = signedIn(buildApp({ config, db }), db);
       const { id } = (await post(app, ['x'])).json();
       db.prepare('UPDATE recipes SET steps_json = ? WHERE id = ?').run('["Brown the mince"]', id);
       const got = (await app.inject({ url: `/api/recipes/${id}` })).json();

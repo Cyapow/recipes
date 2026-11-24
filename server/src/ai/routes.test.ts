@@ -7,6 +7,7 @@ import { createImageStore } from '../images/store.js';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
+import { signedIn } from '../auth/testing.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'other', brand: 'Gousto', dishPhoto: { image: 0, x0: 0, y0: 0, x1: 500, y1: 500 }, sourceName: 'x', sourceUrl: 'http://x',
@@ -15,8 +16,10 @@ const draft = {
   steps: [], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
 };
 const extraction = { draft, provider: 'openai' as const, model: 'gpt-x' };
-const make = (ai?: AiClient, config: Record<string, unknown> = {}, web: Record<string, unknown> = {}) =>
-  buildApp({ config: { dataDir: '/nonexistent', ...config } as never, db: openDb(':memory:'), ai, ...web });
+const make = (ai?: AiClient, config: Record<string, unknown> = {}, web: Record<string, unknown> = {}) => {
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config: { dataDir: '/nonexistent', ...config } as never, db, ai, ...web }), db);
+};
 const post = (app: ReturnType<typeof make>, payload: unknown) =>
   app.inject({ method: 'POST', url: '/api/ai/describe', payload: payload as never });
 

@@ -3,11 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import { BlockedUrlError, FetchFailedError } from './fetchPage.js';
+import { signedIn } from '../auth/testing.js';
 
 const html = readFileSync(new URL('../../test-fixtures/bbc-goodfood.html', import.meta.url), 'utf8');
 const images = { save: vi.fn(async () => 'a'.repeat(64) + '.jpg'), path: vi.fn(), dir: '/x' };
 const fetchBytes = vi.fn(async () => ({ bytes: Buffer.from('i'), contentType: 'image/jpeg', finalUrl: 'x' }));
-const make = (fetchPage: never) => buildApp({ config: { dataDir: '/nonexistent' } as never, db: openDb(':memory:'), images, fetchPage, fetchBytes });
+const make = (fetchPage: never) => {
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config: { dataDir: '/nonexistent' } as never, db, images, fetchPage, fetchBytes }), db);
+};
 const post = (app: ReturnType<typeof make>, payload: unknown) => app.inject({ method: 'POST', url: '/api/import', payload: payload as never });
 
 describe('POST /api/import', () => {
@@ -39,7 +43,8 @@ describe('POST /api/import', () => {
     expect(res.json()).toEqual({ error: "Couldn't fetch that page" });
   });
   it('rejects real private URLs end to end with the default fetcher (no network used)', async () => {
-    const app = buildApp({ config: { dataDir: '/nonexistent' } as never, db: openDb(':memory:'), images });
+    const db = openDb(':memory:');
+    const app = signedIn(buildApp({ config: { dataDir: '/nonexistent' } as never, db, images }), db);
     for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/', 'file:///etc/passwd', 'http://[::1]/']) {
       expect((await post(app, { url })).statusCode).toBe(400);
     }

@@ -5,10 +5,12 @@ import { describe, it, expect } from 'vitest';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import type { RecipeInput } from '../recipes/schema.js';
+import { signedIn } from '../auth/testing.js';
 
 function make() {
   const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'shop-routes-')) } as never;
-  return buildApp({ config, db: openDb(':memory:') });
+  const db = openDb(':memory:');
+  return signedIn(buildApp({ config, db }), db);
 }
 
 const recipe: RecipeInput = {
