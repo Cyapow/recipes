@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import { createHash } from 'node:crypto';
+import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import { listBackupImageNames } from './run.js';
 
@@ -18,11 +19,12 @@ export function canonicalJson(v: unknown): string {
 }
 
 /**
- * Settings are excluded on purpose (backup status rows change every run); anything user-meaningful added
- * to settings later must be added to this fingerprint.
+ * sha256 over every full recipe (ordered by id, no export timestamp), the sorted backup-eligible image
+ * names and the allowlisted email addresses, so an allowlist edit alone still triggers an upload.
  *
- * sha256 over every full recipe (ordered by id, no export timestamp) and the sorted backup-eligible
- * image names. Deliberately excludes the settings table: backup status rows change on every run.
+ * Deliberately excluded: the settings table (backup status rows change on every run) and sessions
+ * (they change on every sign-in and mean nothing after a restore). Anything user-meaningful added to
+ * either later must be added here. Only the addresses are hashed, not their added-at times.
  */
 export async function computeFingerprint(db: Database, dataDir: string): Promise<string> {
   const repo = createRecipeRepo(db);
@@ -31,5 +33,6 @@ export async function computeFingerprint(db: Database, dataDir: string): Promise
     .map((s) => repo.get(s.id)!)
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const images = await listBackupImageNames(dataDir);
-  return createHash('sha256').update(canonicalJson({ recipes, images })).digest('hex');
+  const allowed = createAuthRepo(db).listAllowed().map((a) => a.email);
+  return createHash('sha256').update(canonicalJson({ recipes, images, allowed })).digest('hex');
 }

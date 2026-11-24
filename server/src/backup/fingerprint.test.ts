@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
+import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import { createShoppingRepo } from '../shopping/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
@@ -96,6 +97,26 @@ describe('computeFingerprint', () => {
     shopping.add({ id, title: 'Soup' }, [{ group: null, quantity: 2, unit: 'tins', item: 'tomatoes', note: null }]);
     expect(await fp()).toBe(before);
     shopping.clear();
+    expect(await fp()).toBe(before);
+  });
+
+  it('changes when an address is added to the allowlist, and again when it is removed', async () => {
+    const auth = createAuthRepo(db);
+    const before = await fp();
+    auth.addAllowed('cook@example.com', new Date('2026-01-01T00:00:00Z'));
+    const added = await fp();
+    expect(added).not.toBe(before);
+    auth.removeAllowed('cook@example.com');
+    expect(await fp()).not.toBe(added);
+  });
+
+  it('does not change when a session is created or deleted', async () => {
+    const auth = createAuthRepo(db);
+    auth.addAllowed('cook@example.com', new Date('2026-01-01T00:00:00Z'));
+    const before = await fp();
+    const token = auth.createSession('cook@example.com', new Date('2026-01-02T00:00:00Z'));
+    expect(await fp()).toBe(before);
+    auth.deleteSession(token);
     expect(await fp()).toBe(before);
   });
 });
