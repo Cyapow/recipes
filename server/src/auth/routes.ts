@@ -8,6 +8,8 @@ const REFUSAL = "This Google account isn't on the list";
 
 // One permissive check, not an RFC parser: Google is the real check on who can sign in.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+// The longest address SMTP allows; without it the shape check would accept a 10KB string.
+const EMAIL_MAX = 254;
 
 /** null yields the clearing cookie. */
 export function sessionCookie(token: string | null, secure: boolean): string {
@@ -26,12 +28,13 @@ export function registerAuthRoutes(
     verify?: IdTokenVerifier;
     clientId?: string;
     envEmails: string[];
-    secureCookie?: boolean;
+    /** Required: a silent insecure default in a session-cookie helper is not worth the convenience. */
+    secureCookie: boolean;
     now?: () => number;
   },
 ): void {
   const now = deps.now ?? Date.now;
-  const secure = deps.secureCookie ?? false;
+  const secure = deps.secureCookie;
   const verify = deps.verify ?? (deps.clientId ? createGoogleIdTokenVerifier(deps.clientId) : undefined);
 
   app.get('/api/auth/config', async () => ({ clientId: deps.clientId ?? null }));
@@ -76,7 +79,9 @@ export function registerAuthRoutes(
   app.post('/api/auth/allowed', async (req, reply) => {
     const raw = (req.body as { email?: unknown } | null)?.email;
     const email = typeof raw === 'string' ? normaliseEmail(raw) : '';
-    if (!EMAIL_SHAPE.test(email)) return reply.code(400).send({ error: "That doesn't look like an email address" });
+    if (email.length > EMAIL_MAX || !EMAIL_SHAPE.test(email)) {
+      return reply.code(400).send({ error: "That doesn't look like an email address" });
+    }
     deps.repo.addAllowed(email, new Date(now()));
     return { ok: true };
   });

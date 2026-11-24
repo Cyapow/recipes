@@ -64,7 +64,10 @@ export function createAuthRepo(db: Database): AuthRepo {
       const row = findSession.get(hash) as { email: string; created_at: string; last_seen_at: string } | undefined;
       if (!row) return null;
       const t = now.getTime();
-      if (t - Date.parse(row.created_at) >= SESSION_TTL_MS) return null;
+      // A damaged created_at parses as NaN, and every comparison against NaN is false: without this the
+      // row would read as not expired and the session would never die.
+      const createdAt = Date.parse(row.created_at);
+      if (!Number.isFinite(createdAt) || t - createdAt >= SESSION_TTL_MS) return null;
       if (t - Date.parse(row.last_seen_at) > LAST_SEEN_INTERVAL_MS) touchSession.run(now.toISOString(), hash);
       return row.email;
     },

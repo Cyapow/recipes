@@ -79,6 +79,12 @@ describe('sessions', () => {
     expect(repo.sessionEmail(token, at(now, SESSION_TTL_MS))).toBeNull();
   });
 
+  it('treats a damaged created_at as expired rather than immortal', () => {
+    const token = repo.createSession('foo@gmail.com', now);
+    db.prepare('UPDATE sessions SET created_at = ?').run('garbage');
+    expect(repo.sessionEmail(token, now)).toBeNull();
+  });
+
   it('writes last_seen_at at most once a day', () => {
     const token = repo.createSession('foo@gmail.com', now);
     repo.sessionEmail(token, at(now, HOUR));

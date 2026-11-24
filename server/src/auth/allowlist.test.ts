@@ -71,6 +71,15 @@ describe('allowlist management', () => {
     },
   );
 
+  it('rejects an address longer than 254 characters', async () => {
+    const { app, repo } = setup();
+    const long = `${'a'.repeat(250)}@example.com`;
+    const res = await add(app, long);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "That doesn't look like an email address" });
+    expect(repo.isAllowed(long)).toBe(false);
+  });
+
   it('requires a session', async () => {
     const { app } = setup();
     const res = await app.injectAnon({ method: 'GET', url: '/api/auth/allowed' });

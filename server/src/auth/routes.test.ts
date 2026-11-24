@@ -23,7 +23,7 @@ function setup(o: { secureCookie?: boolean; noClient?: boolean } = {}) {
     verify: fake,
     clientId: o.noClient ? undefined : 'client-id',
     envEmails: ['mat@example.com'],
-    secureCookie: o.secureCookie,
+    secureCookie: o.secureCookie ?? false,
   });
   return { app, db, repo };
 }
