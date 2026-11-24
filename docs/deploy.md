@@ -31,24 +31,32 @@ After deploying:
 
 Rolling back:
 
-- Rebuilding the old commit is NOT enough. The database has been migrated to schema version 3, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
-- Roll back by checking out the old commit AND restoring the pre-upgrade snapshot you noted and downloaded before upgrading. Recipes added after the upgrade are lost.
-- NEVER roll back with the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-3 one that the old build cannot take.
+- Rebuilding the old commit on the data that is now on Hetzner is NOT enough. That database has been migrated to schema version 8, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
 - The old build must never sit behind the public nginx vhost: it would be a site with no login. Take the Hetzner container down first, and roll back on the LAN box, where it is LAN-only again.
+- Recipes added after the upgrade are lost either way.
+- The shortest rollback: the LAN `recipes_recipes_data` volume was stopped before the copy, mounted read-only for it, and never migrated, so it is still the pre-upgrade database. Check out the old commit on the LAN box and start it on that volume (steps A below). No download and no restore.
+- If that volume is gone, check out the old commit AND restore the pre-upgrade snapshot you noted and downloaded before upgrading (steps B below).
+- In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-8 one that the old build cannot take.
 
-Steps:
+Steps A (LAN volume intact):
 
 1. Stop the new app so nothing else is writing to Drive: on Hetzner, `docker compose stop recipes` in `/home/deploy/recipes`.
 2. Cloudflare (owner): point the `recipes` A record back at the LAN IP.
-3. On the LAN box, put the downloaded pre-upgrade `recipes-<stamp>.sqlite` in a folder (for example `/path/to/downloaded/backup`) together with the `images/` folder from Drive. Ideally the folder holds only that one snapshot.
-4. Check out the old commit in the LAN project directory and stop the app: `docker compose stop recipes` (the old container, `recipes-app`, has been stopped since the move).
-5. Restore that exact file, with `--snapshot` and `--force`:
+3. On the LAN box, in `/opt/recipes`, check out the old commit. The old `docker-compose.yml` declares the `studioos-lan-edge` network as external, so make sure it exists: `docker network ls | grep studioos-lan-edge`. If it is missing, bring the Studio OS stack up first (or recreate the network) or compose will refuse to start.
+4. Rebuild and start the old version, recreating the container so it gets its normal restart policy back (it was set to `no` at the move): `docker compose up -d --build --force-recreate`.
+
+Steps B (LAN volume gone, restore from the snapshot):
+
+1. Do A1 and A2 above.
+2. On the LAN box, put the downloaded pre-upgrade `recipes-<stamp>.sqlite` in a folder (for example `/path/to/downloaded/backup`) together with the `images/` folder from Drive. Ideally the folder holds only that one snapshot.
+3. Check out the old commit in `/opt/recipes` and check the `studioos-lan-edge` network as in A3.
+4. Restore that exact file, with `--snapshot` and `--force`:
 
    ```sh
    docker compose run --rm --no-deps -v /path/to/downloaded/backup:/restore:ro recipes npm run restore -- /restore --snapshot recipes-<stamp>.sqlite --force
    ```
 
-6. Rebuild and start the old version: `docker compose up -d --build`. This recreates the container with its normal restart policy.
+5. Rebuild and start the old version: `docker compose up -d --build --force-recreate`.
 
 Do not leave both boxes running. Two instances backing up to one Drive folder is the failure to avoid.
 
@@ -91,7 +99,7 @@ Copy the `.env` from the LAN box (it holds the Google client and AI keys), then 
 
 ```sh
 ssh mat@ubuntu 'cat /opt/recipes/.env' | ssh deploy@hetzner 'cat > /home/deploy/recipes/.env && chmod 600 /home/deploy/recipes/.env'
-ssh deploy@hetzner "echo 'ALLOWED_EMAILS=you@gmail.com' >> /home/deploy/recipes/.env"
+ssh deploy@hetzner "printf '\nALLOWED_EMAILS=%s\n' you@gmail.com >> /home/deploy/recipes/.env"
 ```
 
 Use your own Google address in place of `you@gmail.com`. Then check, on the box, that the file has what it needs:
@@ -99,6 +107,8 @@ Use your own Google address in place of `you@gmail.com`. Then check, on the box,
 ```sh
 grep -E '^(ALLOWED_EMAILS|PUBLIC_BASE_URL|GOOGLE_CLIENT_ID|TZ)=' /home/deploy/recipes/.env
 ```
+
+Each of the four names must show on its own line, and `GOOGLE_CLIENT_ID=` must have a value after the `=`. If it is empty, sign-in cannot work: the check at step 6 would still pass (`/api/auth/config` answers 200 with a null client ID) and the problem would only appear at step 9, after DNS and the certificate. Fix it now.
 
 `ALLOWED_EMAILS` must appear exactly once and not be empty: with it empty (and an empty allowlist) the server refuses to start, printing `Refusing to start: nobody can sign in. Set ALLOWED_EMAILS in .env to your own Google address.` `PUBLIC_BASE_URL` stays `https://recipes.matchapman.dev`: the domain does not change, so the Google redirect URI for Drive backups stays valid.
 
@@ -189,7 +199,7 @@ for p in /api/health /api/auth/config /api/recipes /api/shopping /api/tags /api/
 
 Expected: `/api/health` and `/api/auth/config` answer `200`; **every other line answers `401`**, including `/api/no-such-route`. Any other `/api` route answering `200` means stop: do not move DNS. Close the tunnel with Ctrl-C afterwards.
 
-This check is deliberately narrow. The Google sign-in button cannot be used here, because Google refuses plain-http and raw-IP origins. The sign-in itself is checked at step 9, over https.
+This check is deliberately narrow. The Google sign-in button cannot be used here: `http://127.0.0.1:3006` is not one of the Authorized JavaScript origins on the Google client, and Google only accepts plain http for `localhost` origins you have registered. The sign-in itself is checked at step 9, over https.
 
 ### 7. Point DNS at the box (owner, Cloudflare)
 
@@ -310,31 +320,12 @@ Upgrade the usual way: pull the branch, then in `/opt/recipes` run `docker compo
 Rolling back:
 
 - An older version can't read the new `{group, name}` tags, so rebuilding the old commit is not enough once the upgrade has run.
-- Check out the old commit AND restore the pre-upgrade snapshot explicitly with `--snapshot <name>` (the file you noted before upgrading). Never use the restore default, which picks the newest snapshot, and that one has the new tag format. See "Restoring from a Drive backup" below.
+- Check out the old commit AND restore the pre-upgrade snapshot explicitly with `--snapshot <name>` (the file you noted before upgrading). Never use the restore default, which picks the newest snapshot, and that one has the new tag format. See "Restoring from a Drive backup" above.
 - Edits made after the upgrade are lost.
 
-### Previous release: shopping list and step slides
+### Previous release: shopping list and step slides (historical, rollback only)
 
-Kept because its rollback is the only record of how to get back past the step-format migration. If you roll back past it, do the rollbacks above first, newest first, then this one, each time with that release's own pre-upgrade snapshot.
-
-(Its commands use the compose project directory, as in the first-deploy runbook.)
-
-Before upgrading:
-
-- In the running app open Settings, press "Back up now" and confirm it reports success.
-- In Drive open "Recipes backup/snapshots" and note the exact file name of that backup (`recipes-<stamp>.sqlite`, the newest one). Download it and keep a copy somewhere safe, with the name written down. The rollback below needs exactly this file, and Drive retention keeps only the newest 14 snapshots, so Drive will eventually delete it.
-
-What changed:
-
-- New pages: `/recipe/:id` is an overview with a "what do we already have?" ingredient checklist, `/recipe/:id/cook` is a step-by-step slideshow, and `/shopping` is the shopping list.
-- The shopping list lives in the SQLite file, so every snapshot includes it. The backup fingerprint ignores it, so a shopping-only change does not trigger a nightly upload; "Back up now" always uploads.
-- Step photos are stored with the other photos and ride in the existing images backup.
-- Step data changed shape, so the first nightly backup after upgrading uploads once even if nothing else changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
-- Old recipes keep working: their steps just have no photos or ingredient links until you edit them. Old backups restore fine and migrate on next start.
-
-After deploying:
-
-- Fully close and reopen the app on every phone and tablet, including any open browser tabs and the installed PWA. A tab still running the previous version must not be used to edit recipes: it cannot handle the new step format. (The server rejects the corrupted step text such a tab would send, but the old screens will still misbehave.)
+Kept only because its rollback is the only record of how to get back past the step-format migration. Nothing else from that release applies now. If you roll back past it, do the rollbacks above first, newest first, each time with that release's own pre-upgrade snapshot (which had to be downloaded before that release). These commands run in the project directory on the box you are rolling back on, and the `studioos-lan-edge` network check above applies to them too.
 
 Rolling back:
 
@@ -353,11 +344,3 @@ Steps:
    ```
 
 4. Rebuild and start the old version: `docker compose up -d --build`.
-
-Checks after deploying:
-
-1. Open a recipe's slideshow on a phone and a tablet.
-2. Add recipe ingredients to the list and share the list from a phone.
-3. Press "Back up now" and confirm step photos appear in the Drive images folder.
-4. Do a restore drill (see above). Note it restores the newest snapshot by default and replaces the live database, so only do it when you are happy to go back to that backup.
-5. Run the live AI test once per provider key you have (see AI providers below): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`. It has never been run against the real APIs, and the AI step-link schema changed.
