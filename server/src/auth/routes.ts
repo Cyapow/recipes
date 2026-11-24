@@ -6,6 +6,9 @@ import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './verify.js';
 export const SESSION_COOKIE = 'recipes_session';
 const REFUSAL = "This Google account isn't on the list";
 
+// One permissive check, not an RFC parser: Google is the real check on who can sign in.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+
 /** null yields the clearing cookie. */
 export function sessionCookie(token: string | null, secure: boolean): string {
   const maxAge = token === null ? 0 : SESSION_TTL_MS / 1000;
@@ -63,6 +66,33 @@ export function registerAuthRoutes(
     const token = readSessionCookie(req.headers.cookie);
     if (token) deps.repo.deleteSession(token);
     reply.header('set-cookie', sessionCookie(null, secure));
+    return { ok: true };
+  });
+
+  app.get('/api/auth/allowed', async () => ({
+    emails: deps.repo.listAllowed().map((a) => ({ ...a, fromEnv: deps.envEmails.includes(a.email) })),
+  }));
+
+  app.post('/api/auth/allowed', async (req, reply) => {
+    const raw = (req.body as { email?: unknown } | null)?.email;
+    const email = typeof raw === 'string' ? normaliseEmail(raw) : '';
+    if (!EMAIL_SHAPE.test(email)) return reply.code(400).send({ error: "That doesn't look like an email address" });
+    deps.repo.addAllowed(email, new Date(now()));
+    return { ok: true };
+  });
+
+  // The refusals run most specific first, so the message names the real reason.
+  app.delete('/api/auth/allowed/:email', async (req, reply) => {
+    const email = normaliseEmail((req.params as { email: string }).email);
+    if (deps.envEmails.includes(email)) {
+      return reply.code(409).send({ error: "That address is set in the server's .env and can't be removed here." });
+    }
+    if (email === req.email) return reply.code(409).send({ error: "That's you. Someone else has to remove your access." });
+    if (!deps.repo.isAllowed(email)) return reply.code(404).send({ error: 'That address is not on the list' });
+    if (deps.repo.listAllowed().length <= 1) {
+      return reply.code(409).send({ error: 'That is the only address left. Add another first.' });
+    }
+    deps.repo.removeAllowed(email);
     return { ok: true };
   });
 }
