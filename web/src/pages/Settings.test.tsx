@@ -123,7 +123,8 @@ describe('Settings', () => {
       expect.stringMatching(/Gemini.*key set/),
     ]);
     expect(rows[2]).not.toMatch(/in use/);
-    expect(screen.getByText(/\.env/)).toBeTruthy();
+    // Narrowed to the AI hint: the allowlist hint names .env too, deliberately the same phrase.
+    expect(screen.getByText(/ANTHROPIC_API_KEY.*\.env/)).toBeTruthy();
   });
 
   it('says so when no AI key is set', async () => {

@@ -495,3 +495,22 @@ body.cook-scroll-lock { overflow: hidden; }
 .crop-dialog-foot { display: flex; justify-content: space-between; gap: 12px; }
 .crop-dialog-foot > * { flex: 1; min-height: 48px; }
 .crop-dialog-shapes { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The two screens with nothing else on them: the sign-in front door and the 404. */
+.not-found { min-height: 100vh; min-height: 100dvh; justify-content: center; align-items: center; text-align: center; }
+.not-found .card { width: 100%; max-width: 420px; }
+.card { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 26px 22px;
+  border-radius: 22px; background: var(--card); border: 1px solid var(--line); }
+.card .hint { max-width: 30ch; }
+/* Google renders its own button in here; keep the card from jumping as it arrives. */
+.gsi-slot { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+/* Settings: who can get in */
+.allowed-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.allowed-list li { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px 8px 16px;
+  border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.allowed-list li > span { overflow-wrap: anywhere; }
+.allowed-list li > button { margin-left: auto; flex: none; }
+.page > .allowed-add { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.allowed-add label { flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
+.allowed-add button { flex: none; min-height: 52px; }

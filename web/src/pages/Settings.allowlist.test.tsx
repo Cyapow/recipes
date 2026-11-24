@@ -106,6 +106,30 @@ describe('Settings: who can get in', () => {
     await waitFor(() => expect(removeAllowed).toHaveBeenCalledWith('wife@x.com'));
   });
 
+  it('treats a 401 from sign-out as already signed out instead of dead-ending', async () => {
+    vi.mocked(signOut).mockRejectedValue(new ApiError('Request failed (401)', 401));
+    const back = vi.fn();
+    const off = onUnauthorized(back);
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(back).toHaveBeenCalled());
+    expect(screen.queryByText('Could not sign out. Try again.')).toBeNull();
+    off();
+  });
+
+  it('says so when sign-out fails for any other reason', async () => {
+    vi.mocked(signOut).mockRejectedValue(new ApiError('Request failed (500)', 500));
+    const back = vi.fn();
+    const off = onUnauthorized(back);
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not sign out. Try again.');
+    expect(back).not.toHaveBeenCalled();
+    off();
+  });
+
   it('signs out', async () => {
     const back = vi.fn();
     const off = onUnauthorized(back);

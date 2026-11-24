@@ -88,9 +88,13 @@ export function Settings() {
   async function leave() {
     try {
       await signOut();
-    } catch {
-      setAllowError('Could not sign out. Try again.');
-      return;
+    } catch (err) {
+      // A 401 means the session had already expired, which is what the button was asking for: carrying
+      // on takes the user to the sign-in screen instead of dead-ending on an error they cannot clear.
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setAllowError('Could not sign out. Try again.');
+        return;
+      }
     }
     forgetSignedIn();
     notifyUnauthorized(); // the auth gate listens for this and shows the sign-in screen
@@ -166,7 +170,7 @@ export function Settings() {
           ))}
         </ul>
       )}
-      <form className="actions" onSubmit={add} noValidate>
+      <form className="allowed-add" onSubmit={add} noValidate>
         <label>
           Email address
           <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="off" />
@@ -174,7 +178,7 @@ export function Settings() {
         <button type="submit" disabled={!newEmail.trim()}>Add</button>
       </form>
       {allowError && <p className="field-error" role="alert">{allowError}</p>}
-      <p className="hint">Addresses set in the server's configuration are always allowed and can't be removed here.</p>
+      <p className="hint">Addresses set in the server's .env are always allowed and can't be removed here.</p>
       <h2>Google Drive backup</h2>
       {g === 'denied' && <p className="field-error" role="alert">Google access was not granted.</p>}
       {g === 'failed' && (

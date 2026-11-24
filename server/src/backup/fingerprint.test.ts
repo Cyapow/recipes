@@ -107,7 +107,8 @@ describe('computeFingerprint', () => {
     const added = await fp();
     expect(added).not.toBe(before);
     auth.removeAllowed('cook@example.com');
-    expect(await fp()).not.toBe(added);
+    // Back to the original hash exactly, which also proves addedAt stays out of it.
+    expect(await fp()).toBe(before);
   });
 
   it('does not change when a session is created or deleted', async () => {
