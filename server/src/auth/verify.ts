@@ -13,7 +13,9 @@ export function createGoogleIdTokenVerifier(clientId: string): IdTokenVerifier {
       const payload = ticket.getPayload();
       if (!payload?.email) return null;
       return { email: payload.email, emailVerified: payload.email_verified === true };
-    } catch {
+    } catch (err) {
+      // Never the token itself; this is the only trace of a wrong client ID, clock skew or a cert fetch failure.
+      console.warn('id token verification failed:', err instanceof Error ? err.message : err);
       return null;
     }
   };

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { cookieAttrs, readCookie } from '../cookies.js';
 import { normaliseEmail, SESSION_TTL_MS, type AuthRepo } from './repo.js';
 import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './verify.js';
 
@@ -14,15 +15,11 @@ declare module 'fastify' {
 /** null yields the clearing cookie. */
 export function sessionCookie(token: string | null, secure: boolean): string {
   const maxAge = token === null ? 0 : SESSION_TTL_MS / 1000;
-  return `${SESSION_COOKIE}=${token ?? ''}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+  return `${SESSION_COOKIE}=${token ?? ''}; Max-Age=${maxAge}; ${cookieAttrs({ path: '/', secure })}`;
 }
 
 export function readSessionCookie(header: string | undefined): string | undefined {
-  for (const part of (header ?? '').split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === SESSION_COOKIE) return v.join('=') || undefined;
-  }
-  return undefined;
+  return readCookie(header, SESSION_COOKIE) || undefined;
 }
 
 export function registerAuthRoutes(
