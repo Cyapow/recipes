@@ -22,7 +22,7 @@ What changed:
 - The allowlist is part of the backup, and the backup fingerprint now includes it, so the first nightly backup after this deploy uploads once even if nothing else changed. That and your post-upgrade "Back up now" check create NEWER snapshots, which is why a rollback must name the pre-upgrade file explicitly.
 - Signed-out requests to `/api` paths that do not exist now answer 401, not 404. This is deliberate: it stops a signed-out client from finding out which routes exist.
 - The app moves from the LAN box to Hetzner behind nginx, replacing the LAN-only Caddy guard (`deploy/recipes.caddy` is gone). Sign-in is what protects it now. The domain, `PUBLIC_BASE_URL` and the Google redirect URI for Drive are unchanged.
-- Migration `003_auth.sql` takes the database to schema version 3 (the allowlist and the sessions). It runs on first start.
+- Migration `008_auth.sql` takes the database to schema version 8 (the allowlist and the sessions). It runs on first start.
 
 After deploying:
 
@@ -169,7 +169,7 @@ docker port recipes-app
 ss -ltn | grep ':3006 '
 ```
 
-The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 3 (`003_auth.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
+The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 8 (`008_auth.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
 
 Check the photo files made it. This must match the count you noted on the LAN box (the recipes themselves are checked through the app at step 9):
 

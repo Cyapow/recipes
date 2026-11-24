@@ -137,7 +137,7 @@ of an app that cannot tell who is using it, without B's no-open-port benefit.
 
 ### Sign-in
 
-- **Migration `003_auth.sql`**:
+- **Migration `008_auth.sql`**:
   - `allowed_emails(email TEXT PRIMARY KEY, added_at TEXT NOT NULL)` — email stored
     lowercased.
   - `sessions(token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, created_at TEXT NOT NULL,

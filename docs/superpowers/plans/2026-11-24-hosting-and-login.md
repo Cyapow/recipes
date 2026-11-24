@@ -37,7 +37,7 @@ Five things the spec implies, that no obvious task test covers, most likely to b
 ### Task 1: Schema, allowlist and session store
 
 **Files:**
-- Create: `server/src/migrations/003_auth.sql`
+- Create: `server/src/migrations/008_auth.sql`
 - Create: `server/src/auth/repo.ts`
 - Test: `server/src/auth/repo.test.ts`
 
@@ -99,7 +99,7 @@ it('pruneSessions deletes only expired rows and reports the count', () => { /* e
 Run: `npx vitest run server/src/auth/repo.test.ts`
 Expected: FAIL — cannot resolve `./repo.js`
 
-- [ ] **Step 3: Write `server/src/migrations/003_auth.sql`**
+- [ ] **Step 3: Write `server/src/migrations/008_auth.sql`**
 
 Two tables, following `001_init.sql`'s style:
 - `allowed_emails(email TEXT PRIMARY KEY, added_at TEXT NOT NULL)`
@@ -119,7 +119,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/src/migrations/003_auth.sql server/src/auth/repo.ts server/src/auth/repo.test.ts
+git add server/src/migrations/008_auth.sql server/src/auth/repo.ts server/src/auth/repo.test.ts
 git commit -m "feat: allowlist and session tables with a repo to match"
 ```
 
@@ -641,7 +641,7 @@ Add `ALLOWED_EMAILS=` with a comment: your own Google address, comma-separated i
 
 Both docs get a "What's new in this release" entry in the existing style: everyone must sign in; the first nightly backup after this deploy uploads once because the fingerprint now includes the allowlist; and anyone you want in must be added in Settings.
 
-It also needs the rollback paragraph this repo writes every release. Migration `003_auth.sql` takes the schema to `user_version` 3, and `server/scripts/restore.ts` refuses a snapshot from a newer app version — so a snapshot taken after this deploy cannot be restored into the old build. Rolling back means checking out the old commit **and** restoring the pre-upgrade snapshot, which must be downloaded and its filename written down *before* deploying, exactly as the previous release's section instructs. Recipes added after the upgrade are lost in that case.
+It also needs the rollback paragraph this repo writes every release. Migration `008_auth.sql` takes the schema to `user_version` 8, and `server/scripts/restore.ts` refuses a snapshot from a newer app version — so a snapshot taken after this deploy cannot be restored into the old build. Rolling back means checking out the old commit **and** restoring the pre-upgrade snapshot, which must be downloaded and its filename written down *before* deploying, exactly as the previous release's section instructs. Recipes added after the upgrade are lost in that case.
 
 - [ ] **Step 6: Verify the build and the whole suite**
 
