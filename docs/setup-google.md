@@ -17,9 +17,15 @@ Nightly backups go to your own Google Drive, and the same Google OAuth client is
    ```
    https://recipes.matchapman.dev
    http://localhost:3000
+   http://localhost:5173
    ```
 
-   The first is the live site; the second is for running the app locally with `npm run dev`. Google only allows plain `http` for `localhost`, so sign-in cannot work on the site until it has its https certificate. No new client, no new scope and no new redirect URI are needed: the sign-in token already carries the email address, and the redirect URI above is only for Drive backups. If you already have a client from before sign-in existed, just add the two origins to it.
+   The first is the live site. The other two are the two ways of running it locally, and the origin Google checks is the one in the browser's address bar, not the port the API is on:
+
+   - `npm run build && npm run dev` serves the built app from the server itself on **3000**.
+   - `npm run dev:web` (Vite, with hot reload) serves it on **5173** and proxies `/api` to 3000, so `npm run dev` has to be running too.
+
+   Add both localhost origins, or local sign-in will fail on whichever one you left out. Google only allows plain `http` for `localhost`, so sign-in cannot work on the site until it has its https certificate. No new client, no new scope and no new redirect URI are needed: the sign-in token already carries the email address, and the redirect URI above is only for Drive backups. If you already have a client from before sign-in existed, just add the origins to it.
 6. **Configure the server.** Copy the client ID and secret into `.env`, and set `ALLOWED_EMAILS` to your own Google address:
 
    ```
@@ -61,4 +67,4 @@ Only Google accounts on the allowlist can use the site; everyone else is turned 
 
 ## What's new in this release
 
-Release: public hosting, with Google sign-in. Everyone must now sign in. Add the two Authorised JavaScript origins above to the existing client before the first sign-in; nothing else in Google Cloud changes. See `docs/deploy.md` for the move itself, the rollback and the first-backup note.
+Release: public hosting, with Google sign-in. Everyone must now sign in. Add the Authorised JavaScript origins above to the existing client before the first sign-in; nothing else in Google Cloud changes. See `docs/deploy.md` for the move itself, the rollback and the first-backup note.

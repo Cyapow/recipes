@@ -290,6 +290,8 @@ From a phone off the home wifi, or any machine other than the LAN box: open `htt
 7. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
 8. Settings shows Drive still connected. Press "Back up now" and confirm success.
 
+If the Google button never appears (a heading and nothing under it), the script or the client is being refused: check *Authorised JavaScript origins* on the OAuth client includes `https://recipes.matchapman.dev` exactly (see `docs/setup-google.md`), and open the browser console on the sign-in page — Google reports the mismatch there. The screen offers a **Try again** button once the load fails outright.
+
 Done means the site is running on Hetzner and you have signed in over https from off the home network.
 
 ### 10. The LAN box stays off
@@ -303,6 +305,8 @@ Redeploy after a code change (as `deploy`, in `/home/deploy/recipes`, after sync
 ## Restoring from a Drive backup
 
 Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds `recipes-<YYYYMMDD-HHmmss>.sqlite` plus a readable `.json`; `images/` holds the photos).
+
+**A restore replaces who can get in.** The allowlist and the sessions live in the database, so both become the snapshot's: anyone added to "Who can get in" since that snapshot is gone and has to be added again, and the sessions table is replaced too, so every sign-in made since then is gone and that browser is signed out at its next request. `ALLOWED_EMAILS` from `.env` is re-added at the next start, so that address always comes back — which is why it must be yours.
 
 1. In Drive, open "Recipes backup", download it (Drive gives a zip) and unzip it. The zip keeps the folder names, so you get `snapshots/` and `images/`. Alternatively use a plain folder holding the `.sqlite` plus an `images/` folder.
 2. Stop the app. The database file is replaced, so nothing may have it open:
