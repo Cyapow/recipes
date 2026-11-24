@@ -3,6 +3,8 @@ import type { ShoppingItem } from '../../server/src/shopping/repo';
 import { tagKey, type Tag } from '../../server/src/recipes/categories';
 import type { Box1000 } from '../../server/src/images/store';
 
+import { forgetSignedIn, notifyUnauthorized } from './lib/session';
+
 export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingItem };
 
 export type { Box1000, Tag };
@@ -20,13 +22,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Every call goes through here so a 401 anywhere means signed out. The auth endpoints are
+ * excluded: the gate handles /me itself, and a 401 from sign-out must not loop back into it.
+ */
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  if (res.status === 401 && !url.startsWith('/api/auth/')) {
+    forgetSignedIn();
+    notifyUnauthorized();
+  }
+  return res;
+}
+
 async function jsonBody(res: Response): Promise<unknown> {
   if (!(res.headers.get('content-type') ?? '').includes('json')) return undefined;
   return res.json().catch(() => undefined);
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await apiFetch(url, init);
   if (!res.ok) throw new ApiError(`Request failed (${res.status})`, res.status, await jsonBody(res));
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
@@ -58,7 +73,7 @@ export const getFacets = (): Promise<Facets> => request('/api/tags');
 export async function uploadImage(file: File): Promise<string> {
   const body = new FormData();
   body.append('file', file);
-  const res = await fetch('/api/images', { method: 'POST', body });
+  const res = await apiFetch('/api/images', { method: 'POST', body });
   if (res.status === 413) throw new Error('image is too large (15 MB max)');
   if (res.status === 415) throw new Error('not a supported image');
   if (!res.ok) throw new Error(`upload failed (${res.status})`);
@@ -77,7 +92,7 @@ export const getAiStatus = (): Promise<AiStatus> => request('/api/ai/status');
 export type AiDraft = RecipeDraft & { provider?: AiProviderName; model?: string };
 
 export async function describeRecipe(text: string): Promise<AiDraft> {
-  const res = await fetch('/api/ai/describe', {
+  const res = await apiFetch('/api/ai/describe', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -125,7 +140,7 @@ export type ImportResult = {
 };
 
 export async function importRecipe(url: string): Promise<ImportResult> {
-  const res = await fetch('/api/import', {
+  const res = await apiFetch('/api/import', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ url }),
@@ -154,7 +169,7 @@ export type BackupRunResult = { ok: true; uploadedImages: number; snapshot: stri
 export const getBackupStatus = (): Promise<BackupStatus> => request('/api/backup/status');
 
 export async function runBackupNow(): Promise<BackupRunResult> {
-  const res = await fetch('/api/backup/run', { method: 'POST' });
+  const res = await apiFetch('/api/backup/run', { method: 'POST' });
   const body = (await res.json().catch(() => null)) as (BackupRunResult & { error?: string }) | null;
   if (res.ok && body) return body;
   return { ok: false, error: body?.error ?? `Request failed (${res.status})` };

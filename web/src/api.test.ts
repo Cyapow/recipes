@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, addToShopping, clearShopping, listShopping, removeShoppingItem } from './api';
+import { onUnauthorized } from './lib/session';
+import { ApiError, getMe, signOut, signInWithGoogle, addToShopping, clearShopping, listShopping, removeShoppingItem } from './api';
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -40,5 +41,38 @@ describe('shopping api', () => {
     await removeShoppingItem('x y');
     expect(f.mock.calls[0][0]).toBe('/api/shopping/x%20y');
     await expect(clearShopping()).resolves.toBeUndefined();
+  });
+});
+
+describe('401 handling', () => {
+  const status = (n: number) => vi.stubGlobal('fetch', vi.fn(async () => json(n, { error: 'x' })));
+  it('notifies once and still throws the ApiError', async () => {
+    status(401);
+    const fn = vi.fn();
+    const off = onUnauthorized(fn);
+    const err = await listShopping().catch((e) => e);
+    off();
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+  it('does not notify for other statuses', async () => {
+    status(500);
+    const fn = vi.fn();
+    const off = onUnauthorized(fn);
+    await listShopping().catch(() => {});
+    off();
+    expect(fn).not.toHaveBeenCalled();
+  });
+  it('does not notify for the auth endpoints, so sign-out and sign-in cannot loop', async () => {
+    const fn = vi.fn();
+    const off = onUnauthorized(fn);
+    status(401);
+    await getMe().catch(() => {});
+    await signOut().catch(() => {});
+    status(403);
+    await signInWithGoogle('bad').catch(() => {});
+    off();
+    expect(fn).not.toHaveBeenCalled();
   });
 });

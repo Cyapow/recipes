@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ApiError, getMe } from '../api';
-import { forgetSignedIn, rememberSignedIn, wasSignedIn } from '../lib/session';
+import { forgetSignedIn, onUnauthorized, rememberSignedIn, wasSignedIn } from '../lib/session';
 import { SignIn } from '../pages/SignIn';
 
 type State = 'loading' | 'signedIn' | 'signedOut' | 'offline';
@@ -26,7 +26,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
         }
       },
     );
-    return () => { live = false; };
+    const off = onUnauthorized(() => { if (live) setState('signedOut'); });
+    return () => { live = false; off(); };
   }, []);
 
   if (state === 'loading') return <p className="hint" aria-busy="true">Loading…</p>;

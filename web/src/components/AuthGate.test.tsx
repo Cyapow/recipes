@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ApiError } from '../api';
 import { AuthGate } from './AuthGate';
 import { rememberSignedIn, wasSignedIn } from '../lib/session';
@@ -10,12 +11,12 @@ vi.mock('../api', async (orig) => ({
   getMe: vi.fn(),
   getAuthConfig: vi.fn().mockResolvedValue({ clientId: null }),
 }));
-import { getMe } from '../api';
+import { getMe, listRecipes } from '../api';
 
 const view = () => render(<AuthGate><p>the app</p></AuthGate>);
 
 beforeEach(() => { localStorage.clear(); vi.mocked(getMe).mockReset(); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('AuthGate', () => {
   it('renders the app when /api/auth/me succeeds', async () => {
@@ -56,5 +57,48 @@ describe('AuthGate', () => {
     view();
     expect(await screen.findByRole('heading', { name: /sign in/i })).toBeTruthy();
     expect(screen.queryByText('the app')).toBeNull();
+  });
+
+  describe('a data call failing while the app is showing', () => {
+    // The real listRecipes goes through the real fetch wrapper; only fetch is stubbed.
+    const app = () => render(
+      <AuthGate><button onClick={() => { listRecipes().catch(() => {}); }}>load</button></AuthGate>,
+    );
+    const stubFetch = (res: () => Response | Promise<Response>) => vi.stubGlobal('fetch', vi.fn(async () => res()));
+
+    beforeEach(() => vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c' }));
+
+    it('a 401 mid-session replaces the app with the sign-in screen and clears the flag', async () => {
+      app();
+      await screen.findByText('load');
+      rememberSignedIn();
+      stubFetch(() => new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } }));
+      await act(async () => { await userEvent.click(screen.getByText('load')); });
+      expect(await screen.findByRole('heading', { name: /sign in/i })).toBeTruthy();
+      expect(screen.queryByText('load')).toBeNull();
+      expect(wasSignedIn()).toBe(false);
+    });
+
+    it('a 500 leaves the app showing', async () => {
+      app();
+      await screen.findByText('load');
+      rememberSignedIn();
+      stubFetch(() => new Response('boom', { status: 500 }));
+      await act(async () => { await userEvent.click(screen.getByText('load')); });
+      expect(screen.getByText('load')).toBeTruthy();
+      expect(screen.queryByRole('heading', { name: /sign in/i })).toBeNull();
+      expect(wasSignedIn()).toBe(true);
+    });
+
+    it('a network failure leaves the app showing', async () => {
+      app();
+      await screen.findByText('load');
+      rememberSignedIn();
+      stubFetch(() => { throw new TypeError('Failed to fetch'); });
+      await act(async () => { await userEvent.click(screen.getByText('load')); });
+      expect(screen.getByText('load')).toBeTruthy();
+      expect(screen.queryByRole('heading', { name: /sign in/i })).toBeNull();
+      expect(wasSignedIn()).toBe(true);
+    });
   });
 });
