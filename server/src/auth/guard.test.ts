@@ -32,7 +32,8 @@ describe('isOpenPath', () => {
            '/', '/settings', '/recipe/abc/cook', '/Assets/index-ABC.js', '/Sw.js'])('%s is open', (p) => expect(isOpenPath(p)).toBe(true));
   it.each(['/api/recipes', '/api/shopping', '/api/images/upload', '/api/backup/status',
            '/api/auth/me', '/api/auth/allowed', '/api',
-           '/api/healthz', '/api/auth/configure', '//api/recipes', '/API/recipes', '/Api/recipes', '/api//recipes'])('%s is guarded', (p) => expect(isOpenPath(p)).toBe(false));
+           '/api/healthz', '/api/auth/configure', '//api/recipes', '/API/recipes', '/Api/recipes', '/api//recipes',
+           '/\\api/recipes', '\\api/recipes', '/api\\recipes', '/api\\\\recipes'])('%s is guarded', (p) => expect(isOpenPath(p)).toBe(false));
 });
 
 describe('auth guard', () => {
@@ -43,7 +44,10 @@ describe('auth guard', () => {
     expect(res.json()).toEqual({ error: 'Sign in required' });
   });
 
-  it.each(['/%61pi/recipes', '/%2561pi/recipes', '//api/recipes', '/API/recipes', '/api//recipes', '/api/healthz', '/api/auth/configure'])(
+  it.each(['/%61pi/recipes', '/%2561pi/recipes', '//api/recipes', '/API/recipes', '/api//recipes', '/api/healthz',
+           // %5c decodes to a backslash, which `new URL` treats as a separator: /\api/recipes used to be
+           // judged open. (A literal backslash cannot be tested here: inject normalises it away.)
+           '/api/auth/configure', '/%5capi/recipes'])(
     '%s does not slip past the guard',
     async (url) => {
       const { app } = setup();

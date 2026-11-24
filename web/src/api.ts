@@ -23,12 +23,15 @@ export class ApiError extends Error {
 }
 
 /**
- * Every call goes through here so a 401 anywhere means signed out. The auth endpoints are
- * excluded: the gate handles /me itself, and a 401 from sign-out must not loop back into it.
+ * Every call goes through here so a 401 anywhere means signed out. Only the three endpoints the gate
+ * drives itself are excluded: it handles /me, and a 401 from sign-in or sign-out must not loop back
+ * into it. The allowlist endpoints are not excluded; a 401 from those means signed out like any other.
  */
+const SELF_HANDLED_401 = new Set(['/api/auth/me', '/api/auth/google', '/api/auth/signout']);
+
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, init);
-  if (res.status === 401 && !url.startsWith('/api/auth/')) {
+  if (res.status === 401 && !SELF_HANDLED_401.has(url)) {
     forgetSignedIn();
     notifyUnauthorized();
   }

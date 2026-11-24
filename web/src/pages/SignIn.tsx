@@ -13,6 +13,8 @@ declare global {
 }
 
 const GSI_SRC = 'https://accounts.google.com/gsi/client';
+export const GSI_TIMEOUT_MS = 15000;
+const UNREACHABLE = "Couldn't reach Google. Check your connection and try again.";
 
 function loadGoogle(): Promise<GoogleId> {
   const ready = window.google?.accounts.id;
@@ -25,23 +27,38 @@ function loadGoogle(): Promise<GoogleId> {
       script.async = true;
       document.head.appendChild(script);
     }
-    script.addEventListener('load', () => {
+    const node = script;
+    let timer: ReturnType<typeof setTimeout>;
+    // A node that failed, hung or loaded without defining google must not stay in the head: the next
+    // attempt would adopt it and wait on listeners that can never fire again, hanging for good.
+    const fail = (message: string) => {
+      clearTimeout(timer);
+      node.remove();
+      reject(new Error(message));
+    };
+    timer = setTimeout(() => fail(UNREACHABLE), GSI_TIMEOUT_MS);
+    node.addEventListener('load', () => {
       const id = window.google?.accounts.id;
-      return id ? resolve(id) : reject(new Error('Google sign-in did not load'));
+      if (!id) return fail('Google sign-in did not load');
+      clearTimeout(timer);
+      resolve(id);
     });
-    script.addEventListener('error', () => reject(new Error("Couldn't reach Google. Check your connection and try again.")));
+    node.addEventListener('error', () => fail(UNREACHABLE));
   });
 }
 
 export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const buttonRef = useRef<HTMLDivElement>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // canRetry marks the failures a fresh load can clear, as opposed to the server refusing an account.
+  const [error, setError] = useState<{ message: string; canRetry: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
     (async () => {
       try {
+        setError(null);
         const { clientId } = await getAuthConfig();
         if (!live) return;
         setConfigured(clientId !== null);
@@ -58,27 +75,32 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             } catch (e) {
               // The server words its refusal itself; show it as it is.
               const body = e instanceof ApiError ? (e.body as { error?: string } | undefined) : undefined;
-              setError(body?.error ?? 'Sign-in failed. Try again.');
+              setError({ message: body?.error ?? 'Sign-in failed. Try again.', canRetry: false });
             }
           },
         });
         id.renderButton(buttonRef.current, { theme: 'outline', size: 'large' });
       } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : 'Sign-in failed. Try again.');
+        if (live) setError({ message: e instanceof Error ? e.message : 'Sign-in failed. Try again.', canRetry: true });
       }
     })();
     return () => { live = false; };
-  }, [onSignedIn]);
+  }, [onSignedIn, attempt]);
 
   return (
     <main className="page not-found">
-      <h1>Sign in</h1>
-      {configured === false ? (
-        <p className="hint">This server isn't set up for Google sign-in yet.</p>
-      ) : (
-        <div ref={buttonRef} />
-      )}
-      {error && <p role="alert" className="hint">{error}</p>}
+      <div className="card">
+        <h1>Sign in</h1>
+        {configured === false ? (
+          <p className="hint">This server isn't set up for Google sign-in yet.</p>
+        ) : (
+          <div className="gsi-slot" ref={buttonRef} />
+        )}
+        {error && <p role="alert" className="hint">{error.message}</p>}
+        {error?.canRetry && (
+          <button type="button" className="primary" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+        )}
+      </div>
     </main>
   );
 }

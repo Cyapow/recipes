@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onUnauthorized } from './lib/session';
-import { ApiError, getMe, signOut, signInWithGoogle, addToShopping, clearShopping, listShopping, removeShoppingItem } from './api';
+import { addAllowed, ApiError, getMe, listAllowed, signOut, signInWithGoogle, addToShopping, clearShopping, listShopping, removeShoppingItem } from './api';
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -64,15 +64,24 @@ describe('401 handling', () => {
     off();
     expect(fn).not.toHaveBeenCalled();
   });
-  it('does not notify for the auth endpoints, so sign-out and sign-in cannot loop', async () => {
+  it('does not notify for the three endpoints the gate drives itself', async () => {
     const fn = vi.fn();
     const off = onUnauthorized(fn);
     status(401);
     await getMe().catch(() => {});
     await signOut().catch(() => {});
-    status(403);
     await signInWithGoogle('bad').catch(() => {});
     off();
     expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('notifies for the allowlist endpoints: a 401 there means signed out like anywhere else', async () => {
+    status(401);
+    const fn = vi.fn();
+    const off = onUnauthorized(fn);
+    await listAllowed().catch(() => {});
+    await addAllowed('a@b.c').catch(() => {});
+    off();
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });

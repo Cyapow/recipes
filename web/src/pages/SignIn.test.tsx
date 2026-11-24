@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { SignIn } from './SignIn';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { GSI_TIMEOUT_MS, SignIn } from './SignIn';
 import { wasSignedIn } from '../lib/session';
 
 vi.mock('../api', async (orig) => ({
@@ -29,7 +30,17 @@ beforeEach(() => {
     accounts: { id: { initialize: (o: { callback: Callback }) => { callback = o.callback; }, renderButton, prompt } },
   };
 });
-afterEach(() => { cleanup(); delete (window as unknown as { google?: unknown }).google; });
+afterEach(() => { cleanup(); vi.useRealTimers(); delete (window as unknown as { google?: unknown }).google; });
+
+const theScript = async () => {
+  await waitFor(() => expect(document.querySelectorAll(SCRIPT).length).toBe(1));
+  return document.querySelector(SCRIPT) as HTMLScriptElement;
+};
+const googleAppears = () => {
+  (window as unknown as { google: unknown }).google = {
+    accounts: { id: { initialize: (o: { callback: Callback }) => { callback = o.callback; }, renderButton, prompt } },
+  };
+};
 
 describe('SignIn', () => {
   it('posts the credential from the Google callback and remembers the session', async () => {
@@ -65,13 +76,53 @@ describe('SignIn', () => {
     expect(renderButton).not.toHaveBeenCalled();
   });
 
-  it('inserts the Google script only once, even when mounted again', async () => {
+  it('inserts the Google script only once when mounted again, and still settles when it loads', async () => {
     delete (window as unknown as { google?: unknown }).google;
     render(<SignIn onSignedIn={vi.fn()} />);
-    await waitFor(() => expect(document.querySelectorAll(SCRIPT).length).toBe(1));
+    const script = await theScript();
     cleanup();
     render(<SignIn onSignedIn={vi.fn()} />);
     await waitFor(() => expect(getAuthConfig).toHaveBeenCalledTimes(2));
     expect(document.querySelectorAll(SCRIPT).length).toBe(1);
+    // The second mount adopted the existing node, so its listeners must still be able to fire.
+    googleAppears();
+    await act(async () => { script.dispatchEvent(new Event('load')); });
+    await waitFor(() => expect(renderButton).toHaveBeenCalled());
+  });
+
+  it('drops a failed script node so a retry starts a fresh request instead of hanging', async () => {
+    delete (window as unknown as { google?: unknown }).google;
+    render(<SignIn onSignedIn={vi.fn()} />);
+    const script = await theScript();
+    await act(async () => { script.dispatchEvent(new Event('error')); });
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't reach Google/);
+    expect(document.querySelectorAll(SCRIPT).length).toBe(0);
+
+    googleAppears();
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(renderButton).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows the same error when the script request hangs instead of failing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    delete (window as unknown as { google?: unknown }).google;
+    render(<SignIn onSignedIn={vi.fn()} />);
+    await theScript();
+    await act(async () => { await vi.advanceTimersByTimeAsync(GSI_TIMEOUT_MS); });
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't reach Google/);
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
+    expect(document.querySelectorAll(SCRIPT).length).toBe(0);
+  });
+
+  it('offers no retry for an account the server turns away', async () => {
+    vi.mocked(signInWithGoogle).mockRejectedValue(
+      new ApiError('Request failed (403)', 403, { error: "This Google account isn't on the list" }),
+    );
+    render(<SignIn onSignedIn={vi.fn()} />);
+    await waitFor(() => expect(callback).toBeDefined());
+    callback!({ credential: 'bad' });
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
   });
 });
