@@ -64,6 +64,15 @@ describe('google sign-in', () => {
     }
   });
 
+  it('does not authorise off envEmails: an env address with no table row is refused like a stranger', async () => {
+    const { app, repo } = setup();
+    repo.removeAllowed('mat@example.com');
+    const res = await signIn(app, 'good');
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: REFUSAL });
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
   it('rejects a token minted for another OAuth client', async () => {
     // the verifier answers null on an audience mismatch
     const { app } = setup();

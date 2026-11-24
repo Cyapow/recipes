@@ -51,9 +51,7 @@ export function registerAuthRoutes(
     const identity = await verify(credential);
     if (!identity?.emailVerified) return reply.code(403).send({ error: REFUSAL });
     const email = normaliseEmail(identity.email);
-    if (!deps.envEmails.includes(email) && !deps.repo.isAllowed(email)) {
-      return reply.code(403).send({ error: REFUSAL });
-    }
+    if (!deps.repo.isAllowed(email)) return reply.code(403).send({ error: REFUSAL });
 
     const at = new Date(now());
     deps.repo.pruneSessions(at);
