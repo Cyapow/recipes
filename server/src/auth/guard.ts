@@ -13,17 +13,27 @@ const OPEN_API = new Set(['/api/health', '/api/auth/config', '/api/auth/google']
 /**
  * Takes a decoded path. Every non-/api path is open: those serve the SPA shell or the PWA's own files (sw.js, the
  * manifest, icons, /assets), which a signed-out browser needs to render its sign-in screen. None of them carry data.
+ * Slashes are collapsed and case folded here, for this decision only, so //api and /API are judged as /api.
  */
 export function isOpenPath(pathname: string): boolean {
-  if (pathname === '/api' || pathname.startsWith('/api/')) return OPEN_API.has(pathname);
+  const p = pathname.replace(/\/{2,}/g, '/').toLowerCase();
+  if (p === '/api' || p.startsWith('/api/')) return OPEN_API.has(p);
   return true;
 }
 
+/** Decodes until stable, so %2561pi cannot hide an /api prefix. Anything malformed yields null: guarded, never open. */
 function decodedPathname(url: string): string | null {
   try {
-    return decodeURIComponent(new URL(url, 'http://x').pathname);
+    // A leading // would otherwise parse as a host and drop its first segment from the pathname.
+    let p = new URL(url.replace(/^\/+/, '/'), 'http://x').pathname;
+    for (let i = 0; i < 5; i++) {
+      const next = decodeURIComponent(p);
+      if (next === p) return p;
+      p = next;
+    }
+    return null;
   } catch {
-    return null; // undecodable: the router cannot match it either, so treat it as guarded
+    return null;
   }
 }
 

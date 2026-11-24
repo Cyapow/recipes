@@ -29,9 +29,10 @@ function setup(o: { webDir?: string; publicBaseUrl?: string; verify?: IdTokenVer
 describe('isOpenPath', () => {
   it.each(['/api/health', '/api/auth/config', '/api/auth/google', '/sw.js', '/manifest.webmanifest',
            '/assets/index-abc123.js', '/icon-192.png', '/apple-touch-icon.png', '/icon.svg',
-           '/', '/settings', '/recipe/abc/cook'])('%s is open', (p) => expect(isOpenPath(p)).toBe(true));
+           '/', '/settings', '/recipe/abc/cook', '/Assets/index-ABC.js', '/Sw.js'])('%s is open', (p) => expect(isOpenPath(p)).toBe(true));
   it.each(['/api/recipes', '/api/shopping', '/api/images/upload', '/api/backup/status',
-           '/api/auth/me', '/api/auth/allowed', '/api'])('%s is guarded', (p) => expect(isOpenPath(p)).toBe(false));
+           '/api/auth/me', '/api/auth/allowed', '/api',
+           '/api/healthz', '/api/auth/configure', '//api/recipes', '/API/recipes', '/Api/recipes', '/api//recipes'])('%s is guarded', (p) => expect(isOpenPath(p)).toBe(false));
 });
 
 describe('auth guard', () => {
@@ -42,11 +43,14 @@ describe('auth guard', () => {
     expect(res.json()).toEqual({ error: 'Sign in required' });
   });
 
-  it('an encoded /api path does not slip past the guard', async () => {
-    const { app } = setup();
-    const res = await app.inject({ method: 'GET', url: '/%61pi/recipes' });
-    expect(res.statusCode).toBe(401);
-  });
+  it.each(['/%61pi/recipes', '/%2561pi/recipes', '//api/recipes', '/API/recipes', '/api//recipes', '/api/healthz', '/api/auth/configure'])(
+    '%s does not slip past the guard',
+    async (url) => {
+      const { app } = setup();
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(401);
+    },
+  );
 
   it('a guarded API route with a seeded session passes', async () => {
     const { app, db } = setup();

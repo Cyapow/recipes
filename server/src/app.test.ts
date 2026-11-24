@@ -37,7 +37,7 @@ describe('GET /api/health', () => {
   it('returns ok', async () => {
     const db = openDb(':memory:');
     const app = signedIn(buildApp({ config: loadConfig({}), db }), db);
-    const res = await app.inject({ url: '/api/health' });
+    const res = await app.injectAnon({ url: '/api/health' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     await app.close();
@@ -54,6 +54,10 @@ describe('static web serving', () => {
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain('spa');
     expect((await app.inject({ url: '/' })).body).toContain('spa');
+    // The guard narrows the old cookie-less contract: signed out is 401, and only a session reaches the 404.
+    const signedOut = await app.injectAnon({ url: '/api/nope' });
+    expect(signedOut.statusCode).toBe(401);
+    expect(signedOut.json()).toEqual({ error: 'Sign in required' });
     const api = await app.inject({ url: '/api/nope' });
     expect(api.statusCode).toBe(404);
     expect(api.json()).toEqual({ error: 'Not found' });
