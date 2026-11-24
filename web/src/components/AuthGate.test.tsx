@@ -52,6 +52,33 @@ describe('AuthGate', () => {
     expect(screen.getByText(/offline/i)).toBeTruthy();
   });
 
+  it('renders the app at once while a hung getMe() never settles, if we were signed in', async () => {
+    rememberSignedIn();
+    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string }>(() => {})); // a hung socket: no resolve, no reject
+    view();
+    expect(screen.getByText('the app')).toBeTruthy();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: /sign in/i })).toBeNull();
+  });
+
+  it('waits on getMe() when we were never signed in', () => {
+    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string }>(() => {}));
+    view();
+    expect(screen.getByText(/Loading/)).toBeTruthy();
+    expect(screen.queryByText('the app')).toBeNull();
+  });
+
+  it('re-checks when the browser comes back online and drops the offline notice', async () => {
+    rememberSignedIn();
+    vi.mocked(getMe).mockRejectedValue(new TypeError('Failed to fetch'));
+    view();
+    expect(await screen.findByText(/offline/i)).toBeTruthy();
+    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c' });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(screen.queryByText(/offline/i)).toBeNull();
+    expect(screen.getByText('the app')).toBeTruthy();
+  });
+
   it('shows the sign-in screen on a network error when we were never signed in', async () => {
     vi.mocked(getMe).mockRejectedValue(new TypeError('Failed to fetch'));
     view();
