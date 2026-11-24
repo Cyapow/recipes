@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildApp } from './app.js';
+import { createAuthRepo } from './auth/repo.js';
+import { AllowlistEmptyError, assertAllowlistUsable, seedAllowedEmails } from './auth/seed.js';
 import { startBackupSchedule } from './backup/schedule.js';
 import { loadConfig } from './config.js';
 import { openDb } from './db.js';
@@ -8,6 +10,15 @@ import { openDb } from './db.js';
 const config = loadConfig(process.env);
 fs.mkdirSync(config.dataDir, { recursive: true });
 const db = openDb(path.join(config.dataDir, 'recipes.sqlite'));
+const authRepo = createAuthRepo(db);
+seedAllowedEmails(authRepo, config.allowedEmails, new Date());
+try {
+  assertAllowlistUsable(authRepo, config.allowedEmails);
+} catch (err) {
+  if (!(err instanceof AllowlistEmptyError)) throw err;
+  console.error('Refusing to start: nobody can sign in. Set ALLOWED_EMAILS in .env to your own Google address.');
+  process.exit(1);
+}
 const app = buildApp({ config, db });
 await app.listen({ host: '0.0.0.0', port: config.port });
 console.log(`recipes listening on ${config.port}`);
@@ -15,6 +26,7 @@ console.log(`recipes listening on ${config.port}`);
 const schedule = startBackupSchedule({
   hour: config.backupHour,
   run: async () => {
+    authRepo.pruneSessions(new Date());
     const out = await app.backup.runNow();
     if (out.status === 'busy') console.log('scheduled backup skipped: a backup is already running');
     else if (out.status === 'not_connected') console.log('scheduled backup skipped: Google Drive not connected');

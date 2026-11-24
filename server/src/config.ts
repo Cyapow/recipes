@@ -1,3 +1,5 @@
+import { normaliseEmail } from './auth/repo.js';
+
 export type AiProviderName = 'anthropic' | 'openai' | 'gemini';
 
 export type Config = {
@@ -21,6 +23,8 @@ export type Config = {
   googleClientSecret?: string;
   publicBaseUrl: string;
   backupHour: number;
+  /** Break-glass seed for the sign-in allowlist: normalised, de-duplicated, and never removable through the API. */
+  allowedEmails: string[];
 };
 
 // Inexpensive, structured-output-capable defaults; override with OPENAI_MODEL / GEMINI_MODEL.
@@ -78,7 +82,13 @@ export function loadConfig(raw: NodeJS.ProcessEnv): Config {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET || undefined,
     publicBaseUrl: env.PUBLIC_BASE_URL || 'http://localhost:3000',
     backupHour: parseHour(env.BACKUP_HOUR),
+    allowedEmails: parseEmails(env.ALLOWED_EMAILS),
   };
+}
+
+function parseEmails(v: string | undefined): string[] {
+  const emails = (v ?? '').split(',').map(normaliseEmail).filter(Boolean);
+  return [...new Set(emails)];
 }
 
 function parseHour(v: string | undefined): number {

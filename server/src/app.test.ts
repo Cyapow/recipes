@@ -21,6 +21,17 @@ describe('BACKUP_HOUR', () => {
     expect(loadConfig({ BACKUP_HOUR: v }).backupHour).toBe(want));
 });
 
+describe('ALLOWED_EMAILS', () => {
+  it.each([
+    ['', []],
+    ['me@example.com', ['me@example.com']],
+    [' Me@Example.com , you@example.com ', ['me@example.com', 'you@example.com']],
+    ['me@example.com,me@example.com', ['me@example.com']],
+    [',,', []],
+  ])('%j -> %j', (v, want) => expect(loadConfig({ ALLOWED_EMAILS: v }).allowedEmails).toEqual(want));
+  it('defaults to an empty list', () => expect(loadConfig({}).allowedEmails).toEqual([]));
+});
+
 describe('GET /api/health', () => {
   it('returns ok', async () => {
     const app = buildApp({ config: loadConfig({}), db: openDb(':memory:') });
