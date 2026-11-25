@@ -8,7 +8,7 @@ import { createRecipeRepo } from '../recipes/repo.js';
 import { createFavouritesRepo } from '../favourites/repo.js';
 import { createShoppingRepo } from '../shopping/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
-import { canonicalJson, computeFingerprint } from './fingerprint.js';
+import { canonicalJson, computeFingerprint, fingerprintPayload } from './fingerprint.js';
 
 const H1 = 'a'.repeat(64) + '.jpg';
 const input = (title: string): RecipeInput => ({
@@ -120,5 +120,43 @@ describe('computeFingerprint', () => {
     expect(await fp()).toBe(before);
     auth.deleteSession(token);
     expect(await fp()).toBe(before);
+  });
+
+  describe('favourites', () => {
+    const star = (email = 'cook@example.com') => {
+      const id = repo.list({})[0].id;
+      createFavouritesRepo(db).add(email, id, new Date('2026-01-01T00:00:00Z'));
+      return id;
+    };
+
+    it('changes when a recipe is starred', async () => {
+      const before = await fp();
+      star();
+      expect(await fp()).not.toBe(before);
+    });
+
+    it('returns to the original hash when the star is removed', async () => {
+      const before = await fp();
+      const id = star();
+      createFavouritesRepo(db).remove('cook@example.com', id);
+      expect(await fp()).toBe(before);
+    });
+
+    it('does not change when a display name changes', async () => {
+      const auth = createAuthRepo(db);
+      auth.addAllowed('cook@example.com', new Date('2026-01-01T00:00:00Z'));
+      const before = await fp();
+      auth.setDisplayName('cook@example.com', 'Cook');
+      expect(await fp()).toBe(before);
+    });
+
+    it('counts a star once, outside the recipes part of the hashed object', async () => {
+      const before = await fingerprintPayload(db, dir);
+      const id = star();
+      const after = await fingerprintPayload(db, dir);
+      expect(JSON.stringify(after.recipes)).not.toContain('favouritedBy');
+      expect(after.recipes).toEqual(before.recipes);
+      expect(after.favourites).toEqual([{ email: 'cook@example.com', recipeId: id }]);
+    });
   });
 });

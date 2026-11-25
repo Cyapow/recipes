@@ -96,7 +96,11 @@ export async function runBackup(deps: {
       const jsonFile = path.join(tmp, `${base}.json`);
       await deps.db.backup(sqliteFile);
       const repo = createRecipeRepo(deps.db, createFavouritesRepo(deps.db));
-      const recipes = repo.list({}).map((s) => repo.get(s.id)!);
+      // Favourites are not part of a recipe: they stay out of the readable export.
+      const recipes = repo.list({}).map((s) => {
+        const { favouritedBy: _stars, ...recipe } = repo.get(s.id)!;
+        return recipe;
+      });
       await writeFile(jsonFile, JSON.stringify({ exportedAt: started.toISOString(), recipes }, null, 2));
 
       const root = await deps.drive.ensureFolder('Recipes backup');

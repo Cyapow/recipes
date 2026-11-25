@@ -20,20 +20,35 @@ export function canonicalJson(v: unknown): string {
 }
 
 /**
- * sha256 over every full recipe (ordered by id, no export timestamp), the sorted backup-eligible image
- * names and the allowlisted email addresses, so an allowlist edit alone still triggers an upload.
+ * Everything the fingerprint hashes: every full recipe (ordered by id), the sorted backup-eligible image
+ * names, the allowlisted email addresses and the sorted favourite pairs.
  *
- * Deliberately excluded: the settings table (backup status rows change on every run) and sessions
- * (they change on every sign-in and mean nothing after a restore). Anything user-meaningful added to
- * either later must be added here. Only the addresses are hashed, not their added-at times.
+ * Recipes go in without favouritedBy: a star is hashed once, under `favourites`, and is not recipe content.
  */
-export async function computeFingerprint(db: Database, dataDir: string): Promise<string> {
-  const repo = createRecipeRepo(db, createFavouritesRepo(db));
+export async function fingerprintPayload(db: Database, dataDir: string) {
+  const favourites = createFavouritesRepo(db);
+  const repo = createRecipeRepo(db, favourites);
   const recipes = repo
     .list({})
-    .map((s) => repo.get(s.id)!)
+    .map((s) => {
+      const { favouritedBy: _stars, ...recipe } = repo.get(s.id)!;
+      return recipe;
+    })
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const images = await listBackupImageNames(dataDir);
   const allowed = createAuthRepo(db).listAllowed().map((a) => a.email);
-  return createHash('sha256').update(canonicalJson({ recipes, images, allowed })).digest('hex');
+  return { recipes, images, allowed, favourites: favourites.allPairs() };
+}
+
+/**
+ * sha256 over {@link fingerprintPayload}, with no export timestamp, so an allowlist edit or a new star
+ * alone still triggers an upload.
+ *
+ * Deliberately excluded: the settings table (backup status rows change on every run), sessions (they
+ * change on every sign-in and mean nothing after a restore) and display names (cosmetic, re-fetched from
+ * Google at the next sign-in). Anything else user-meaningful added later must be added here. Only the
+ * addresses are hashed, not their added-at times; favourites go in as email and recipe id pairs.
+ */
+export async function computeFingerprint(db: Database, dataDir: string): Promise<string> {
+  return createHash('sha256').update(canonicalJson(await fingerprintPayload(db, dataDir))).digest('hex');
 }

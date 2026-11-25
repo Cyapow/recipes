@@ -101,6 +101,14 @@ describe('runBackup', () => {
     expect(js.recipes[0].steps).toEqual([{ text: 'x', imageId: null, ingredients: [] }]);
   });
 
+  it('keeps favourites out of the readable export', async () => {
+    createFavouritesRepo(db).add('cook@example.com', createRecipeRepo(db, createFavouritesRepo(db)).list({})[0].id, new Date());
+    await runBackup({ db, dataDir: dir, drive, now: day(0) });
+    const json = drive.read(snaps().find((f) => f.name.endsWith('.json'))!.id).toString();
+    expect(json).not.toContain('favouritedBy');
+    expect(json).not.toContain('cook@example.com');
+  });
+
   it('records success status', async () => {
     await runBackup({ db, dataDir: dir, drive, now: day(0) });
     expect(getBackupStatus(db)).toEqual({
