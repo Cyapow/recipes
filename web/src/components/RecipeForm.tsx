@@ -7,6 +7,7 @@ import { KNOWN_BRANDS, TAG_GROUPS, canonicalBrand, normaliseTags, originForBrand
 import { parseTags } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
+import type { StepMarks } from '../lib/stepMarks';
 import { CropDialog } from './CropDialog';
 
 export type RecipeFormProps = {
@@ -23,6 +24,8 @@ export type RecipeFormProps = {
   dishCrop?: ({ sourceImageId: string } & Box1000) | null;
   /** Called when the dish crop changes: the new box after Adjust, null once the crop photo is replaced or removed. */
   onDishCropChange?(crop: ({ sourceImageId: string } & Box1000) | null): void;
+  /** Which steps a revision added or reworded, shown beside each step. Keyed by step identity, so `initial.steps` must be the very objects the marks were built from. */
+  marks?: StepMarks;
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -33,7 +36,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange, marks }: RecipeFormProps) {
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -251,7 +254,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
         </div>
         <section className="field steps-field" aria-labelledby="h-steps-title">
           <h2 id="h-steps-title">Method</h2>
-          <StepEditor steps={steps} ingredients={ingredients} onChange={(next) => { setSteps(next); }} onBusyChange={setStepsBusy} />
+          <StepEditor steps={steps} ingredients={ingredients} marks={marks}onChange={(next) => { setSteps(next); }} onBusyChange={setStepsBusy} />
         </section>
         <label>
           Notes

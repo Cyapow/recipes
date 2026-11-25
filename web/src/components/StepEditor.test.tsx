@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StepEditor } from './StepEditor';
+import { stepMarks } from '../lib/stepMarks';
 import type { Ingredient, Step } from '../../../server/src/recipes/schema';
 
 let impl: (f: File) => Promise<string>;
@@ -163,5 +164,15 @@ describe('StepEditor', () => {
     render(<Harness initial={[s('A'), s('B')]} />);
     expect((screen.getByRole('button', { name: 'Move step 1 up' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Move step 2 down' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('StepEditor marks', () => {
+  it('names a marked step in its label so it is announced with the step', () => {
+    const steps = [s('Mix'), s('Cool')];
+    const marks = stepMarks([s('Mix')], steps, [0, null]);
+    render(<StepEditor steps={steps} ingredients={ings} marks={marks} onChange={() => {}} onBusyChange={() => {}} />);
+    expect(screen.getByRole('textbox', { name: 'Step 2 New' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Step 1' })).toBeTruthy();
   });
 });

@@ -3,15 +3,17 @@ import { uploadImage } from '../api';
 import type { Ingredient, Step } from '../../../server/src/recipes/schema';
 import { formatIngredientLine } from '../lib/text';
 import { derive, stepId } from '../lib/stepIdentity';
+import { markFor, type StepMarks } from '../lib/stepMarks';
 
 export type StepEditorProps = {
   steps: Step[];
   ingredients: Ingredient[];
+  marks?: StepMarks;
   onChange(steps: Step[]): void;
   onBusyChange(busy: boolean): void;
 };
 
-export function StepEditor({ steps, ingredients, onChange, onBusyChange }: StepEditorProps) {
+export function StepEditor({ steps, ingredients, marks, onChange, onBusyChange }: StepEditorProps) {
   const keys = steps.map(stepId);
 
   const stepsRef = useRef(steps);
@@ -106,11 +108,18 @@ export function StepEditor({ steps, ingredients, onChange, onBusyChange }: StepE
         const key = keys[i];
         const pending = (inflight[key] ?? 0) > 0;
         const n = i + 1;
+        const mark = markFor(marks, step);
         return (
           <div className="step-card" key={key}>
             <div className="step-head">
               <label htmlFor={`step-${key}`} className="step-num">
                 Step {n}
+                {mark && (
+                  <>
+                    {' '}
+                    <span className="step-mark">{mark}</span>
+                  </>
+                )}
               </label>
               <span className="step-tools">
                 <button type="button" className="icon-btn" aria-label={`Move step ${n} up`} disabled={i === 0} onClick={() => move(i, -1)}>

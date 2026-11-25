@@ -251,6 +251,7 @@ body.cook-scroll-lock { overflow: hidden; }
 .step-card { padding: 16px; border-radius: 22px; background: var(--card); border: 1.5px solid var(--fg); display: flex; flex-direction: column; gap: 14px; }
 .step-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .step-num { font-size: .875rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--accent); }
+.step-mark { margin-left: 8px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--amber-line); background: var(--amber-bg); color: var(--amber-fg); font-size: .75rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
 .step-tools { display: flex; gap: 4px; }
 .step-tools .icon-btn { border: 0; background: transparent; font-size: 1.125rem; }
 .step-tools .icon-btn:disabled { opacity: .35; cursor: default; }
