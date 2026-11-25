@@ -34,12 +34,12 @@ After deploying:
 
 Rolling back:
 
-- Rebuilding the old commit on the data that is now on Hetzner is NOT enough. That database has been migrated to schema version 8, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
+- Rebuilding the old commit on the data that is now on Hetzner is NOT enough. That database has been migrated to schema version 9, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
 - The old build must never sit behind the public nginx vhost: it would be a site with no login. Take the Hetzner container down first, and roll back on the LAN box, where it is LAN-only again.
 - Recipes added after the upgrade are lost either way.
 - The shortest rollback: the LAN `recipes_recipes_data` volume was stopped before the copy, mounted read-only for it, and never migrated, so it is still the pre-upgrade database. Check out the old commit on the LAN box and start it on that volume (steps A below). No download and no restore.
 - If that volume is gone, check out the old commit AND restore the pre-upgrade snapshot you noted and downloaded before upgrading (steps B below).
-- In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-8 one that the old build cannot take.
+- In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-9 one that the old build cannot take.
 
 The quick rollback depends on the existing LAN install: the app's checkout in `/opt/recipes`, its `.env`, the `recipes-app` container and the `recipes_recipes_data` volume. That install was set up before this release and this release does not touch it: step 4 of the first-deploy sequence only stops the container and copies the volume out read-only. Leave all of it in place, untouched, until Hetzner has proven itself (see step 10). Deleting or rebuilding it turns a quick rollback into a restore from Drive.
 
@@ -174,7 +174,7 @@ docker port recipes-app
 ss -ltn | grep ':3006 '
 ```
 
-The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 8 (`008_auth.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
+The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 9 (`008_auth.sql`, then `009_favourites.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
 
 Check the photo files made it. This must match the count you noted on the LAN box (the recipes themselves are checked through the app at step 9):
 
@@ -291,10 +291,11 @@ From a phone off the home wifi, or any machine other than the LAN box: open `htt
 2. Brands and tags: open Filters, pick a Brand and a tag from another group, and confirm the list narrows. Open a recipe and check its brand and grouped tags match the LAN app.
 3. Edit a recipe: change a price or tag, save, reload, and confirm it stuck. Then change it back.
 4. From photos: add one or two photos of a recipe card from a phone. Confirm a draft appears with a brand, tags and a cropped dish photo, then discard it. This needs a working AI key on the new box.
-5. Shopping list: add a recipe's ingredients and confirm they appear.
-6. Planner: confirm your shops, ingredient packs and budget came across, plan a couple of recipes, and add the result to the shopping list.
-7. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
-8. Settings shows Drive still connected. Press "Back up now" and confirm success.
+5. Describe your edits: open a recipe with a few steps, type "let it cool for 20 minutes before serving" in the box at the top of the editor, and confirm the form comes back with a new step marked New, a summary naming it, and an Undo that puts it back. Leave without saving. This needs a working AI key on the new box.
+6. Shopping list: add a recipe's ingredients and confirm they appear.
+7. Planner: confirm your shops, ingredient packs and budget came across, plan a couple of recipes, and add the result to the shopping list.
+8. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
+9. Settings shows Drive still connected. Press "Back up now" and confirm success.
 
 If the Google button never appears (a heading and nothing under it), the script or the client is being refused: check *Authorised JavaScript origins* on the OAuth client includes `https://recipes.matchapman.dev` exactly (see `docs/setup-google.md`), and open the browser console on the sign-in page — Google reports the mismatch there. The screen offers a **Try again** button once the load fails outright.
 
@@ -343,7 +344,7 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
 
 ## AI providers
 
-"Describe a recipe" and the page-reading fallback in import can use Claude, ChatGPT (OpenAI) or Gemini. Set any one or more of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY` in `.env` (models are `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`; the defaults in `.env.example` are cheap ones and can be changed), then restart.
+"Describe a recipe", "Describe your edits" in the recipe editor, and the page-reading fallback in import can use Claude, ChatGPT (OpenAI) or Gemini. Set any one or more of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY` in `.env` (models are `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`; the defaults in `.env.example` are cheap ones and can be changed), then restart.
 
 - The first provider with a key is used, in the order Claude, ChatGPT, Gemini. Set `AI_PROVIDER=anthropic|openai|gemini` to try a different one first. An unknown value is ignored with a warning in the log.
 - Fallback: if the provider fails because of the provider (key rejected, no credit, rate limit, overloaded or down, timeout) the next provider with a key is tried. A refusal, a recipe that is still invalid after the one retry, or a request error of our own is shown rather than passed on.
@@ -354,6 +355,8 @@ Backups live in the "Recipes backup" folder in Google Drive (`snapshots/` holds 
 - Settings shows which providers have a key and which is in use (never the keys). Drafts say "Drafted by ..." above the form; that is never saved with the recipe.
 - If every provider fails, the page shows a plain message: "The AI account is out of credit. Add credit or switch provider." (no credit), "The AI key was rejected. Check the key in .env." (bad key), "The AI is busy right now. Try again in a minute." (rate limit), or "The AI didn't respond. Try again.". The message follows the first provider tried.
 - Quality and the no-invention behaviour can differ by provider, so run the live test for each one you set a key for (it runs once per key present and skips the rest): `LIVE_AI=1 npx vitest run server/src/ai/draft.live.test.ts`.
+
+Describe your edits sends a **stored** recipe to the provider. Until now the AI only ever saw text you had just typed, photos you had just taken, or a page you asked it to read; revising sends the whole recipe as it stands on screen — title, description, source, times, tags, every ingredient, every step and the notes — to the third-party provider you have a key for, once per instruction. No photo is ever sent, and nothing else the app stores goes with it. That is a change in kind rather than degree, so it is worth knowing before you point the box at a recipe whose notes you would not paste into someone else's service; what the provider does with what it receives is its own policy, not this app's.
 
 Describe splits a spoken narrative ("I browned the mince, added an onion, simmered for an hour...") into separate steps in your own words, without adding any detail you didn't say; steps you already list are kept exactly. If you give no dish name it picks a plain title from what you said and flags it in "Check these" ("title chosen from your description").
 
