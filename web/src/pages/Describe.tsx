@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, describeRecipe, saveRecipe, type AiDraft, type RecipeInput } from '../api';
+import { describeRecipe, saveRecipe, type AiDraft, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
+import { describeAiError } from '../lib/aiError';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
@@ -33,15 +34,7 @@ export function Describe() {
       kept.save({ text, input: input as RecipeInput, gaps: g });
       setDraft((d) => ({ n: (d?.n ?? 0) + 1, value }));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '';
-      const code = e instanceof ApiError ? (e.body as { code?: string } | undefined)?.code : undefined;
-      setError(
-        msg === 'AI not configured'
-          ? 'AI is not configured on this server (no AI key set in .env).'
-          : code && code !== 'other'
-            ? msg // already a plain-language sentence from the server
-            : `Could not create a draft${msg ? `: ${msg}` : ''}`,
-      );
+      setError(describeAiError(e, 'Could not create a draft'));
     } finally {
       busyRef.current = false;
       setBusy(false);

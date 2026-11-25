@@ -112,6 +112,22 @@ export async function describeRecipe(text: string): Promise<AiDraft> {
   return (await res.json()) as AiDraft;
 }
 
+/** A revised recipe; stepsFrom[i] is the index of the original step that step i came from, or null if new. */
+export type Revision = RecipeInput & { gaps: string[]; stepsFrom: (number | null)[]; provider?: AiProviderName; model?: string };
+
+export async function reviseRecipe(recipe: RecipeInput, instruction: string): Promise<Revision> {
+  const res = await apiFetch('/api/ai/revise', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ recipe, instruction }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status, body ?? undefined);
+  }
+  return (await res.json()) as Revision;
+}
+
 /** A draft from photos of a recipe card; dishCrop is where the finished dish is in one of those photos. */
 export type PhotosDraft = AiDraft & { dishCrop: ({ sourceImageId: string } & Box1000) | null };
 
