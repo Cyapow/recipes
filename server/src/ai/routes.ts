@@ -5,8 +5,10 @@ import { sourceFromText, type SourceDeps } from '../import/describedSource.js';
 import { aiStatus } from './registry.js';
 import { IMAGE_ID_RE, normaliseBox, type ImageStore } from '../images/store.js';
 import { originForBrand } from '../recipes/categories.js';
+import { RecipeInputSchema } from '../recipes/schema.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
+export const MAX_REVISE_CHARS = 2_000;
 export const MAX_PHOTOS = 6;
 
 function aiFailure(err: unknown, reply: FastifyReply) {
@@ -86,6 +88,23 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         provider,
         model,
       };
+    } catch (err) {
+      return aiFailure(err, reply);
+    }
+  });
+
+  app.post('/api/ai/revise', async (req, reply) => {
+    if (!ai) return reply.code(503).send({ error: 'AI not configured' });
+    const body = req.body as { recipe?: unknown; instruction?: unknown } | null;
+    const instruction = body?.instruction;
+    if (typeof instruction !== 'string' || instruction.trim() === '') return reply.code(400).send({ error: 'instruction is required' });
+    if (instruction.length > MAX_REVISE_CHARS) return reply.code(413).send({ error: 'instruction is too long' });
+    // The same schema a save uses, so the AI sees the recipe exactly as it would be stored.
+    const parsed = RecipeInputSchema.safeParse(body?.recipe);
+    if (!parsed.success) return reply.code(400).send({ error: 'recipe is not a valid recipe' });
+    try {
+      const { input, stepsFrom, gaps, provider, model } = await ai.reviseRecipe({ recipe: parsed.data, instruction: instruction.trim() });
+      return { ...input, gaps, stepsFrom, provider, model };
     } catch (err) {
       return aiFailure(err, reply);
     }

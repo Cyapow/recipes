@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createImageStore } from '../images/store.js';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
+import { MAX_REVISE_CHARS } from './routes.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
 import { signedIn } from '../auth/testing.js';
 
@@ -246,5 +247,77 @@ describe('POST /api/ai/photos', () => {
     expect((await run(new AiRefusedError())).json()).toEqual({ error: 'The AI declined this request', code: 'other' });
     expect((await run(new AiInvalidOutputError('x'))).json()).toEqual({ error: 'AI returned an invalid recipe', code: 'other' });
     expect((await run(new Error('sk-secret'))).json()).toEqual({ error: 'AI request failed', code: 'other' });
+  });
+});
+
+describe('POST /api/ai/revise', () => {
+  const recipe = {
+    title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
+    servings: 4, prepMinutes: null, cookMinutes: null,
+    ingredients: [{ group: null, quantity: 500, unit: 'g', item: 'mince', note: null }],
+    steps: [{ text: 'Brown the mince.', imageId: null, ingredients: [0] }],
+    notes: null, tags: [], imageIds: [],
+  };
+  const revised = {
+    ...recipe,
+    steps: [{ text: 'Brown the mince.', imageId: null, ingredients: [0] }, { text: 'Let it cool for 20 minutes.', imageId: null, ingredients: [] }],
+  };
+  const revision = { input: revised, stepsFrom: [0, null], gaps: ['servings'], provider: 'openai' as const, model: 'gpt-x' };
+  const revise = (app: ReturnType<typeof make>, payload: unknown) =>
+    app.inject({ method: 'POST', url: '/api/ai/revise', payload: payload as never });
+  const fake = (impl = vi.fn().mockResolvedValue(revision)) => ({ reviseRecipe: impl }) as unknown as AiClient;
+
+  it('revises the recipe and returns the provenance alongside it', async () => {
+    const reviseRecipe = vi.fn().mockResolvedValue(revision);
+    const res = await revise(make(fake(reviseRecipe)), { recipe, instruction: ' let it cool ' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ...revised, stepsFrom: [0, null], gaps: ['servings'], provider: 'openai', model: 'gpt-x' });
+    expect(reviseRecipe).toHaveBeenCalledWith({ recipe, instruction: 'let it cool' });
+  });
+
+  it('503s when no AI is configured', async () => {
+    const res = await revise(make(undefined), { recipe, instruction: 'x' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: 'AI not configured' });
+  });
+
+  it.each([[''], ['   '], [undefined], [42]])('400s on a missing instruction (%j) without calling the AI', async (instruction) => {
+    const reviseRecipe = vi.fn();
+    const res = await revise(make(fake(reviseRecipe)), { recipe, instruction });
+    expect(res.statusCode).toBe(400);
+    expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it('413s on an instruction over the limit without calling the AI', async () => {
+    const reviseRecipe = vi.fn();
+    const res = await revise(make(fake(reviseRecipe)), { recipe, instruction: 'x'.repeat(MAX_REVISE_CHARS + 1) });
+    expect(res.statusCode).toBe(413);
+    expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it('400s when the recipe is not a valid recipe', async () => {
+    const reviseRecipe = vi.fn();
+    const res = await revise(make(fake(reviseRecipe)), { recipe: { title: '' }, instruction: 'x' });
+    expect(res.statusCode).toBe(400);
+    expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it('normalises the recipe before sending it to the AI', async () => {
+    const reviseRecipe = vi.fn().mockResolvedValue(revision);
+    await revise(make(fake(reviseRecipe)), { recipe: { ...recipe, steps: ['Brown the mince.'] }, instruction: 'x' });
+    expect(reviseRecipe.mock.calls[0][0].recipe.steps).toEqual([{ text: 'Brown the mince.', imageId: null, ingredients: [] }]);
+  });
+
+  it('maps a provider failure to its plain-language sentence', async () => {
+    const res = await revise(make(fake(vi.fn().mockRejectedValue(new AiRequestError('no_credit')))), { recipe, instruction: 'x' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'The AI account is out of credit. Add credit or switch provider.', code: 'no_credit' });
+  });
+
+  it('is behind the auth guard', async () => {
+    const reviseRecipe = vi.fn();
+    const res = await make(fake(reviseRecipe)).injectAnon({ method: 'POST', url: '/api/ai/revise', payload: { recipe, instruction: 'x' } });
+    expect(res.statusCode).toBe(401);
+    expect(reviseRecipe).not.toHaveBeenCalled();
   });
 });
