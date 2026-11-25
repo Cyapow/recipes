@@ -1,12 +1,12 @@
 import type { Config } from '../../config.js';
-import { JSON_MODE_NOTE, nullableAsTypeArray, recipeToolSchema, TOOL_NAME } from '../draft.js';
-import { postJson, ProviderError, type Provider, type ProviderMessage, type ProviderResult } from './types.js';
+import { JSON_MODE_NOTE, nullableAsTypeArray } from '../draft.js';
+import { postJson, ProviderError, type Provider, type ProviderMessage, type ProviderResult, type ProviderTool } from './types.js';
 
 const URL_CHAT = 'https://api.openai.com/v1/chat/completions';
 
 /** Strict structured-output schema: the shared strict-safe schema with nullable fields as `["type","null"]`. */
-export function openaiSchema(): Record<string, unknown> {
-  return nullableAsTypeArray(recipeToolSchema()) as Record<string, unknown>;
+export function openaiSchema(tool: ProviderTool): Record<string, unknown> {
+  return nullableAsTypeArray(tool.schema) as Record<string, unknown>;
 }
 
 function toMessages(system: string, messages: ProviderMessage[]) {
@@ -38,7 +38,6 @@ type ChatResponse = {
 };
 
 export function createOpenAiProvider(config: Config, fetchImpl: typeof fetch = fetch): Provider {
-  const schema = openaiSchema();
   const model = config.openaiModel;
   return {
     name: 'openai',
@@ -52,7 +51,7 @@ export function createOpenAiProvider(config: Config, fetchImpl: typeof fetch = f
         {
           model,
           messages: toMessages(req.system, req.messages),
-          response_format: { type: 'json_schema', json_schema: { name: TOOL_NAME, strict: true, schema } },
+          response_format: { type: 'json_schema', json_schema: { name: req.tool.name, strict: true, schema: openaiSchema(req.tool) } },
           max_completion_tokens: req.maxTokens,
           // Effort values are model-specific; an unsupported one is a 400 (surfaced as `other`).
           ...(config.openaiReasoningEffort ? { reasoning_effort: config.openaiReasoningEffort } : {}),

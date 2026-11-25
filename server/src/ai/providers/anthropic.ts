@@ -1,6 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Config } from '../../config.js';
-import { recipeToolSchema, TOOL_NAME } from '../draft.js';
 import { classifyHttpError, ProviderError, raceAbort, type Provider, type ProviderMessage, type ProviderResult } from './types.js';
 
 /** The slice of the Anthropic SDK we use; lets tests inject a fake. */
@@ -8,7 +7,7 @@ export type SdkLike = { messages: { stream(params: Anthropic.MessageCreateParams
 
 type Msg = Anthropic.MessageParam;
 
-function toMessages(messages: ProviderMessage[]): Msg[] {
+function toMessages(messages: ProviderMessage[], toolName: string): Msg[] {
   const out: Msg[] = [];
   for (const m of messages) {
     if (m.role === 'user') {
@@ -32,11 +31,11 @@ function toMessages(messages: ProviderMessage[]): Msg[] {
             type: 'tool_result' as const,
             tool_use_id: b.id,
             is_error: true,
-            content: `Invalid recipe: ${m.problem}\nCall ${TOOL_NAME} again with valid input. Still do not add anything the user did not say.`,
+            content: `Invalid recipe: ${m.problem}\nCall ${toolName} again with valid input. Still do not add anything the user did not say.`,
           })),
       });
     } else {
-      out.push({ role: 'user', content: `Respond only by calling ${TOOL_NAME} with the recipe. Do not reply with text, and do not add anything the user did not say.` });
+      out.push({ role: 'user', content: `Respond only by calling ${toolName} with the recipe. Do not reply with text, and do not add anything the user did not say.` });
     }
   }
   return out;
@@ -53,7 +52,6 @@ function toProviderError(err: unknown, signal: AbortSignal): ProviderError {
 
 export function createAnthropicProvider(config: Config, sdk?: SdkLike): Provider {
   const client: SdkLike = sdk ?? (new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 1 }) as unknown as SdkLike);
-  const tools = [{ name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', strict: true, input_schema: recipeToolSchema() }];
   return {
     name: 'anthropic',
     label: 'Claude',
@@ -67,10 +65,10 @@ export function createAnthropicProvider(config: Config, sdk?: SdkLike): Provider
             model: config.anthropicModel,
             max_tokens: req.maxTokens,
             system: req.system,
-            tools: tools as Anthropic.Tool[],
+            tools: [{ name: req.tool.name, description: req.tool.description, strict: true, input_schema: req.tool.schema }] as Anthropic.Tool[],
             tool_choice: { type: 'auto' },
             output_config: { effort: 'low' },
-            messages: toMessages(req.messages),
+            messages: toMessages(req.messages, req.tool.name),
           },
           { timeout: req.timeoutMs, signal: req.signal },
         );
@@ -81,7 +79,7 @@ export function createAnthropicProvider(config: Config, sdk?: SdkLike): Provider
       if (res.stop_reason === 'refusal') return { kind: 'refusal' };
       // Truncated tool input can still validate (gaps is last), so never accept it.
       if (res.stop_reason === 'max_tokens') return { kind: 'truncated' };
-      const block = res.content.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
+      const block = res.content.find((b) => b.type === 'tool_use' && b.name === req.tool.name);
       if (block && block.type === 'tool_use') return { kind: 'draft', input: block.input, raw: res.content };
       return { kind: 'no_draft', raw: res.content };
     },

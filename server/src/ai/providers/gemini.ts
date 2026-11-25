@@ -1,6 +1,6 @@
 import type { Config } from '../../config.js';
-import { JSON_MODE_NOTE, nullableAsTypeArray, recipeToolSchema } from '../draft.js';
-import { postJson, ProviderError, type Provider, type ProviderMessage, type ProviderResult } from './types.js';
+import { JSON_MODE_NOTE, nullableAsTypeArray } from '../draft.js';
+import { postJson, ProviderError, type Provider, type ProviderMessage, type ProviderResult, type ProviderTool } from './types.js';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REFUSAL_FINISH = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'RECITATION', 'BLOCKLIST', 'SPII']);
@@ -9,8 +9,8 @@ const REFUSAL_FINISH = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'RECITATION', 'B
  * Gemini accepts a JSON Schema subset: type (lowercase), properties, required, additionalProperties, items, enum,
  * description; nullable as a type array. Our strict-safe schema already stays inside that subset.
  */
-export function geminiSchema(): Record<string, unknown> {
-  return nullableAsTypeArray(recipeToolSchema()) as Record<string, unknown>;
+export function geminiSchema(tool: ProviderTool): Record<string, unknown> {
+  return nullableAsTypeArray(tool.schema) as Record<string, unknown>;
 }
 
 function toContents(messages: ProviderMessage[]) {
@@ -43,7 +43,6 @@ type GenResponse = {
 };
 
 export function createGeminiProvider(config: Config, fetchImpl: typeof fetch = fetch): Provider {
-  const schema = geminiSchema();
   const model = config.geminiModel;
   return {
     name: 'gemini',
@@ -61,7 +60,7 @@ export function createGeminiProvider(config: Config, fetchImpl: typeof fetch = f
             maxOutputTokens: req.maxTokens,
             // thinkingLevel is for Gemini 3+ models; earlier ones reject it (set GEMINI_THINKING_LEVEL=default).
             ...(config.geminiThinkingLevel ? { thinkingConfig: { thinkingLevel: config.geminiThinkingLevel.toUpperCase() } } : {}),
-            responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema } },
+            responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema: geminiSchema(req.tool) } },
           },
         },
         req.signal,

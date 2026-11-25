@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
 import { canonicalBrand, normaliseTags } from '../recipes/categories.js';
+import type { ProviderTool } from './providers/types.js';
 import { RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
 /** What the model may say about a step: its text and which ingredients it names. No photo, ever. */
@@ -124,6 +125,8 @@ export function sanitizeForStrict(node: unknown): unknown {
 export function recipeToolSchema(): { type: 'object'; [k: string]: unknown } {
   return { ...(sanitizeForStrict(z.toJSONSchema(AiDraftSchema)) as Json), type: 'object' };
 }
+
+export const RECIPE_TOOL: ProviderTool = { name: TOOL_NAME, description: 'Record the recipe exactly as the user stated it.', schema: recipeToolSchema() };
 
 /**
  * Express nullable fields as a type array (`["string","null"]`), which OpenAI strict mode and Gemini both document,

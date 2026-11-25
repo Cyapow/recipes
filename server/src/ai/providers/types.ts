@@ -30,12 +30,16 @@ export type ProviderMessage =
   /** The previous answer was unusable. `problem` is the validation error, or null when no recipe came back at all. */
   | { role: 'retry'; raw: unknown; problem: string | null };
 
+/** What the model is asked to call: the tool's name, its description, and the JSON schema of its input. */
+export type ProviderTool = { name: string; description: string; schema: Record<string, unknown> };
+
 export type ProviderRequest = {
   system: string;
   messages: ProviderMessage[];
   maxTokens: number;
   signal: AbortSignal;
   timeoutMs: number;
+  tool: ProviderTool;
 };
 
 export type ProviderResult =

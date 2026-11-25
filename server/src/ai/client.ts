@@ -1,10 +1,10 @@
 import type { Config } from '../config.js';
 import type { RecipeDraft } from '../recipes/schema.js';
-import { AiDraftParseSchema, buildUserMessage, type DishBox, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
+import { AiDraftParseSchema, buildUserMessage, type DishBox, RECIPE_TOOL, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
 import { createAnthropicProvider, type SdkLike } from './providers/anthropic.js';
 import { createGeminiProvider } from './providers/gemini.js';
 import { createOpenAiProvider } from './providers/openai.js';
-import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderImage, type ProviderMessage, type ProviderName, type ProviderResult } from './providers/types.js';
+import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderImage, type ProviderMessage, type ProviderName, type ProviderResult, type ProviderTool } from './providers/types.js';
 import { providerOrder } from './registry.js';
 
 export type { SdkLike };
@@ -88,7 +88,7 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
   const minAttemptMs = deps.minAttemptMs ?? MIN_ATTEMPT_MS;
   const timeLeft = (b: Budget) => b.deadline - Date.now();
 
-  async function attempt(budget: Budget, provider: Provider, messages: ProviderMessage[], maxTokens: number): Promise<ProviderResult> {
+  async function attempt(budget: Budget, provider: Provider, call: { system: string; tool: ProviderTool }, messages: ProviderMessage[], maxTokens: number): Promise<ProviderResult> {
     const left = timeLeft(budget);
     if (budget.started > 0 && left < minAttemptMs) throw new AiRequestError('timeout');
     budget.started++;
@@ -96,7 +96,7 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await provider.complete({ system: SYSTEM_PROMPT, messages, maxTokens, signal: controller.signal, timeoutMs });
+      return await provider.complete({ system: call.system, tool: call.tool, messages, maxTokens, signal: controller.signal, timeoutMs });
     } catch (err) {
       // deliberately drops the upstream error: it may echo request details
       throw new AiRequestError(err instanceof ProviderError ? err.code : controller.signal.aborted ? 'timeout' : 'unavailable');
@@ -114,7 +114,7 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
     let lastError = '';
     let maxTokens = MAX_TOKENS;
     for (let n = 0; n < 2; n++) {
-      const res = await attempt(budget, provider, messages, maxTokens);
+      const res = await attempt(budget, provider, { system: SYSTEM_PROMPT, tool: RECIPE_TOOL }, messages, maxTokens);
       if (res.kind === 'refusal') throw new AiRefusedError();
       if (res.kind === 'truncated') {
         lastError = 'response truncated (max_tokens)';

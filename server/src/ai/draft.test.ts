@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, createAnthropicClient } from './client.js';
+import { createAnthropicProvider } from './providers/anthropic.js';
 import { AiDraftSchema, buildUserMessage, recipeToolSchema, SYSTEM_PROMPT, toRecipeDraft } from './draft.js';
 
 const draft = {
@@ -248,6 +249,32 @@ describe('createAnthropicClient', () => {
     expect(params.tools[0].input_schema.$schema).toBeUndefined();
     expect(params.messages[0].content).toContain('<user_description>\nmy spag bol\n</user_description>');
     expect(opts.timeout).toBeGreaterThan(0);
+  });
+
+  it('names the tool the caller asked for and matches its tool_use block', async () => {
+    const tool = { name: 'revise_recipe', description: 'Revise it', schema: { type: 'object', properties: { ping: { type: 'string' } }, required: ['ping'], additionalProperties: false } };
+    const reply = { content: [{ type: 'tool_use', id: 't1', name: 'revise_recipe', input: { ping: 'x' } }] };
+    const { sdk, create } = fake(reply);
+    const res = await createAnthropicProvider(config, sdk).complete({
+      system: 'x', messages: [{ role: 'user', text: 'y' }], maxTokens: 100, signal: new AbortController().signal, timeoutMs: 100, tool,
+    });
+    const [params] = create.mock.calls[0]!;
+    expect(params.tools[0].name).toBe('revise_recipe');
+    expect(params.tools[0].strict).toBe(true);
+    expect(params.tools[0].input_schema).toEqual(tool.schema);
+    expect(res).toEqual({ kind: 'draft', input: { ping: 'x' }, raw: reply.content });
+  });
+
+  it('names the requested tool in the retry nudge', async () => {
+    const tool = { name: 'revise_recipe', description: 'Revise it', schema: { type: 'object' } };
+    const { sdk, create } = fake({ content: [{ type: 'text', text: 'hi' }] });
+    await createAnthropicProvider(config, sdk).complete({
+      system: 'x', messages: [{ role: 'user', text: 'y' }, { role: 'retry', raw: [{ type: 'text', text: 'hi' }], problem: null }],
+      maxTokens: 100, signal: new AbortController().signal, timeoutMs: 100, tool,
+    });
+    const sent = JSON.stringify(create.mock.calls[0]![0].messages);
+    expect(sent).toContain('calling revise_recipe');
+    expect(sent).not.toContain('record_recipe');
   });
 
   it('wraps page text with its source url', async () => {
