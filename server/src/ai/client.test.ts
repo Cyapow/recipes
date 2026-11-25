@@ -5,6 +5,8 @@ import { aiStatus, providerOrder } from './registry.js';
 import { loadConfig } from '../config.js';
 import type { ProviderRequest } from './providers/types.js';
 import { buildUserMessage } from './draft.js';
+import { REVISE_SYSTEM_PROMPT } from './revise.js';
+import type { RecipeInput } from '../recipes/schema.js';
 
 const draft = {
   title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
@@ -343,5 +345,73 @@ describe('photos input', () => {
     const a = fake('anthropic');
     await build(cfg(), { anthropic: a }).extractRecipe(input);
     expect((a.complete.mock.calls[0]![0] as ProviderRequest).messages[0]).not.toHaveProperty('images');
+  });
+});
+
+describe('reviseRecipe', () => {
+  const recipe: RecipeInput = {
+    title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
+    servings: null, prepMinutes: null, cookMinutes: null,
+    ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
+    steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }],
+    notes: null, tags: [], imageIds: [],
+  };
+  const revision = {
+    title: 'Spag bol', description: null, brand: 'Mine', sourceName: null, sourceUrl: null,
+    servings: null, prepMinutes: null, cookMinutes: null,
+    ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
+    steps: [
+      { text: 'Brown the mince', ingredients: [], from: 0 },
+      { text: 'Let it cool for 20 minutes', ingredients: [], from: null },
+    ],
+    notes: null, tags: [], gaps: [],
+  };
+  const good: ProviderResult = { kind: 'draft', input: revision, raw: 'x' };
+  const bad: ProviderResult = { kind: 'draft', input: { nonsense: true }, raw: 'y' };
+  const ask = { recipe, instruction: 'cool it' };
+
+  it('revises through the first provider and reports which one', async () => {
+    const out = await build(cfg(), { anthropic: fake('anthropic', good) }).reviseRecipe(ask);
+    expect(out.provider).toBe('anthropic');
+    expect(out.model).toBe('anthropic-model');
+    expect(out.input.title).toBe(recipe.title);
+    expect(out.stepsFrom).toEqual([0, null]);
+  });
+
+  it('sends the revise prompt and the revise tool, not the extraction ones', async () => {
+    const f = fake('anthropic', good);
+    await build(cfg({ aiProvider: 'anthropic' }), { anthropic: f }).reviseRecipe(ask);
+    const req = f.complete.mock.calls[0]![0] as ProviderRequest;
+    expect(req.system).toBe(REVISE_SYSTEM_PROMPT);
+    expect(req.tool.name).toBe('revise_recipe');
+    expect(req.messages[0]).toMatchObject({ role: 'user' });
+  });
+
+  it('falls back to the next provider on a provider failure', async () => {
+    const o = fake('openai', good);
+    const out = await build(cfg(), { anthropic: fake('anthropic', 'rate_limit'), openai: o }).reviseRecipe(ask);
+    expect(out.provider).toBe('openai');
+    expect((o.complete.mock.calls[0]![0] as ProviderRequest).tool.name).toBe('revise_recipe');
+  });
+
+  it("reports the first provider's code when every provider fails", async () => {
+    const err = await build(cfg(), { anthropic: fake('anthropic', 'credit'), openai: fake('openai', 'rate_limit'), gemini: fake('gemini', 'unavailable') })
+      .reviseRecipe(ask).catch((e) => e);
+    expect(err).toBeInstanceOf(AiRequestError);
+    expect(err.code).toBe('credit');
+  });
+
+  it('retries once on invalid output, then throws AiInvalidOutputError', async () => {
+    const a = fake('anthropic', bad, bad);
+    const o = fake('openai');
+    await expect(build(cfg(), { anthropic: a, openai: o }).reviseRecipe(ask)).rejects.toBeInstanceOf(AiInvalidOutputError);
+    expect(a.complete).toHaveBeenCalledTimes(2);
+    expect(o.complete).not.toHaveBeenCalled();
+  });
+
+  it('throws AiRefusedError on a refusal without retrying', async () => {
+    const a = fake('anthropic', { kind: 'refusal', raw: 'no' } as ProviderResult);
+    await expect(build(cfg(), { anthropic: a, openai: fake('openai') }).reviseRecipe(ask)).rejects.toBeInstanceOf(AiRefusedError);
+    expect(a.complete).toHaveBeenCalledTimes(1);
   });
 });

@@ -6,6 +6,8 @@ import { createGeminiProvider } from './providers/gemini.js';
 import { createOpenAiProvider } from './providers/openai.js';
 import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, type ProviderImage, type ProviderMessage, type ProviderName, type ProviderResult, type ProviderTool } from './providers/types.js';
 import { providerOrder } from './registry.js';
+import { applyRevision, AiRevisionParseSchema, buildReviseMessage, REVISE_SYSTEM_PROMPT, REVISE_TOOL, type AppliedRevision } from './revise.js';
+import type { RecipeInput } from '../recipes/schema.js';
 
 export type { SdkLike };
 export type { ProviderErrorCode, ProviderName };
@@ -16,8 +18,12 @@ export type ExtractInput =
   | { kind: 'description' | 'page'; text: string; sourceUrl?: string }
   | { kind: 'photos'; images: ProviderImage[] };
 
+export type ReviseInput = { recipe: RecipeInput; instruction: string };
+export type AiRevisionResult = AppliedRevision & { provider: ProviderName; model: string };
+
 export interface AiClient {
   extractRecipe(input: ExtractInput): Promise<AiExtraction>;
+  reviseRecipe(input: ReviseInput): Promise<AiRevisionResult>;
 }
 
 export class AiInvalidOutputError extends Error {
@@ -56,7 +62,7 @@ export type AiClientDeps = {
   /** Replaces whole providers by name (tests). Which ones are tried, and in what order, still comes from the config. */
   providers?: Partial<Record<ProviderName, Provider>>;
   attemptTimeoutMs?: number;
-  /** Overall deadline for one extractRecipe call; defaults to config.aiTotalTimeoutMs, then 100 s. */
+  /** Overall deadline for one extractRecipe or reviseRecipe call; defaults to config.aiTotalTimeoutMs, then 100 s. */
   totalTimeoutMs?: number;
   /** Smallest remaining time worth starting another attempt in (default 15 s). */
   minAttemptMs?: number;
@@ -105,16 +111,22 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
     }
   }
 
-  async function extractWith(budget: Budget, provider: Provider, input: ExtractInput): Promise<AiExtraction> {
-    const first: ProviderMessage =
-      input.kind === 'photos'
-        ? { role: 'user', text: buildUserMessage({ kind: 'photos', imageCount: input.images.length }), images: input.images }
-        : { role: 'user', text: buildUserMessage(input) };
+  /**
+   * The per-provider body shared by both calls: up to two attempts (a retry on invalid output, a doubled max tokens on
+   * truncation). `parse` turns the model's tool input into the call's result, or says why it will not do.
+   */
+  async function converge<T>(
+    budget: Budget,
+    provider: Provider,
+    call: { system: string; tool: ProviderTool },
+    first: ProviderMessage,
+    parse: (input: unknown) => { ok: true; value: T } | { ok: false; error: string },
+  ): Promise<T> {
     const messages: ProviderMessage[] = [first];
     let lastError = '';
     let maxTokens = MAX_TOKENS;
     for (let n = 0; n < 2; n++) {
-      const res = await attempt(budget, provider, { system: SYSTEM_PROMPT, tool: RECIPE_TOOL }, messages, maxTokens);
+      const res = await attempt(budget, provider, call, messages, maxTokens);
       if (res.kind === 'refusal') throw new AiRefusedError();
       if (res.kind === 'truncated') {
         lastError = 'response truncated (max_tokens)';
@@ -122,9 +134,9 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
         continue;
       }
       if (res.kind === 'draft') {
-        const parsed = AiDraftParseSchema.safeParse(res.input);
-        if (parsed.success) return { draft: toRecipeDraft(parsed.data), provider: provider.name, model: provider.model };
-        lastError = parsed.error.message;
+        const parsed = parse(res.input);
+        if (parsed.ok) return parsed.value;
+        lastError = parsed.error;
         messages.push({ role: 'retry', raw: res.raw, problem: lastError });
       } else {
         lastError = 'no tool call returned';
@@ -134,27 +146,59 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
     throw new AiInvalidOutputError(lastError);
   }
 
-  return {
-    async extractRecipe(input) {
-      const budget: Budget = { deadline: Date.now() + totalTimeoutMs, started: 0 };
-      // If every provider fails, the error reported is the FIRST provider's code, whatever the later ones said (so a
-      // later deadline cut-off never hides "out of credit" from the provider the user prefers). A later provider that
-      // fails with a non-fallback error (refusal, invalid output, 'other') is thrown as is and is what the user sees.
-      let first: ProviderErrorCode | undefined;
-      for (const provider of providers) {
-        if (budget.started > 0 && timeLeft(budget) < minAttemptMs) break;
-        try {
-          return await extractWith(budget, provider, input);
-        } catch (err) {
-          if (err instanceof AiRequestError && err.code !== 'other') {
-            first ??= err.code;
-            continue;
-          }
-          throw err;
+  /**
+   * Walks the providers in order under one budget, for every kind of call. If every provider fails, the error reported
+   * is the FIRST provider's code, whatever the later ones said (so a later deadline cut-off never hides "out of credit"
+   * from the provider the user prefers). A later provider that fails with a non-fallback error (refusal, invalid
+   * output, 'other') is thrown as is and is what the user sees.
+   */
+  async function withFallback<T>(run: (budget: Budget, provider: Provider) => Promise<T>): Promise<T> {
+    const budget: Budget = { deadline: Date.now() + totalTimeoutMs, started: 0 };
+    let first: ProviderErrorCode | undefined;
+    for (const provider of providers) {
+      if (budget.started > 0 && timeLeft(budget) < minAttemptMs) break;
+      try {
+        return await run(budget, provider);
+      } catch (err) {
+        if (err instanceof AiRequestError && err.code !== 'other') {
+          first ??= err.code;
+          continue;
         }
+        throw err;
       }
-      throw new AiRequestError(first ?? 'other');
-    },
+    }
+    throw new AiRequestError(first ?? 'other');
+  }
+
+  return {
+    extractRecipe: (input) =>
+      withFallback((budget, provider) => {
+        const first: ProviderMessage =
+          input.kind === 'photos'
+            ? { role: 'user', text: buildUserMessage({ kind: 'photos', imageCount: input.images.length }), images: input.images }
+            : { role: 'user', text: buildUserMessage(input) };
+        return converge<AiExtraction>(budget, provider, { system: SYSTEM_PROMPT, tool: RECIPE_TOOL }, first, (raw) => {
+          const parsed = AiDraftParseSchema.safeParse(raw);
+          return parsed.success
+            ? { ok: true, value: { draft: toRecipeDraft(parsed.data), provider: provider.name, model: provider.model } }
+            : { ok: false, error: parsed.error.message };
+        });
+      }),
+    reviseRecipe: (input) =>
+      withFallback((budget, provider) =>
+        converge<AiRevisionResult>(
+          budget,
+          provider,
+          { system: REVISE_SYSTEM_PROMPT, tool: REVISE_TOOL },
+          { role: 'user', text: buildReviseMessage(input.recipe, input.instruction) },
+          (raw) => {
+            const parsed = AiRevisionParseSchema.safeParse(raw);
+            return parsed.success
+              ? { ok: true, value: { ...applyRevision(parsed.data, input.recipe), provider: provider.name, model: provider.model } }
+              : { ok: false, error: parsed.error.message };
+          },
+        ),
+      ),
   };
 }
 
