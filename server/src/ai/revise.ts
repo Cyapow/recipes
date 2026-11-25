@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { RecipeCoreSchema, TagSchema, type Ingredient, type RecipeInput } from '../recipes/schema.js';
+import { mentionsAnySignificantWord } from '../recipes/links.js';
+import { canonicalBrand, normaliseTags, originForBrand } from '../recipes/categories.js';
+import { RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeInput } from '../recipes/schema.js';
 import { sanitizeForStrict } from './draft.js';
 import type { ProviderTool } from './providers/types.js';
 
@@ -92,4 +94,51 @@ function renderRecipe(r: RecipeInput): string {
 
 export function buildReviseMessage(recipe: RecipeInput, instruction: string): string {
   return `Revise this recipe as the instruction says.\n<recipe>\n${defang(renderRecipe(recipe))}\n</recipe>\n<instruction>\n${defang(instruction)}\n</instruction>`;
+}
+
+export type AppliedRevision = {
+  input: RecipeInput;
+  /** For each revised step, the index of the original step it kept (and so its photo from), or null when new. */
+  stepsFrom: (number | null)[];
+  gaps: string[];
+};
+
+/**
+ * Turn the model's revision into a recipe the app can save. Every photo is decided here, from what the caller's
+ * recipe holds: a step keeps its photo only through a valid `from` that no earlier step has already claimed.
+ * Ingredients are deliberately not passed through `repairAmount`: it would rewrite an ingredient the instruction
+ * never mentioned. Brand, origin and tags go through helpers that leave an untouched value as it was.
+ */
+export function applyRevision(revision: AiRevisionOutput, recipe: RecipeInput): AppliedRevision {
+  const claimed = new Set<number>();
+  const stepsFrom = revision.steps.map(({ from }) => {
+    if (from == null || !Number.isInteger(from) || from < 0 || from >= recipe.steps.length || claimed.has(from)) return null;
+    claimed.add(from);
+    return from;
+  });
+
+  // One-to-one with revision.steps: zod has guaranteed every step a string text, so none is skipped.
+  const steps = normaliseSteps(
+    revision.steps.map(({ text, ingredients }) => ({ text, ingredients })),
+    revision.ingredients.length,
+  ).map((s, n) => ({
+    ...s,
+    imageId: stepsFrom[n] == null ? null : recipe.steps[stepsFrom[n]]!.imageId,
+    ingredients: s.ingredients.filter((i) => mentionsAnySignificantWord(s.text, revision.ingredients[i]!)),
+  }));
+
+  const brand = canonicalBrand(revision.brand);
+  const { gaps, ...rest } = revision;
+  return {
+    input: {
+      ...rest,
+      brand,
+      origin: originForBrand(brand),
+      tags: normaliseTags(revision.tags),
+      steps,
+      imageIds: recipe.imageIds,
+    },
+    stepsFrom,
+    gaps,
+  };
 }
