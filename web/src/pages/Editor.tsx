@@ -29,7 +29,7 @@ export function Editor() {
   // Revising: the form is reloaded (new key) with the revision, and the contents before it are kept for Undo.
   const formInput = useRef<(() => RecipeInput) | null>(null);
   const [revision, setRevision] = useState(0);
-  const [gaps, setGaps] = useState<string[]>([]);
+  const [gaps, setGaps] = useState<string[]>(draft.existing?.gaps ?? []);
   const [marks, setMarks] = useState<StepMarks | undefined>();
   const [summary, setSummary] = useState<string[] | null>(null);
   const [reviseBusy, setReviseBusy] = useState(false);
@@ -40,7 +40,6 @@ export function Editor() {
   // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-revision contents.
   useEffect(() => {
     if (revision > 0 && initial) draft.save({ input: initial, gaps });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision]);
 
   useEffect(() => {
@@ -66,8 +65,12 @@ export function Editor() {
   async function onRevise(instruction: string) {
     if (!initial || reviseBusy) return;
     const current = formInput.current?.() ?? initial;
-    setReviseBusy(true);
     setReviseError(null);
+    if (!current.title.trim()) {
+      setReviseError('Give the recipe a title first, then describe what to change.');
+      return;
+    }
+    setReviseBusy(true);
     try {
       const { gaps: newGaps, stepsFrom, provider: _p, model: _m, ...next } = await reviseRecipe(current, instruction);
       // `next.steps` goes to the form as-is: the marks are keyed to those very objects.

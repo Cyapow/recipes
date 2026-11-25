@@ -11,7 +11,7 @@ vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
   getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn(), getFacets: vi.fn(), reviseRecipe: vi.fn(),
 }));
-import { ApiError, getFacets, getRecipe, reviseRecipe, saveRecipe } from '../api';
+import { getFacets, getRecipe, reviseRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -60,6 +60,21 @@ describe('Editor revise', () => {
     await user.type(title, 'typed title');
     await apply(user, 'cool it');
     expect(vi.mocked(reviseRecipe)).toHaveBeenCalledWith(expect.objectContaining({ title: 'typed title' }), 'cool it');
+    // The form was touched by the typing, so its unmount flush would overwrite a draft written too early.
+    await waitFor(() => expect(listDrafts()[0]?.input?.steps).toHaveLength(3));
+  });
+
+  it('asks for a title before revising a recipe that has none', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <MemoryRouter initialEntries={['/new']}>
+        <Routes><Route path="/new" element={<Editor />} /></Routes>
+      </MemoryRouter>,
+    );
+    await apply(user, 'cool it');
+    expect((await screen.findByRole('alert')).textContent).toMatch(/title first/);
+    expect(vi.mocked(reviseRecipe)).not.toHaveBeenCalled();
+    view.unmount();
   });
 
   it('replaces the form with the revision and marks the new step', async () => {

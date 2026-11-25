@@ -524,6 +524,7 @@ body.cook-scroll-lock { overflow: hidden; }
 .page > .allowed-add { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .allowed-add label { flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
 .allowed-add button { flex: none; min-height: 52px; }
+.revise-box > label { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
 .revise-box { display: flex; flex-direction: column; gap: 10px; margin: 0 0 20px; }
 .revise-box > .primary { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
 .revise-summary { padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
