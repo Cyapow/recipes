@@ -20,6 +20,8 @@ exists instead of a blank one.
 - Only what the instruction asks for changes. Everything else comes back exactly as it was.
 - Step photos survive an edit that rewrites the method around them.
 - The person can see what changed, and undo it in one tap if it was not what they meant.
+- Which steps were added, and which were reworded, is marked on the steps themselves in the method
+  editor — not only described in a summary above it.
 - Several instructions in a row, each acting on the result of the last.
 
 ## Non-goals
@@ -38,6 +40,8 @@ exists instead of a blank one.
   renamed the brand would make the feature untrustworthy: the summary must name every area that changed,
   and it is computed from the before and after, never from what the model claims it did.
 - Losing a step photo. Photos are the one thing in a recipe that cannot be retyped.
+- A guessed mark. "New" and "Reworded" come from the provenance the model returned and the server
+  checked, never from comparing texts and hoping. A mark on the wrong step is worse than no mark.
 - Inventing content. The existing draft prompt's hard rule — never add what the input does not state —
   still holds, with exactly one hole in it: the person's instruction is input, so what the instruction
   states may be added.
@@ -124,8 +128,11 @@ server's to decide, never the model's.
 `RecipeInputSchema`, so the route gets the same normalisation a save does; the instruction must be a
 non-empty string of at most `MAX_REVISE_CHARS` (2,000). Failures use the existing `aiFailure` mapping, so
 "out of credit" and "try again in a minute" read the same as they do on the Describe page. The response is
-the revised `RecipeInput` plus `gaps`, `provider` and `model`, matching the Describe route's shape. The
-route is guarded by the global auth guard like every other non-open path.
+the revised `RecipeInput` plus `gaps`, `provider` and `model`, matching the Describe route's shape, and
+`stepsFrom`: an array the same length as `steps`, holding each step's `from` after the server has
+range-checked and de-duplicated it. The browser needs that provenance to mark the steps, and it is the
+same value the server used to carry the photos across, so the marks and the photos can never disagree.
+The route is guarded by the global auth guard like every other non-open path.
 
 **The screen.** At the top of the editor page, above the form: a short textarea labelled so it is obvious
 what it does ("Describe the changes you want"), a button, and the same "tap the microphone to dictate"
@@ -143,6 +150,21 @@ lists the areas that differ: changed fields by name, steps by their new position
 so — a model that changed nothing should not look like it worked. `gaps` from the response go to the
 form's existing "Check these" box.
 
+**Marks on the steps.** A summary above a long method still leaves you counting rows, so each affected
+step says so where it sits. From `stepsFrom` and the steps as they were, the editor sorts the revised
+steps into three piles: **new** (`from` is null), **reworded** (`from` points at a step whose text
+differs), and untouched (everything else, which gets no mark). A step that only moved is untouched. A
+removed step has nowhere to carry a mark, so it is named in the summary only.
+
+The marks travel by step identity, not by position: `web/src/lib/stepIdentity.ts` already keys identity to
+the step object through a `WeakMap`, and every edit, move and delete in the form carries it over with
+`derive`. So the editor computes the two sets of step ids once, at the moment a revision is applied, and
+each mark stays on its own step while the person reorders, edits or deletes around it. The marks are
+replaced wholesale by the next revision and cleared by Undo.
+
+Each mark is a short word next to the step's number ("New", "Reworded"), not a colour on its own, so it
+reads the same to someone who cannot tell the colours apart and is announced with the step.
+
 **Undo** restores exactly the contents from before the last apply, in one tap, including the device draft.
 One level is enough: it covers the mistake it is for, and a second instruction is a fresh starting point.
 
@@ -152,6 +174,8 @@ answers 503 produces the same sentence the Describe page shows ("AI is not confi
 ## Left to the builder
 
 - The exact copy of the summary lines and of the box's label and button, within the shapes above.
+- How the step marks look: where the word sits against the step number, and whether a colour or rule
+  goes with it. Follow the app's existing treatment rather than inventing a new one.
 - Whether the box is a plain section or a disclosure that opens — but it is at the top of the editor and
   its purpose is readable without opening anything.
 - Where the undo sits relative to the summary.
