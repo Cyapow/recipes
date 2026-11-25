@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createImageStore } from '../images/store.js';
 import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
-import { MAX_REVISE_CHARS } from './routes.js';
+import { MAX_REVISE_CHARS, MAX_REVISE_RECIPE_CHARS } from './routes.js';
 import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } from './client.js';
 import { signedIn } from '../auth/testing.js';
 
@@ -293,6 +293,26 @@ describe('POST /api/ai/revise', () => {
     const res = await revise(make(fake(reviseRecipe)), { recipe, instruction: 'x'.repeat(MAX_REVISE_CHARS + 1) });
     expect(res.statusCode).toBe(413);
     expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it('413s on a recipe over the limit without calling the AI', async () => {
+    const reviseRecipe = vi.fn();
+    const big = { ...recipe, notes: 'x'.repeat(MAX_REVISE_RECIPE_CHARS) };
+    const res = await revise(make(fake(reviseRecipe)), { recipe: big, instruction: 'x' });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: 'recipe is too long' });
+    expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a step that is too long', [{ text: 'x'.repeat(5_001), imageId: null, ingredients: [] }]],
+    ['too many steps', Array.from({ length: 201 }, () => ({ text: 'Stir.', imageId: null, ingredients: [] }))],
+    ['a corrupted step', [{ text: 'Stir in the [object Object].', imageId: null, ingredients: [] }]],
+  ])('502s on a revision the form could not save back: %s', async (_name, steps) => {
+    const bad = { ...revision, input: { ...revised, steps }, stepsFrom: steps.map(() => null) };
+    const res = await revise(make(fake(vi.fn().mockResolvedValue(bad))), { recipe, instruction: 'x' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'AI returned an invalid recipe', code: 'other' });
   });
 
   it('400s when the recipe is not a valid recipe', async () => {

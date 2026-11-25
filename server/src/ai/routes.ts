@@ -9,6 +9,13 @@ import { RecipeInputSchema } from '../recipes/schema.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
 export const MAX_REVISE_CHARS = 2_000;
+/**
+ * The recipe sent to be revised, measured as JSON so every field is bounded at once. Same order as
+ * MAX_DESCRIBE_CHARS, which bounds a whole described recipe as text; a long real recipe is 1-3 kB. Without it the
+ * only bound is Fastify's 1 MiB body limit, and a recipe that big burns the input tokens, truncates, retries at
+ * doubled max_tokens and ends as "AI returned an invalid recipe" after two slow calls.
+ */
+export const MAX_REVISE_RECIPE_CHARS = 20_000;
 export const MAX_PHOTOS = 6;
 
 function aiFailure(err: unknown, reply: FastifyReply) {
@@ -102,9 +109,14 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
     // The same schema a save uses, so the AI sees the recipe exactly as it would be stored.
     const parsed = RecipeInputSchema.safeParse(body?.recipe);
     if (!parsed.success) return reply.code(400).send({ error: 'recipe is not a valid recipe' });
+    if (JSON.stringify(parsed.data).length > MAX_REVISE_RECIPE_CHARS) return reply.code(413).send({ error: 'recipe is too long' });
     try {
       const { input, stepsFrom, gaps, provider, model } = await ai.reviseRecipe({ recipe: parsed.data, instruction: instruction.trim() });
-      return { ...input, gaps, stepsFrom, provider, model };
+      // Back through the schema a save uses, so a pathological revision (200+ steps, a 5,000-character step, an
+      // "[object Object]") is one clean AI failure here instead of a form that renders and then refuses to save.
+      const revised = RecipeInputSchema.safeParse(input);
+      if (!revised.success) throw new AiInvalidOutputError();
+      return { ...revised.data, gaps, stepsFrom, provider, model };
     } catch (err) {
       return aiFailure(err, reply);
     }

@@ -385,6 +385,12 @@ describe('reviseRecipe', () => {
     expect(req.system).toBe(REVISE_SYSTEM_PROMPT);
     expect(req.tool.name).toBe('revise_recipe');
     expect(req.messages[0]).toMatchObject({ role: 'user' });
+    // Both halves of the ask have to reach the provider: with the instruction dropped or the arguments swapped the
+    // model gets a recipe and no change to make, returns it as it was, and the box says nothing changed.
+    const text = (req.messages[0] as { text: string }).text;
+    expect(text).toContain(ask.instruction);
+    expect(text).toContain(recipe.title);
+    expect(text).toContain('Brown the mince');
   });
 
   it('falls back to the next provider on a provider failure', async () => {
@@ -395,10 +401,11 @@ describe('reviseRecipe', () => {
   });
 
   it("reports the first provider's code when every provider fails", async () => {
-    const err = await build(cfg(), { anthropic: fake('anthropic', 'credit'), openai: fake('openai', 'rate_limit'), gemini: fake('gemini', 'unavailable') })
+    const err = await build(cfg(), { anthropic: fake('anthropic', 'no_credit'), openai: fake('openai', 'rate_limit'), gemini: fake('gemini', 'unavailable') })
       .reviseRecipe(ask).catch((e) => e);
     expect(err).toBeInstanceOf(AiRequestError);
-    expect(err.code).toBe('credit');
+    expect(err.code).toBe('no_credit');
+    expect(err.message).toBe('The AI account is out of credit. Add credit or switch provider.');
   });
 
   it('retries once on invalid output, then throws AiInvalidOutputError', async () => {

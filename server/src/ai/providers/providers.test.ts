@@ -5,6 +5,7 @@ import { classifyHttpError, type Provider } from './types.js';
 import { createGeminiProvider, geminiSchema } from './gemini.js';
 import { createOpenAiProvider, openaiSchema } from './openai.js';
 import { recipeToolSchema } from '../draft.js';
+import { REVISE_TOOL } from '../revise.js';
 
 const KEY = 'sk-test-SECRET-123';
 const draft = {
@@ -279,8 +280,14 @@ describe('provider schemas', () => {
     Object.values(n).forEach((x) => walk(x, f));
   };
 
-  it.each([['openai', openaiSchema], ['gemini', geminiSchema]] as const)('%s: only supported keywords, closed objects, nullable as a type array, no imageId', (_n, make) => {
-    const schema = make(RECIPE_TOOL) as Record<string, any>;
+  // Both tools, both providers: a schema change that only OpenAI's strict mode or Gemini rejects must not wait
+  // until production on the second provider to be noticed.
+  const makers = [['openai', openaiSchema], ['gemini', geminiSchema]] as const;
+  const tools = [['recipe', RECIPE_TOOL, ['text', 'ingredients']], ['revise', REVISE_TOOL, ['text', 'ingredients', 'from']]] as const;
+  const cases = makers.flatMap(([n, make]) => tools.map(([t, tool, stepKeys]) => [`${n}/${t}`, make, tool, stepKeys] as const));
+
+  it.each(cases)('%s: only supported keywords, closed objects, nullable as a type array, no imageId', (_n, make, tool, stepKeys) => {
+    const schema = make(tool) as Record<string, any>;
     const text = JSON.stringify(schema);
     for (const b of banned) expect(text, b).not.toContain(`"${b}"`);
     let nullable = 0;
@@ -304,7 +311,7 @@ describe('provider schemas', () => {
     expect(nullable).toBeGreaterThan(3);
     expect(schema.properties.description.type).toEqual(['string', 'null']);
     const step = schema.properties.steps.items;
-    expect(Object.keys(step.properties)).toEqual(['text', 'ingredients']);
+    expect(Object.keys(step.properties)).toEqual(stepKeys);
     expect(step.additionalProperties).toBe(false);
     const ing = schema.properties.ingredients.items;
     expect(ing.properties.quantity.type).toEqual(['number', 'null']);

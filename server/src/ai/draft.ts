@@ -148,10 +148,17 @@ export function nullableAsTypeArray(node: unknown): unknown {
   return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, k === 'properties' ? Object.fromEntries(Object.entries(v as Json).map(([pk, pv]) => [pk, nullableAsTypeArray(pv)])) : nullableAsTypeArray(v)]));
 }
 
-/** Neutralise any tag-like text that could close (or reopen) our delimiter blocks. */
-function defang(text: string): string {
-  return text.replace(/<(\s*\/?\s*)(page_text|user_description)(?=[\s>\/]|$)/gi, '&lt;$1$2');
+/**
+ * Neutralise any tag-like text that could close (or reopen) one of our delimiter blocks. `names` are the tag
+ * names this message uses: every prompt that wraps untrusted text shares this one function, so the injection
+ * boundary cannot drift between them.
+ */
+export function defang(text: string, names: readonly string[]): string {
+  return text.replace(new RegExp(`<(\\s*/?\\s*)(${names.join('|')})(?=[\\s>/]|$)`, 'gi'), '&lt;$1$2');
 }
+
+/** The tag names the extraction message wraps its untrusted input in. */
+const DRAFT_TAGS = ['page_text', 'user_description'] as const;
 
 export function buildUserMessage(
   input: { kind: 'description' | 'page'; text: string; sourceUrl?: string } | { kind: 'photos'; imageCount: number },
@@ -161,7 +168,7 @@ export function buildUserMessage(
   }
   if (input.kind === 'page') {
     const attr = input.sourceUrl ? ` source_url="${input.sourceUrl.replace(/[<>"]/g, '')}"` : '';
-    return `Extract the recipe from this page text.\n<page_text${attr}>\n${defang(input.text)}\n</page_text>`;
+    return `Extract the recipe from this page text.\n<page_text${attr}>\n${defang(input.text, DRAFT_TAGS)}\n</page_text>`;
   }
-  return `Write up this recipe from the description, in recipe style, adding nothing that was not said.\n<user_description>\n${defang(input.text)}\n</user_description>`;
+  return `Write up this recipe from the description, in recipe style, adding nothing that was not said.\n<user_description>\n${defang(input.text, DRAFT_TAGS)}\n</user_description>`;
 }
