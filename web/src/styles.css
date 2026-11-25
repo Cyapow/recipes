@@ -274,6 +274,9 @@ body.cook-scroll-lock { overflow: hidden; }
 /* Recipe overview: "What do we already have?" checklist */
 .round-btn { width: 44px; padding: 0; border-radius: 22px; }
 .overview .cook-bar { gap: 8px; }
+/* The label drops under the buttons at full width, so a long brand and tag stay readable; the ellipsis is only a backstop. */
+.overview .cook-bar { flex-wrap: wrap; }
+.overview .cook-label { order: 1; flex: 1 1 100%; }
 .overview .sub { margin: -6px 0 0; }
 .have-section { display: flex; flex-direction: column; gap: 10px; }
 .have-section h2 { margin: 8px 0 0; font-size: 1.5rem; }
