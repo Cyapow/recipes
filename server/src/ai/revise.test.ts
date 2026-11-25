@@ -23,6 +23,7 @@ describe('reviseToolSchema', () => {
     expect(Object.keys(s.properties.steps.items.properties)).toEqual(['text', 'ingredients', 'from']);
     expect(JSON.stringify(s)).not.toContain('imageId');
     expect(JSON.stringify(s)).not.toContain('dishPhoto');
+    expect(JSON.stringify(s)).not.toContain('origin');
     expect(s.properties.steps.items.additionalProperties).toBe(false);
     expect(s.$schema).toBeUndefined();
   });
