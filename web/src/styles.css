@@ -95,6 +95,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .title { font-family: var(--font-head); font-weight: 500; font-size: 1.1875rem; line-height: 1.2; }
 .sub { color: var(--muted); font-size: .875rem; }
 .chevron { flex: none; color: var(--muted); }
+.fav-btn { width: 44px; padding: 0; border-radius: 22px; background: transparent; border-color: transparent; color: var(--muted); }
+.fav-btn.on { color: var(--accent); }
+.row-item { position: relative; }
+.row-item .meta { margin-right: 48px; }
+.row-fav { position: absolute; top: 50%; right: 34px; transform: translateY(-50%); }
+.overview .cook-bar .fav-btn { border-color: var(--line); background: var(--card); }
 .empty { color: var(--muted); }
 
 .recipe-form { display: flex; flex-direction: column; gap: 16px; }

@@ -29,3 +29,6 @@ export const SunIcon = () => <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2
 export const PlayIcon = () => <Svg width={28}><path d="M9 6.5 18 12l-9 5.5z" fill="currentColor" /></Svg>;
 export const PrinterIcon = () => <Svg sw={1.8}><path d="M7 8V3h10v5M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7z" /></Svg>;
 export const CameraIcon =() => <Svg sw={1.6}><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="13" r="3.5" /></Svg>;
+export const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
+  <Svg><path d="M12 20.5s-8-4.9-8-11A4.5 4.5 0 0 1 12 6.8a4.5 4.5 0 0 1 8 2.7c0 6.1-8 11-8 11z" fill={filled ? 'currentColor' : 'none'} /></Svg>
+);

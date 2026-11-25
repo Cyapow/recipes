@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getBackupStatus, listRecipes, getFacets, type BackupStatus, type Facets, type RecipeSummary } from '../api';
+import { getBackupStatus, listRecipes, getFacets, setFavourite, type BackupStatus, type Facets, type RecipeSummary } from '../api';
 import { tagKey, type Tag } from '../../../server/src/recipes/categories';
 import { FilterSheet, type Filters } from '../components/FilterSheet';
+import { FavouriteButton } from '../components/FavouriteButton';
 import { BackupBanner } from '../components/BackupBanner';
 import { CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { useMyEmail, withStar } from '../lib/favourite';
 import { formatMinutes, originLabel } from '../lib/text';
 import { monogram, monogramColors } from '../lib/monogram';
 import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
@@ -43,6 +45,7 @@ export function Library() {
   const [backup, setBackup] = useState<BackupStatus | null>(null);
   const [backupFailed, setBackupFailed] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>(() => listDrafts());
+  const me = useMyEmail();
 
   useEffect(() => {
     getBackupStatus().then(setBackup).catch(() => setBackupFailed(true));
@@ -69,6 +72,19 @@ export function Library() {
       live = false;
     };
   }, [search, filters]);
+
+  // Updated in place by id: a star is not an edit, so the list neither reloads nor re-sorts under the finger.
+  const star = async (id: string, on: boolean) => {
+    if (!me) return;
+    const put = (value: boolean) =>
+      setRows((cur) => cur && cur.map((r) => (r.id === id ? { ...r, favouritedBy: withStar(r.favouritedBy, me, value) } : r)));
+    put(on);
+    try {
+      await setFavourite(id, on);
+    } catch {
+      put(!on);
+    }
+  };
 
   const activeCount = filters.brands.length + filters.tags.length;
   const closeSheet = () => {
@@ -173,7 +189,7 @@ export function Library() {
       {rows && rows.length === 0 && <p className="empty">No recipes yet.</p>}
       <ul className="rows">
         {rows?.map((r) => (
-          <li key={r.id}>
+          <li key={r.id} className="row-item">
             <Link className="row" to={`/recipe/${r.id}`}>
               {r.thumbnailId ? (
                 <span className="thumb"><img src={`/api/images/${r.thumbnailId}/thumb`} alt="" /></span>
@@ -188,6 +204,9 @@ export function Library() {
               </span>
               <ChevronIcon />
             </Link>
+            {me && (
+              <FavouriteButton className="row-fav" title={r.title} on={r.favouritedBy.includes(me)} onToggle={() => star(r.id, !r.favouritedBy.includes(me))} />
+            )}
           </li>
         ))}
       </ul>

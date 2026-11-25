@@ -71,6 +71,10 @@ export function saveRecipe(id: string | null, input: RecipeInput): Promise<Recip
 export const deleteRecipe = (id: string): Promise<void> =>
   request(`/api/recipes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+/** Stars or unstars a recipe for the signed-in person. Idempotent, and never touches the recipe itself. */
+export const setFavourite = (recipeId: string, on: boolean): Promise<void> =>
+  request(`/api/recipes/${encodeURIComponent(recipeId)}/favourite`, { method: on ? 'PUT' : 'DELETE' });
+
 export const getFacets = (): Promise<Facets> => request('/api/tags');
 
 export async function uploadImage(file: File): Promise<string> {

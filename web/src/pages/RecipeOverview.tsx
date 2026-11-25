@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { addToShopping, ApiError, getRecipe, type Recipe } from '../api';
+import { addToShopping, ApiError, getRecipe, setFavourite, type Recipe } from '../api';
 import { BackIcon, CartIcon, PlayIcon, PrinterIcon } from '../components/Icons';
+import { FavouriteButton } from '../components/FavouriteButton';
 import { MetricToggle } from '../components/MetricToggle';
+import { useMyEmail, withStar } from '../lib/favourite';
 import { useMetric } from '../lib/metric';
 import { sourceLink } from '../lib/source';
 import { hasImperial, metricIngredient } from '../lib/units';
@@ -66,6 +68,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [metric] = useMetric();
+  const me = useMyEmail();
   const inFlight = useRef(false);
   const addAgainRef = useRef<HTMLButtonElement>(null);
   const duplicate = notice?.kind === 'duplicate';
@@ -112,6 +115,19 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
     setHave(all ? new Set(recipe!.ingredients.map((_, i) => i)) : new Set());
   };
 
+  // Only the heart changes: a star is not an edit, so nothing else on the page (or its updatedAt) moves.
+  async function star(on: boolean) {
+    if (!me) return;
+    const put = (value: boolean) =>
+      setRecipe((cur) => cur && { ...cur, favouritedBy: withStar(cur.favouritedBy, me, value) });
+    put(on);
+    try {
+      await setFavourite(recipe!.id, on);
+    } catch {
+      put(!on);
+    }
+  }
+
   async function add(force?: boolean) {
     if (inFlight.current || needed.length === 0) return;
     inFlight.current = true;
@@ -136,6 +152,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
       <header className="cook-bar">
         <Link className="btn round-btn" to="/" aria-label="Back to library"><BackIcon /></Link>
         <span className="cook-label">{originLabel(recipe)}{recipe.tags[0] ? ` · ${recipe.tags[0].name}` : ''}</span>
+        {me && <FavouriteButton className="round-btn" title={recipe.title} on={recipe.favouritedBy.includes(me)} onToggle={() => star(!recipe.favouritedBy.includes(me))} />}
         <Link className="btn" to={`/recipe/${encodeURIComponent(recipe.id)}/edit`}>Edit</Link>
         <Link className="btn round-btn" to={`/recipe/${encodeURIComponent(recipe.id)}/print`} aria-label="Print recipe card"><PrinterIcon /></Link>
         <Link className="btn round-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>

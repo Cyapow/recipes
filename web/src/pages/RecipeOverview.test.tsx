@@ -8,9 +8,9 @@ import type { Recipe } from '../api';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
-  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn(), getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }) };
+  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn(), getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }), setFavourite: vi.fn() };
 });
-import { addToShopping, ApiError, getRecipe } from '../api';
+import { addToShopping, ApiError, getRecipe, setFavourite } from '../api';
 
 vi.mock('./Cook', () => ({ Cook: () => <p>COOK PAGE</p> }));
 import { App } from '../App';
@@ -44,8 +44,40 @@ const box = (name: string) => screen.findByRole('checkbox', { name: `We have thi
 beforeEach(() => {
   vi.mocked(getRecipe).mockReset().mockImplementation(async (id) => (id === 'b' ? other : base));
   vi.mocked(addToShopping).mockReset().mockResolvedValue({ added: 2 });
+  vi.mocked(setFavourite).mockReset().mockResolvedValue();
 });
 afterEach(cleanup);
+
+describe('RecipeOverview heart', () => {
+  const heart = (pressed: boolean) => screen.findByRole('button', { name: 'Favourite Carbonara', pressed });
+
+  it('is filled when you have starred the recipe and empty when you have not', async () => {
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, favouritedBy: ['a@b.c', 'z@z.z'] });
+    renderAt();
+    expect(await heart(true)).toBeTruthy();
+    cleanup();
+    vi.mocked(getRecipe).mockResolvedValue({ ...base, favouritedBy: ['z@z.z'] });
+    renderAt();
+    expect(await heart(false)).toBeTruthy();
+  });
+
+  it('fills at once when tapped, and stays filled once saved', async () => {
+    renderAt();
+    await userEvent.click(await heart(false));
+    expect(await heart(true)).toBeTruthy();
+    expect(setFavourite).toHaveBeenCalledWith('a', true);
+  });
+
+  it('goes back to empty when the request fails', async () => {
+    let fail!: (e: Error) => void;
+    vi.mocked(setFavourite).mockReturnValue(new Promise<void>((_, reject) => { fail = reject; }));
+    renderAt();
+    await userEvent.click(await heart(false));
+    expect(await heart(true)).toBeTruthy();
+    fail(new Error('offline'));
+    await waitFor(async () => expect(await heart(false)).toBeTruthy());
+  });
+});
 
 describe('RecipeOverview', () => {
   it('shows the brand as the label', async () => {

@@ -9,11 +9,14 @@ vi.mock('../api', () => ({
   listRecipes: vi.fn(),
   getFacets: vi.fn(),
   getBackupStatus: vi.fn(),
+  getMe: vi.fn(),
+  setFavourite: vi.fn(),
 }));
-import { getBackupStatus, listRecipes, getFacets } from '../api';
+import { getBackupStatus, getMe, listRecipes, getFacets } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
+  vi.mocked(getMe).mockReset().mockResolvedValue({ email: 'me@x.com' });
   vi.mocked(listRecipes).mockReset().mockResolvedValue([
     { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90, favouritedBy: [] },
     { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45, favouritedBy: [] },
