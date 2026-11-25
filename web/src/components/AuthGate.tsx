@@ -23,8 +23,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
         // Offline is not signed out: only a real 401 means the session is gone.
         if (e instanceof ApiError && e.status === 401) {
           forgetSignedIn();
-          if (live()) setState('signedOut');
+          if (live()) { setMe(null); setState('signedOut'); }
         } else if (live()) {
+          if (!wasSignedIn()) setMe(null);
           setState(wasSignedIn() ? 'offline' : 'signedOut');
         }
       },
@@ -40,7 +41,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let live = true;
     check(() => live);
-    const off = onUnauthorized(() => { if (live) setState('signedOut'); });
+    const off = onUnauthorized(() => { if (live) { setMe(null); setState('signedOut'); } });
     return () => { live = false; off(); };
   }, [check]);
 
