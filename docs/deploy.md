@@ -215,6 +215,8 @@ GET /api/recipes/1
 POST /api/recipes
 PUT /api/recipes/1
 DELETE /api/recipes/1
+PUT /api/recipes/1/favourite
+DELETE /api/recipes/1/favourite
 GET /api/tags
 GET /api/shopping
 POST /api/shopping/add
@@ -238,6 +240,7 @@ POST /api/images/1/crop
 POST /api/import
 GET /api/ai/status
 POST /api/ai/describe
+POST /api/ai/revise
 POST /api/ai/photos
 GET /api/backup/status
 POST /api/backup/run
