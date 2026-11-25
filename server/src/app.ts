@@ -71,7 +71,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.get('/api/health', async () => ({ ok: true }));
   const favouritesRepo = createFavouritesRepo(deps.db);
   const recipeRepo = createRecipeRepo(deps.db, favouritesRepo);
-  registerRecipeRoutes(app, recipeRepo);
+  registerRecipeRoutes(app, recipeRepo, favouritesRepo);
   const shopping = createShoppingRepo(deps.db);
   registerShoppingRoutes(app, { shopping, recipes: recipeRepo });
   registerPlannerRoutes(app, { planner: createPlannerRepo(deps.db), recipes: recipeRepo, shopping });

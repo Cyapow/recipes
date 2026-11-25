@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { openDb } from '../db.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import { createAuthRepo, displayNameFor } from './repo.js';
 import { signedIn } from './testing.js';
 import type { IdTokenVerifier } from './verify.js';
@@ -101,6 +102,26 @@ describe('allowlist management', () => {
     const { app } = setup();
     const res = await app.injectAnon({ method: 'GET', url: '/api/auth/allowed' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it("removing an address takes their stars with them, off the filter and out of the facet", async () => {
+    const { app, db, repo } = setup();
+    repo.addAllowed('wife@example.com', new Date());
+    const recipe = {
+      title: 'Toast', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
+      prepMinutes: 1, cookMinutes: 2, ingredients: [], steps: [], notes: null, tags: [], imageIds: [],
+    };
+    const { id } = (await app.inject({ method: 'POST', url: '/api/recipes', payload: recipe })).json();
+    createFavouritesRepo(db).add('wife@example.com', id, new Date());
+    const people = async () => (await app.inject({ url: '/api/tags' })).json().people as { email: string }[];
+    expect((await people()).map((p) => p.email)).toContain('wife@example.com');
+
+    expect((await remove(app, 'wife@example.com')).statusCode).toBe(200);
+
+    const filtered = await app.inject({ url: '/api/recipes?favourite=wife@example.com' });
+    expect(filtered.json()).toEqual([]);
+    expect((await people()).map((p) => p.email)).not.toContain('wife@example.com');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM favourites').get()).toEqual({ n: 0 });
   });
 
   it('removing an address revokes its live session on the very next request', async () => {

@@ -41,6 +41,8 @@ export function createAuthRepo(db: Database): AuthRepo {
   const insertAllowed = db.prepare('INSERT OR IGNORE INTO allowed_emails (email, added_at) VALUES (?, ?)');
   const updateName = db.prepare('UPDATE allowed_emails SET display_name = ? WHERE email = ?');
   const deleteAllowed = db.prepare('DELETE FROM allowed_emails WHERE email = ?');
+  // Written here rather than via the favourites repo so a removed person's stars go in the same transaction.
+  const deleteFavouritesFor = db.prepare('DELETE FROM favourites WHERE email = ?');
   const deleteSessionsFor = db.prepare('DELETE FROM sessions WHERE email = ?');
   const insertSession = db.prepare(
     'INSERT INTO sessions (token_hash, email, created_at, last_seen_at) VALUES (?, ?, ?, ?)',
@@ -52,6 +54,7 @@ export function createAuthRepo(db: Database): AuthRepo {
 
   const remove = db.transaction((email: string) => {
     deleteSessionsFor.run(email);
+    deleteFavouritesFor.run(email);
     deleteAllowed.run(email);
   });
 

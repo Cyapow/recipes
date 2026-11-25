@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { parseTagKey, type Tag } from './categories.js';
 import { RecipeInputSchema } from './schema.js';
+import type { FavouritesRepo } from '../favourites/repo.js';
 import type { createRecipeRepo } from './repo.js';
 
 const many = z.union([z.string(), z.array(z.string())]).optional();
@@ -15,7 +16,11 @@ const ListQuerySchema = z.object({
   favourite: many,
 });
 
-export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<typeof createRecipeRepo>) {
+export function registerRecipeRoutes(
+  app: FastifyInstance,
+  repo: ReturnType<typeof createRecipeRepo>,
+  favourites: FavouritesRepo,
+) {
   app.get('/api/recipes', async (req, reply) => {
     const q = ListQuerySchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'Invalid query', issues: q.error.issues });
@@ -50,6 +55,22 @@ export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<type
     return repo.delete(req.params.id)
       ? reply.code(204).send()
       : reply.code(404).send({ error: 'Not found' });
+  });
+
+  // Each person stars only for themselves, so these take nothing from the caller. The recipe is checked first
+  // because the favourites table has a foreign key to it.
+  app.put<{ Params: { id: string } }>('/api/recipes/:id/favourite', async (req, reply) => {
+    if (!req.email) return reply.code(401).send({ error: 'Sign in required' });
+    if (!repo.get(req.params.id)) return reply.code(404).send({ error: 'Not found' });
+    favourites.add(req.email, req.params.id, new Date());
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/recipes/:id/favourite', async (req, reply) => {
+    if (!req.email) return reply.code(401).send({ error: 'Sign in required' });
+    if (!repo.get(req.params.id)) return reply.code(404).send({ error: 'Not found' });
+    favourites.remove(req.email, req.params.id);
+    return { ok: true };
   });
 
   app.get('/api/tags', async () => repo.facets());
