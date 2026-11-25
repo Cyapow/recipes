@@ -1,5 +1,9 @@
 import type { Database } from 'better-sqlite3';
 import { createHash, randomBytes } from 'node:crypto';
+import { normaliseEmail } from './email.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
+
+export { normaliseEmail };
 
 // Absolute, not sliding: a sliding window would write on every request and let a stolen token live forever.
 export const SESSION_TTL_MS = 90 * 24 * 3600 * 1000;
@@ -20,10 +24,6 @@ export type AuthRepo = {
   pruneSessions(now: Date): number;
 };
 
-export function normaliseEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
 /** What to show for a person: their Google name, else the part of the address before the @, capitalised. */
 export function displayNameFor(email: string, storedName: string | null): string {
   if (storedName) return storedName;
@@ -41,8 +41,8 @@ export function createAuthRepo(db: Database): AuthRepo {
   const insertAllowed = db.prepare('INSERT OR IGNORE INTO allowed_emails (email, added_at) VALUES (?, ?)');
   const updateName = db.prepare('UPDATE allowed_emails SET display_name = ? WHERE email = ?');
   const deleteAllowed = db.prepare('DELETE FROM allowed_emails WHERE email = ?');
-  // Written here rather than via the favourites repo so a removed person's stars go in the same transaction.
-  const deleteFavouritesFor = db.prepare('DELETE FROM favourites WHERE email = ?');
+  // Its statements join the transaction below, so a removed person's stars go in the same one.
+  const favourites = createFavouritesRepo(db);
   const deleteSessionsFor = db.prepare('DELETE FROM sessions WHERE email = ?');
   const insertSession = db.prepare(
     'INSERT INTO sessions (token_hash, email, created_at, last_seen_at) VALUES (?, ?, ?, ?)',
@@ -54,7 +54,7 @@ export function createAuthRepo(db: Database): AuthRepo {
 
   const remove = db.transaction((email: string) => {
     deleteSessionsFor.run(email);
-    deleteFavouritesFor.run(email);
+    favourites.removeAllFor(email);
     deleteAllowed.run(email);
   });
 

@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3';
-import { normaliseEmail } from '../auth/repo.js';
+import { normaliseEmail } from '../auth/email.js';
 
 export type FavouritesRepo = {
   add(email: string, recipeId: string, now: Date): void;
