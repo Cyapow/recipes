@@ -1,17 +1,23 @@
 import type { RecipeInput } from '../api';
+import { canonicalBrand } from '../../../server/src/recipes/categories';
 
-// The scalar fields in the form's reading order, with the labels the form uses.
-const FIELDS: [label: string, value: (r: RecipeInput) => unknown][] = [
-  ['Title', (r) => r.title],
-  ['Description', (r) => r.description],
-  ['Brand', (r) => r.brand],
-  ['Source name', (r) => r.sourceName],
-  ['Source URL', (r) => r.sourceUrl],
-  ['Servings', (r) => r.servings],
-  ['Prep minutes', (r) => r.prepMinutes],
-  ['Cook minutes', (r) => r.cookMinutes],
-  ['Notes', (r) => r.notes],
-  ['Tags', (r) => r.tags.map((t) => `${t.group}:${t.name}`).sort()],
+/**
+ * The scalar fields in the form's reading order, with the labels the form uses and the key each one reads. The key
+ * is what lets a test check this hand-maintained list still covers every field of a RecipeInput.
+ * Brand is compared canonicalised: the form sends what was typed ("Hello Fresh") and the server returns
+ * canonicalBrand of it ("HelloFresh"), which would otherwise report Brand as changed by every revision.
+ */
+export const FIELDS: [key: keyof RecipeInput, label: string, value: (r: RecipeInput) => unknown][] = [
+  ['title', 'Title', (r) => r.title],
+  ['description', 'Description', (r) => r.description],
+  ['brand', 'Brand', (r) => canonicalBrand(r.brand)],
+  ['sourceName', 'Source name', (r) => r.sourceName],
+  ['sourceUrl', 'Source URL', (r) => r.sourceUrl],
+  ['servings', 'Servings', (r) => r.servings],
+  ['prepMinutes', 'Prep minutes', (r) => r.prepMinutes],
+  ['cookMinutes', 'Cook minutes', (r) => r.cookMinutes],
+  ['notes', 'Notes', (r) => r.notes],
+  ['tags', 'Tags', (r) => r.tags.map((t) => `${t.group}:${t.name}`).sort()],
 ];
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -37,7 +43,7 @@ function unmatched(a: string[], b: string[]): number {
 export function summariseChanges(before: RecipeInput, after: RecipeInput, stepsFrom: (number | null)[]): string[] {
   const lines: string[] = [];
 
-  for (const [label, value] of FIELDS) {
+  for (const [, label, value] of FIELDS) {
     if (JSON.stringify(value(before)) !== JSON.stringify(value(after))) lines.push(label);
   }
 
@@ -51,6 +57,9 @@ export function summariseChanges(before: RecipeInput, after: RecipeInput, stepsF
   const removed = unmatched(was, now);
   if (added) lines.push(`${plural(added, 'ingredient')} added`);
   if (removed) lines.push(`${plural(removed, 'ingredient')} removed`);
+  // The same ingredients in a different order: nothing was added or removed, but the person is looking at a new
+  // order, so the summary has to say so rather than claim nothing changed.
+  if (!added && !removed && JSON.stringify(was) !== JSON.stringify(now)) lines.push('Ingredients reordered');
 
   // Steps are named by their new position; a removed one has none, so those are counted.
   // Photos are not compared: applyRevision gives a surviving step exactly its source step's imageId (and the recipe

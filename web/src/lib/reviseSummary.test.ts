@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeInput } from '../api';
-import { summariseChanges } from './reviseSummary';
+import { FIELDS, summariseChanges } from './reviseSummary';
 
 const ing = (
   item: string,
@@ -80,9 +80,34 @@ describe('summariseChanges', () => {
     expect(summariseChanges(before, after, [0, 1])).toEqual(['Step 1 changed']);
   });
 
-  it('does not count a reordered ingredient list', () => {
+  it('reports a reordered ingredient list as reordered, not as added and removed', () => {
     const after = { ...recipe, ingredients: [...recipe.ingredients].reverse() };
-    expect(summariseChanges(recipe, after, [0, 1])).toEqual([]);
+    expect(summariseChanges(recipe, after, [0, 1])).toEqual(['Ingredients reordered']);
+  });
+
+  it('says nothing about the order when ingredients were added as well', () => {
+    const after = { ...recipe, ingredients: [...recipe.ingredients].reverse().concat(ing('salt')) };
+    expect(summariseChanges(recipe, after, [0, 1])).toEqual(['1 ingredient added']);
+  });
+
+  it('compares the brand canonicalised, so typing a known brand loosely is not a change', () => {
+    const typed = { ...recipe, brand: 'Hello Fresh' };
+    const returned = { ...recipe, brand: 'HelloFresh' };
+    expect(summariseChanges(typed, returned, [0, 1])).toEqual([]);
+    expect(summariseChanges(typed, { ...recipe, brand: 'Gousto' }, [0, 1])).toEqual(['Brand']);
+  });
+
+  it('covers every field of a recipe, so a new one cannot go unreported', () => {
+    // FIELDS is hand-maintained: a field added to RecipeInput and to the form has to be added here too, or the
+    // summary goes quiet about it with the suite green. ingredients and steps are compared on their own below.
+    // origin and imageIds are the server's: applyRevision derives origin from the brand and returns the imageIds
+    // it was given, so neither can change behind a revision and neither has a line of its own.
+    const special = ['ingredients', 'steps'];
+    const serverOwned = ['origin', 'imageIds'];
+    const named = FIELDS.map(([key]) => key as string);
+    for (const key of Object.keys(recipe)) {
+      expect([...named, ...special, ...serverOwned], `${key} is not reported by the summary`).toContain(key);
+    }
   });
 
   it('reports tags as one line however many changed', () => {

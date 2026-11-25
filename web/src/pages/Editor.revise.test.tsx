@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Editor } from './Editor';
@@ -107,6 +107,38 @@ describe('Editor revise', () => {
     expect(screen.queryByText('Step 2 added')).toBeNull();
     expect((screen.getByLabelText('Step 2') as HTMLTextAreaElement).value).toBe('Pour it out');
     await waitFor(() => expect(listDrafts()[0]?.input?.steps).toHaveLength(2));
+  });
+
+  it('undo puts back what was typed while the AI was working, not what was sent', async () => {
+    let release!: (r: Revision) => void;
+    vi.mocked(reviseRecipe).mockImplementation(() => new Promise<Revision>((r) => (release = r)));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    // The form stays live while the call is out, so this typing is on screen when the revision lands.
+    const title = await screen.findByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'typed while waiting');
+    await act(async () => release(revised()));
+    await screen.findByRole('textbox', { name: 'Step 2 New' });
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Fudge');
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('typed while waiting');
+  });
+
+  it('undo puts back the "Check these" list the revision replaced', async () => {
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: ['How long does it set for?'] }))
+      .mockResolvedValueOnce(revised({ gaps: ['How much sugar?'] }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    expect(await screen.findByText('How long does it set for?')).toBeTruthy();
+    await apply(user, 'and again');
+    expect(await screen.findByText('How much sugar?')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('How long does it set for?')).toBeTruthy();
+    expect(screen.queryByText('How much sugar?')).toBeNull();
   });
 
   it('a second instruction revises the result of the first', async () => {

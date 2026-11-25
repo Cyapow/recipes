@@ -26,8 +26,25 @@ describe('stepMarks', () => {
     const moved = [derive(revised[1], { text: 'changed by hand' }), revised[0]];
     expect(markFor(marks, moved[0])).toBe('New');
     expect(markFor(marks, moved[1])).toBeNull();
-    // deleting the other step leaves the mark where it was
-    expect(markFor(marks, moved.slice(0, 1)[0])).toBe('New');
+    // deleting the marked step takes its mark with it: the one left behind, now first, is still unmarked
+    const afterDelete = moved.slice(1);
+    expect(afterDelete).toHaveLength(1);
+    expect(markFor(marks, afterDelete[0])).toBeNull();
+  });
+
+  it.each([
+    ['a stepsFrom shorter than the steps', [0]],
+    ['a stepsFrom longer than the steps', [0, null, 1, 2]],
+  ])('marks nothing at all given %s', (_name, from) => {
+    const marks = stepMarks(before, after, from);
+    for (const step of after) expect(markFor(marks, step)).toBeNull();
+  });
+
+  it.each([[7], [-1], [1.5]])('leaves a step whose from is %s unmarked rather than guessing', (from) => {
+    const marks = stepMarks(before, after, [0, null, from]);
+    expect(markFor(marks, after[2])).toBeNull();
+    // the well-formed entries beside it are still marked
+    expect(markFor(marks, after[1])).toBe('New');
   });
 
   it('has no marks for an undefined marks object', () => {

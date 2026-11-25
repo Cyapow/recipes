@@ -35,6 +35,7 @@ export function Editor() {
   const [reviseBusy, setReviseBusy] = useState(false);
   const [reviseError, setReviseError] = useState<string | null>(null);
   const before = useRef<RecipeInput | null>(null);
+  const beforeGaps = useRef<string[]>([]);
 
   // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
   // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-revision contents.
@@ -44,6 +45,12 @@ export function Editor() {
 
   useEffect(() => {
     setError(null);
+    // Loading different contents drops anything the last revision left behind: no route re-renders this editor with
+    // another :id today, but an undo that wrote recipe A's steps over recipe B would be a bad way to find out.
+    setSummary(null);
+    setMarks(undefined);
+    before.current = null;
+    beforeGaps.current = [];
     if (draft.existing?.input) {
       setInitial(draft.existing.input);
       return;
@@ -76,7 +83,12 @@ export function Editor() {
       // `next.steps` goes to the form as-is: the marks are keyed to those very objects.
       setMarks(stepMarks(current.steps, next.steps, stepsFrom));
       setSummary(summariseChanges(current, next, stepsFrom));
-      before.current = current;
+      // The undo snapshot is the form as it is NOW, not as it was when the call went out: the form stays live while
+      // the AI works, and anything typed meanwhile would otherwise be lost by the remount with no way back.
+      // The revision still acts on the snapshot it was sent, so in that case the summary describes the change
+      // against what was sent while Undo restores what was last on screen. Deliberate: losing the typing is worse.
+      before.current = formInput.current?.() ?? current;
+      beforeGaps.current = gaps;
       setGaps(newGaps);
       setInitial(next);
       setRevision((n) => n + 1);
@@ -93,7 +105,10 @@ export function Editor() {
     before.current = null;
     setMarks(undefined);
     setSummary(null);
-    setGaps([]);
+    // Undo restores exactly the contents from before the apply, and a resumed draft's or an earlier revision's
+    // "Check these" list is part of those contents.
+    setGaps(beforeGaps.current);
+    beforeGaps.current = [];
     setRevision((n) => n + 1);
   }
 

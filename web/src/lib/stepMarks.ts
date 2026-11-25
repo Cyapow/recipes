@@ -11,10 +11,17 @@ export type StepMarks = { added: Set<string>; reworded: Set<string> };
  */
 export function stepMarks(beforeSteps: Step[], afterSteps: Step[], stepsFrom: (number | null)[]): StepMarks {
   const marks: StepMarks = { added: new Set(), reworded: new Set() };
+  // A mark on the wrong step is worse than no mark, so malformed provenance earns none at all: a stepsFrom that is
+  // not one-to-one with the revised steps is not provenance, and nor is an index outside the original method.
+  if (stepsFrom.length !== afterSteps.length) return marks;
   afterSteps.forEach((step, i) => {
     const from = stepsFrom[i];
-    if (from === null || from === undefined) marks.added.add(stepId(step));
-    else if (beforeSteps[from]?.text !== step.text) marks.reworded.add(stepId(step));
+    if (from === null) {
+      marks.added.add(stepId(step));
+      return;
+    }
+    const was = from !== undefined && Number.isInteger(from) && from >= 0 && from < beforeSteps.length ? beforeSteps[from] : undefined;
+    if (was && was.text !== step.text) marks.reworded.add(stepId(step));
   });
   return marks;
 }

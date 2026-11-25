@@ -263,7 +263,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
         </div>
         <section className="field steps-field" aria-labelledby="h-steps-title">
           <h2 id="h-steps-title">Method</h2>
-          <StepEditor steps={steps} ingredients={ingredients} marks={marks}onChange={(next) => { setSteps(next); }} onBusyChange={setStepsBusy} />
+          <StepEditor steps={steps} ingredients={ingredients} marks={marks} onChange={(next) => { setSteps(next); }} onBusyChange={setStepsBusy} />
         </section>
         <label>
           Notes
