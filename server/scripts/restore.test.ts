@@ -288,7 +288,7 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
 
   it('restores a snapshot from before the shopping migration and openDb migrates it', async () => {
     withSnapshot((d) => {
-      d.exec('DROP TABLE shopping_items; DROP TABLE IF EXISTS ingredient_packs; DROP TABLE IF EXISTS ingredient_info; DROP TABLE IF EXISTS shops; DROP TABLE IF EXISTS ingredient_prices; DROP TABLE IF EXISTS allowed_emails; DROP TABLE IF EXISTS sessions');
+      d.exec('DROP TABLE shopping_items; DROP TABLE IF EXISTS ingredient_packs; DROP TABLE IF EXISTS ingredient_info; DROP TABLE IF EXISTS shops; DROP TABLE IF EXISTS ingredient_prices; DROP TABLE IF EXISTS allowed_emails; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS favourites');
       // Back to the 001 recipes shape too: migration 007 adds brand and rewrites tags.
       d.exec("ALTER TABLE recipes DROP COLUMN brand; UPDATE recipes SET tags_json = '[]'");
       d.pragma('user_version = 1');
