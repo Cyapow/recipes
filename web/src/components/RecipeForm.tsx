@@ -26,6 +26,8 @@ export type RecipeFormProps = {
   onDishCropChange?(crop: ({ sourceImageId: string } & Box1000) | null): void;
   /** Which steps a revision added or reworded, shown beside each step. Keyed by step identity, so `initial.steps` must be the very objects the marks were built from. */
   marks?: StepMarks;
+  /** Set by the form to a function returning its current contents, so the editor can revise what is on screen. */
+  inputRef?: { current: (() => RecipeInput) | null };
 };
 
 // Form state is seeded from `initial` once: callers must change `key` to load a different recipe/draft.
@@ -36,7 +38,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange, marks }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange, marks, inputRef }: RecipeFormProps) {
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -169,6 +171,13 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
     const t = setTimeout(() => onChangeRef.current?.(latest.current()), 400);
     return () => clearTimeout(t);
   }, [title, description, brand, sourceName, sourceUrl, servings, prep, cook, ingredients, steps, notes, tags, imageIds]);
+  useEffect(() => {
+    if (!inputRef) return;
+    inputRef.current = () => latest.current();
+    return () => {
+      inputRef.current = null;
+    };
+  }, [inputRef]);
   useEffect(
     () => () => {
       if (touched.current) onChangeRef.current?.(latest.current());

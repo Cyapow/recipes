@@ -14,6 +14,17 @@ const empty: RecipeInput = {
 };
 
 describe('RecipeForm', () => {
+  it('exposes its current contents through inputRef, including unsaved typing', async () => {
+    const ref: { current: (() => RecipeInput) | null } = { current: null };
+    const user = userEvent.setup();
+    const view = render(<RecipeForm initial={{ ...empty, title: 'Old' }} onSave={vi.fn()} inputRef={ref} />);
+    await user.clear(screen.getByLabelText('Title'));
+    await user.type(screen.getByLabelText('Title'), 'Typed');
+    expect(ref.current!().title).toBe('Typed');
+    view.unmount();
+    expect(ref.current).toBeNull();
+  });
+
   it('calls onSave with parsed fields', async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();
