@@ -1,5 +1,4 @@
 import type { RecipeInput } from '../api';
-import { formatIngredientLine } from './text';
 
 // The scalar fields in the form's reading order, with the labels the form uses.
 const FIELDS: [label: string, value: (r: RecipeInput) => unknown][] = [
@@ -43,18 +42,28 @@ export function summariseChanges(before: RecipeInput, after: RecipeInput, stepsF
   }
 
   // An ingredient has no provenance, so "changed" cannot be told from "added and removed": counts only.
-  const was = before.ingredients.map(formatIngredientLine);
-  const now = after.ingredients.map(formatIngredientLine);
+  // Keyed on the raw fields, not a display string: formatIngredientLine drops the group, capitalises the item and
+  // rounds the quantity, so any of those changing would otherwise read as "nothing changed".
+  const key = (i: RecipeInput['ingredients'][number]) => JSON.stringify([i.group, i.quantity, i.unit, i.item, i.note]);
+  const was = before.ingredients.map(key);
+  const now = after.ingredients.map(key);
   const added = unmatched(now, was);
   const removed = unmatched(was, now);
   if (added) lines.push(`${plural(added, 'ingredient')} added`);
   if (removed) lines.push(`${plural(removed, 'ingredient')} removed`);
 
   // Steps are named by their new position; a removed one has none, so those are counted.
+  // Photos are not compared: applyRevision gives a surviving step exactly its source step's imageId (and the recipe
+  // its own imageIds, and origin follows brand), so a revision cannot change them silently. A step whose photo
+  // seems to move is one stepsFrom calls new or from elsewhere, and that is already reported here.
+  // The ingredient links are model-supplied, so they are compared along with the text.
   after.steps.forEach((step, i) => {
     const from = stepsFrom[i] ?? null;
+    const old = from === null ? undefined : before.steps[from];
     if (from === null) lines.push(`Step ${i + 1} added`);
-    else if (before.steps[from]?.text !== step.text) lines.push(`Step ${i + 1} changed`);
+    else if (old?.text !== step.text || JSON.stringify(old.ingredients) !== JSON.stringify(step.ingredients)) {
+      lines.push(`Step ${i + 1} changed`);
+    }
   });
   const kept = new Set(stepsFrom.filter((f): f is number => f !== null));
   const gone = before.steps.filter((_, i) => !kept.has(i)).length;

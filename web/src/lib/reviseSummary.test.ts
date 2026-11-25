@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { RecipeInput } from '../api';
 import { summariseChanges } from './reviseSummary';
 
-const ing = (item: string, quantity: number | null = null, unit: string | null = null) =>
-  ({ group: null, quantity, unit, item, note: null });
+const ing = (
+  item: string,
+  quantity: number | null = null,
+  unit: string | null = null,
+  group: string | null = null,
+  note: string | null = null,
+) => ({ group, quantity, unit, item, note });
 const step = (text: string) => ({ text, imageId: null, ingredients: [] });
 
 const recipe: RecipeInput = {
@@ -59,6 +64,22 @@ describe('summariseChanges', () => {
     expect(summariseChanges(recipe, one, [0, 1])).toEqual(['1 ingredient added']);
   });
 
+  it.each([
+    ['group', ing('leek', 2, null, 'Veg')],
+    ['item case', ing('Leek', 2)],
+    ['note', ing('leek', 2, null, null, 'washed')],
+    ['quantity', ing('leek', 2.001)],
+  ])('reports an ingredient whose only change is its %s', (_, changed) => {
+    const after = { ...recipe, ingredients: [changed, recipe.ingredients[1]] };
+    expect(summariseChanges(recipe, after, [0, 1])).toEqual(['1 ingredient added', '1 ingredient removed']);
+  });
+
+  it('reports a step whose text is the same but whose ingredient links differ', () => {
+    const before = { ...recipe, steps: [{ ...step('Chop the leeks.'), ingredients: [0] }, recipe.steps[1]] };
+    const after = { ...before, steps: [{ ...before.steps[0], ingredients: [0, 1] }, before.steps[1]] };
+    expect(summariseChanges(before, after, [0, 1])).toEqual(['Step 1 changed']);
+  });
+
   it('does not count a reordered ingredient list', () => {
     const after = { ...recipe, ingredients: [...recipe.ingredients].reverse() };
     expect(summariseChanges(recipe, after, [0, 1])).toEqual([]);
@@ -69,7 +90,7 @@ describe('summariseChanges', () => {
     expect(summariseChanges(recipe, after, [0, 1])).toEqual(['Tags']);
   });
 
-  it('lists several changes in the form s order', () => {
+  it("lists several changes in the form's order", () => {
     const after = {
       ...recipe,
       title: 'Leek soup',
