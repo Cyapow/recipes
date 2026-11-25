@@ -15,8 +15,8 @@ import { getBackupStatus, listRecipes, getFacets } from '../api';
 afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(listRecipes).mockReset().mockResolvedValue([
-    { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90 },
-    { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45 },
+    { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90, favouritedBy: [] },
+    { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45, favouritedBy: [] },
   ]);
   vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [{ group: 'other', name: 'Pasta', count: 1 }] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({

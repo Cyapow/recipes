@@ -12,6 +12,7 @@ vi.mock('../api', async () => {
 import { getRecipe } from '../api';
 
 const base: Recipe = {
+  favouritedBy: [],
   id: 'a', title: 'Mini pizza stacks', description: '', origin: 'other', brand: null, sourceName: null, sourceUrl: null,
   servings: 6, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: 330, unit: 'g', item: 'plain flour', note: null }],

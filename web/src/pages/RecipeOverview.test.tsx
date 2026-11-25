@@ -16,6 +16,7 @@ vi.mock('./Cook', () => ({ Cook: () => <p>COOK PAGE</p> }));
 import { App } from '../App';
 
 const base: Recipe = {
+  favouritedBy: [],
   id: 'a', title: 'Carbonara', description: '', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 2, prepMinutes: 5, cookMinutes: 70,
   ingredients: [

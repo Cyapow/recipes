@@ -36,7 +36,7 @@ function app() {
 describe('Import', () => {
   it('imports into the form and saves only on Save', async () => {
     vi.mocked(importRecipe).mockResolvedValue({ draft, usedAi: false, usable: true });
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     const input = screen.getByLabelText(/recipe page address/i);
@@ -70,7 +70,7 @@ describe('Import', () => {
 
   it('opens a prefilled empty editor when the page could not be fetched (502)', async () => {
     vi.mocked(importRecipe).mockRejectedValue(new ApiError("Couldn't fetch that page", 502));
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n2', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n2', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     await user.type(screen.getByLabelText(/recipe page address/i), 'https://www.blocked.example/r/1');

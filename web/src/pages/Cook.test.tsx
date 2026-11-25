@@ -10,6 +10,7 @@ vi.mock('../api', () => ({ getRecipe: vi.fn() }));
 import { getRecipe } from '../api';
 
 const base: Recipe = {
+  favouritedBy: [],
   id: 'a', title: 'Bolognese', description: 'Classic.', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 4, prepMinutes: 5, cookMinutes: 60,
   ingredients: [

@@ -36,7 +36,7 @@ function app() {
 describe('Describe', () => {
   it('shows gaps and does not save until Save is pressed', async () => {
     vi.mocked(describeRecipe).mockResolvedValue(draft);
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     await user.type(screen.getByRole('textbox'), 'my spag bol with red wine');
@@ -88,7 +88,7 @@ describe('Describe', () => {
 
   it('says which AI drafted it, and never saves that with the recipe', async () => {
     vi.mocked(describeRecipe).mockResolvedValue({ ...draft, provider: 'openai', model: 'gpt-x' });
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     await user.type(screen.getByRole('textbox'), 'x');

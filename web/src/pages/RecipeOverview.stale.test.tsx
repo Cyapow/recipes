@@ -13,6 +13,7 @@ vi.mock('../api', async () => {
 import { addToShopping, ApiError, getRecipe } from '../api';
 
 const base: Recipe = {
+  favouritedBy: [],
   id: 'a', title: 'Carbonara', description: '', origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
   servings: 2, prepMinutes: 5, cookMinutes: 70,
   ingredients: [

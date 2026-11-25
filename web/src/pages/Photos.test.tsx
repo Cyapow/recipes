@@ -166,7 +166,7 @@ describe('Photos', () => {
 
   it('saves the recipe with the cropped dish photo first', async () => {
     vi.mocked(photosRecipe).mockResolvedValue(draft);
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     await pickTwo(user);
@@ -181,7 +181,7 @@ describe('Photos', () => {
 
   it('clears the kept draft after a successful save', async () => {
     vi.mocked(photosRecipe).mockResolvedValue(draft);
-    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '' });
+    vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });
     const user = userEvent.setup();
     app();
     await pickTwo(user);

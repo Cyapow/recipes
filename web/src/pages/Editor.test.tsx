@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 const rec = (id: string, title: string): Recipe => ({
-  id, title, createdAt: '', updatedAt: '', description: null, origin: 'mine', brand: 'Mine', sourceName: null,
+  id, title, favouritedBy: [], createdAt: '', updatedAt: '', description: null, origin: 'mine', brand: 'Mine', sourceName: null,
   sourceUrl: null, servings: null, prepMinutes: null, cookMinutes: null, ingredients: [],
   steps: [], notes: null, tags: [], imageIds: [],
 });
