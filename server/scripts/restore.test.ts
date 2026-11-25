@@ -41,8 +41,9 @@ beforeEach(async () => {
   for (const n of [H1, H2, `thumb-${H1}`, `thumb-${H2}`]) writeFileSync(path.join(src, 'images', n), `bytes-${n}`);
   db = openDb(path.join(src, 'recipes.sqlite'));
   const repo = createRecipeRepo(db, createFavouritesRepo(db));
-  repo.create(input('Soup', [H1]));
+  const soup = repo.create(input('Soup', [H1]));
   repo.create(input('Stew', [H1, H2]));
+  createFavouritesRepo(db).add('cook@x.com', soup.id, new Date(Date.UTC(2026, 0, 1)));
   const drive = new FakeDrive();
   const r = await runBackup({ db, dataDir: src, drive, now: () => new Date(Date.UTC(2026, 0, 2, 3, 0, 0)) });
   expect(r.ok).toBe(true);
@@ -88,6 +89,9 @@ describe('restoreFromDirectory', () => {
     const orig = createRecipeRepo(db, createFavouritesRepo(db));
     expect(rr.list({})).toEqual(orig.list({}));
     for (const s of orig.list({})) expect(rr.get(s.id)).toEqual(orig.get(s.id));
+    const pairs = createFavouritesRepo(db).allPairs();
+    expect(pairs).toHaveLength(1);
+    expect(createFavouritesRepo(restored).allPairs()).toEqual(pairs);
     restored.close();
     expect(listing(path.join(dataDir, 'images'))).toEqual([H1, H2, `thumb-${H1}`, `thumb-${H2}`].sort());
     expect(readFileSync(path.join(dataDir, 'images', `thumb-${H2}`), 'utf8')).toBe(`bytes-thumb-${H2}`);

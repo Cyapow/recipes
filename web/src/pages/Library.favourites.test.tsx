@@ -37,6 +37,7 @@ describe('Library hearts', () => {
   it('shows a filled heart on a recipe you have starred', async () => {
     renderLibrary();
     await screen.findByText('Carbonara');
+    expect(heart('Carbonara', true)).toBeTruthy();
   });
 
   it('shows an empty heart on one you have not, even if someone else has', async () => {
