@@ -9,10 +9,10 @@ export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingIte
 
 export type { Box1000, Tag };
 
-export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[] };
+export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[]; favouritedBy?: string[] };
 
 /** What the library can be filtered by, with how many recipes each has. */
-export type Facets = { brands: { name: string; count: number }[]; tags: (Tag & { count: number })[] };
+export type Facets = { brands: { name: string; count: number }[]; tags: (Tag & { count: number })[]; people: { email: string; name: string; count: number }[] };
 
 /** An API failure that keeps the HTTP status so callers can branch without string matching. */
 export class ApiError extends Error {
@@ -54,6 +54,7 @@ export function listRecipes(q: ListQuery = {}): Promise<RecipeSummary[]> {
   if (q.search) p.set('search', q.search);
   for (const b of q.brands ?? []) p.append('brand', b);
   for (const t of q.tags ?? []) p.append('tag', tagKey(t));
+  for (const e of q.favouritedBy ?? []) p.append('favourite', e);
   const qs = p.toString();
   return request(`/api/recipes${qs ? `?${qs}` : ''}`);
 }

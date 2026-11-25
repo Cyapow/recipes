@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Facets } from '../api';
 import { TAG_GROUPS, tagKey, type Tag } from '../../../server/src/recipes/categories';
 
-export type Filters = { brands: string[]; tags: Tag[] };
+export type Filters = { brands: string[]; tags: Tag[]; people: string[] };
 
 const BRANDS_SHOWN = 8;
 
@@ -34,12 +34,17 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
   const brands = [...facets.brands].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const shownBrands = allBrands ? brands : brands.slice(0, BRANDS_SHOWN);
   const hasMore = !allBrands && brands.length > BRANDS_SHOWN;
-  const active = filters.brands.length + filters.tags.length;
+  const active = filters.brands.length + filters.tags.length + filters.people.length;
 
   const toggleBrand = (name: string) =>
     onChange({
       ...filters,
       brands: filters.brands.includes(name) ? filters.brands.filter((b) => b !== name) : [...filters.brands, name],
+    });
+  const togglePerson = (email: string) =>
+    onChange({
+      ...filters,
+      people: filters.people.includes(email) ? filters.people.filter((p) => p !== email) : [...filters.people, email],
     });
   const toggleTag = (t: Tag) => {
     const on = filters.tags.some((x) => tagKey(x) === tagKey(t));
@@ -100,9 +105,27 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
               </section>
             );
           })}
+          {facets.people.length > 0 && (
+            <section>
+              <h3>Favourites</h3>
+              <div className="filter-sheet-chips">
+                {facets.people.map((p) => (
+                  <button
+                    key={p.email}
+                    type="button"
+                    className={`chip${filters.people.includes(p.email) ? ' active' : ''}`}
+                    aria-pressed={filters.people.includes(p.email)}
+                    onClick={() => togglePerson(p.email)}
+                  >
+                    {p.name} · {p.count}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
         <div className="filter-sheet-foot">
-          <button type="button" className="btn small" disabled={active === 0} onClick={() => onChange({ brands: [], tags: [] })}>
+          <button type="button" className="btn small" disabled={active === 0} onClick={() => onChange({ brands: [], tags: [], people: [] })}>
             Clear all
           </button>
           <button type="button" className="btn small primary" onClick={onClose}>

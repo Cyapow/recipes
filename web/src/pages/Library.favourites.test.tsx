@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { Library } from './Library';
+import { Library, loadFilters } from './Library';
 import { MeProvider } from '../lib/me';
 
 vi.mock('../api', () => ({
@@ -20,11 +20,12 @@ const heart = (title: string, pressed: boolean) => screen.getByRole('button', { 
 const renderLibrary = () => render(<MeProvider me={{ email: 'me@x.com', name: 'Me' }}><MemoryRouter><Library /></MemoryRouter></MeProvider>);
 
 beforeEach(() => {
+  sessionStorage.clear();
   vi.mocked(listRecipes).mockReset().mockResolvedValue([
     { ...summary, id: 'a', title: 'Carbonara', favouritedBy: ['me@x.com', 'you@x.com'] },
     { ...summary, id: 'b', title: 'Dal', favouritedBy: ['you@x.com'] },
   ]);
-  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [] });
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [], people: [{ email: 'me@x.com', name: 'Me', count: 1 }, { email: 'you@x.com', name: 'You', count: 2 }] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
     configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   });
@@ -81,5 +82,59 @@ describe('Library hearts', () => {
     renderLibrary();
     await screen.findByText('Dal');
     expect(screen.getByRole('button', { name: 'Favourite Dal' }).closest('a')).toBeNull();
+  });
+});
+
+describe('Library favourites filter', () => {
+  const rows = [
+    { ...summary, id: 'a', title: 'Carbonara', favouritedBy: ['me@x.com'] },
+    { ...summary, id: 'b', title: 'Dal', favouritedBy: ['you@x.com'] },
+    { ...summary, id: 'c', title: 'Eggs', favouritedBy: [] as string[] },
+  ];
+  beforeEach(() => {
+    vi.mocked(listRecipes).mockImplementation(async (q) =>
+      rows.filter((r) => !q?.favouritedBy || q.favouritedBy.some((e) => r.favouritedBy.includes(e))));
+  });
+  const openSheet = async () => {
+    await screen.findByText('Carbonara');
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+  };
+  const titles = () => screen.getAllByRole('link', { name: /Carbonara|Dal|Eggs/ }).map((l) => l.textContent);
+
+  it('ticking a person filters the list to their favourites', async () => {
+    renderLibrary();
+    await openSheet();
+    await userEvent.click(screen.getByRole('button', { name: 'You · 2' }));
+    await waitFor(() => expect(titles()).toEqual([expect.stringMatching(/Dal/)]));
+  });
+
+  it('ticking two people shows either persons favourites', async () => {
+    renderLibrary();
+    await openSheet();
+    await userEvent.click(screen.getByRole('button', { name: 'You · 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Me · 1' }));
+    await waitFor(() => expect(titles()).toHaveLength(2));
+    expect(titles().join()).not.toMatch(/Eggs/);
+  });
+
+  it('counts the person in the Filters button, shows a chip, and the chip removes them', async () => {
+    renderLibrary();
+    await openSheet();
+    await userEvent.click(screen.getByRole('button', { name: 'You · 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show 1 recipe' }));
+    expect(screen.getByRole('button', { name: 'Filters · 1' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove filter You' }));
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy();
+    await waitFor(() => expect(titles()).toHaveLength(3));
+  });
+
+  it('a stored filter from before this feature loads without crashing', () => {
+    sessionStorage.setItem('recipes.libraryFilters', JSON.stringify({ brands: [], tags: [] }));
+    expect(loadFilters().people).toEqual([]);
+  });
+
+  it('keeps only addresses from a stored filter', () => {
+    sessionStorage.setItem('recipes.libraryFilters', JSON.stringify({ brands: [], tags: [], people: ['a@x.com', 3] }));
+    expect(loadFilters().people).toEqual(['a@x.com']);
   });
 });

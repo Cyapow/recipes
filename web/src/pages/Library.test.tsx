@@ -18,7 +18,7 @@ beforeEach(() => {
     { id: 'a', title: 'Carbonara', origin: 'mine', brand: 'Mine', sourceName: null, tags: [{ group: 'other', name: 'Pasta' }], thumbnailId: null, totalMinutes: 90, favouritedBy: [] },
     { id: 'b', title: 'Dal', origin: 'other', brand: null, sourceName: 'BBC', tags: [], thumbnailId: 'img1', totalMinutes: 45, favouritedBy: [] },
   ]);
-  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [{ group: 'other', name: 'Pasta', count: 1 }] });
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [{ group: 'other', name: 'Pasta', count: 1 }], people: [] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
     configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   });
@@ -67,6 +67,7 @@ describe('Library filters', () => {
     vi.mocked(getFacets).mockResolvedValue({
       brands: [{ name: 'Gousto', count: 2 }],
       tags: [{ group: 'cuisine', name: 'Thai', count: 1 }],
+      people: [],
     });
   });
   async function apply(user: ReturnType<typeof userEvent.setup>) {

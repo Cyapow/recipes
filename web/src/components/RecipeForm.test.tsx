@@ -305,7 +305,7 @@ describe('RecipeForm', () => {
     });
 
     it('suggests known brands and facet brands, per instance', () => {
-      const facets = { brands: [{ name: 'Riverford', count: 2 }], tags: [{ group: 'cuisine' as const, name: 'Thai', count: 1 }] };
+      const facets = { brands: [{ name: 'Riverford', count: 2 }], tags: [{ group: 'cuisine' as const, name: 'Thai', count: 1 }], people: [] };
       const { container } = render(<RecipeForm initial={empty} facets={facets} onSave={() => {}} />);
       const listId = (screen.getByLabelText('Brand') as HTMLInputElement).getAttribute('list')!;
       const opts = Array.from(container.querySelectorAll(`datalist[id="${CSS.escape(listId)}"] option`)).map((o) => o.getAttribute('value'));

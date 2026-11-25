@@ -18,7 +18,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.mocked(saveRecipe).mockReset().mockResolvedValue({ id: 'n1' } as never);
   vi.mocked(listRecipes).mockReset().mockResolvedValue([]);
-  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [] });
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [], people: [] });
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({ banner: 'none' } as never);
 });
 

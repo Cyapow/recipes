@@ -13,7 +13,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.mocked(getRecipe).mockReset();
   vi.mocked(saveRecipe).mockReset();
-  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [] });
+  vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [], people: [] });
 });
 
 const rec = (id: string, title: string): Recipe => ({

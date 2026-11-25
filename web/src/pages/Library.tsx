@@ -18,17 +18,19 @@ function isTag(t: unknown): t is Tag {
   return !!t && typeof t === 'object' && typeof (t as Tag).group === 'string' && typeof (t as Tag).name === 'string';
 }
 
-function loadFilters(): Filters {
+export function loadFilters(): Filters {
   try {
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null');
     if (raw && Array.isArray(raw.brands) && Array.isArray(raw.tags)) {
       return {
         brands: raw.brands.filter((b: unknown) => typeof b === 'string'),
         tags: raw.tags.filter(isTag),
+        // Absent from filters saved before favourites existed.
+        people: Array.isArray(raw.people) ? raw.people.filter((e: unknown) => typeof e === 'string') : [],
       };
     }
   } catch { /* storage unavailable or malformed */ }
-  return { brands: [], tags: [] };
+  return { brands: [], tags: [], people: [] };
 }
 
 export function subtitle(r: RecipeSummary): string {
@@ -40,7 +42,7 @@ export function Library() {
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [sheetOpen, setSheetOpen] = useState(false);
   const filtersBtn = useRef<HTMLButtonElement>(null);
-  const [facets, setFacets] = useState<Facets>({ brands: [], tags: [] });
+  const [facets, setFacets] = useState<Facets>({ brands: [], tags: [], people: [] });
   const [rows, setRows] = useState<RecipeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupStatus | null>(null);
@@ -67,6 +69,7 @@ export function Library() {
       search: search || undefined,
       brands: filters.brands.length ? filters.brands : undefined,
       tags: filters.tags.length ? filters.tags : undefined,
+      favouritedBy: filters.people.length ? filters.people : undefined,
     })
       .then((r) => live && (setRows(r), setError(null)))
       .catch(() => live && setError('Could not load recipes'));
@@ -90,7 +93,8 @@ export function Library() {
     }
   };
 
-  const activeCount = filters.brands.length + filters.tags.length;
+  const personName = (email: string) => facets.people.find((p) => p.email === email)?.name ?? email;
+  const activeCount = filters.brands.length + filters.tags.length + filters.people.length;
   const closeSheet = () => {
     setSheetOpen(false);
     filtersBtn.current?.focus();
@@ -148,6 +152,17 @@ export function Library() {
             onClick={() => setFilters({ ...filters, tags: filters.tags.filter((x) => tagKey(x) !== tagKey(t)) })}
           >
             {t.name}<CloseIcon />
+          </button>
+        ))}
+        {filters.people.map((email) => (
+          <button
+            key={`p:${email}`}
+            type="button"
+            className="chip active pill"
+            aria-label={`Remove filter ${personName(email)}`}
+            onClick={() => setFilters({ ...filters, people: filters.people.filter((x) => x !== email) })}
+          >
+            {personName(email)}<CloseIcon />
           </button>
         ))}
       </div>
