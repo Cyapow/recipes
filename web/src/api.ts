@@ -291,7 +291,7 @@ export const addPlanToShopping = (recipeIds: string[]): Promise<AddPlanResult> =
 
 export const getAuthConfig = (): Promise<{ clientId: string | null }> => request('/api/auth/config');
 
-export const getMe = (): Promise<{ email: string }> => request('/api/auth/me');
+export const getMe = (): Promise<{ email: string; name: string }> => request('/api/auth/me');
 
 export const signInWithGoogle = (credential: string): Promise<{ email: string }> =>
   request('/api/auth/google', {

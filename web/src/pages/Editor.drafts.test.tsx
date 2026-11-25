@@ -10,7 +10,6 @@ import { listDrafts, putDraft } from '../lib/drafts';
 vi.mock('../api', () => ({
   getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn(),
   listRecipes: vi.fn(), getFacets: vi.fn(), getBackupStatus: vi.fn(),
-  getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }), setFavourite: vi.fn(),
 }));
 import { getBackupStatus, getFacets, listRecipes, saveRecipe } from '../api';
 

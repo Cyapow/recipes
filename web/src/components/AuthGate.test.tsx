@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { ApiError } from '../api';
 import { AuthGate } from './AuthGate';
 import { rememberSignedIn, wasSignedIn } from '../lib/session';
+import { useMe } from '../lib/me';
 
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
@@ -20,10 +21,17 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('AuthGate', () => {
   it('renders the app when /api/auth/me succeeds', async () => {
-    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c' });
+    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c', name: 'A' });
     view();
     expect(await screen.findByText('the app')).toBeTruthy();
     expect(screen.queryByText(/offline/i)).toBeNull();
+  });
+
+  it('tells the app who is signed in', async () => {
+    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c', name: 'Ann' });
+    function Who() { return <p>{useMe()?.name ?? 'nobody'}</p>; }
+    render(<AuthGate><Who /></AuthGate>);
+    expect(await screen.findByText('Ann')).toBeTruthy();
   });
 
   it('renders the sign-in screen on a 401 and clears the remembered flag', async () => {
@@ -54,7 +62,7 @@ describe('AuthGate', () => {
 
   it('renders the app at once while a hung getMe() never settles, if we were signed in', async () => {
     rememberSignedIn();
-    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string }>(() => {})); // a hung socket: no resolve, no reject
+    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string; name: string }>(() => {})); // a hung socket: no resolve, no reject
     view();
     expect(screen.getByText('the app')).toBeTruthy();
     expect(screen.queryByText(/Loading/)).toBeNull();
@@ -62,7 +70,7 @@ describe('AuthGate', () => {
   });
 
   it('waits on getMe() when we were never signed in', () => {
-    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string }>(() => {}));
+    vi.mocked(getMe).mockReturnValue(new Promise<{ email: string; name: string }>(() => {}));
     view();
     expect(screen.getByText(/Loading/)).toBeTruthy();
     expect(screen.queryByText('the app')).toBeNull();
@@ -73,7 +81,7 @@ describe('AuthGate', () => {
     vi.mocked(getMe).mockRejectedValue(new TypeError('Failed to fetch'));
     view();
     expect(await screen.findByText(/offline/i)).toBeTruthy();
-    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c' });
+    vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c', name: 'A' });
     await act(async () => { window.dispatchEvent(new Event('online')); });
     expect(screen.queryByText(/offline/i)).toBeNull();
     expect(screen.getByText('the app')).toBeTruthy();
@@ -93,7 +101,7 @@ describe('AuthGate', () => {
     );
     const stubFetch = (res: () => Response | Promise<Response>) => vi.stubGlobal('fetch', vi.fn(async () => res()));
 
-    beforeEach(() => vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c' }));
+    beforeEach(() => vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c', name: 'A' }));
 
     it('a 401 mid-session replaces the app with the sign-in screen and clears the flag', async () => {
       app();

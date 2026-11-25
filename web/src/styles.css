@@ -119,7 +119,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* Shared bits still used by the recipe overview */
 .cook-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.cook-label { color: var(--muted); font-size: .9rem; text-align: center; flex: 1; }
+.cook-label { color: var(--muted); font-size: .9rem; text-align: center; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .step-card { margin: 20px 0; padding: 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
 
 /* Cook mode slideshow */

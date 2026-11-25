@@ -4,7 +4,8 @@ import { addToShopping, ApiError, getRecipe, setFavourite, type Recipe } from '.
 import { BackIcon, CartIcon, PlayIcon, PrinterIcon } from '../components/Icons';
 import { FavouriteButton } from '../components/FavouriteButton';
 import { MetricToggle } from '../components/MetricToggle';
-import { useMyEmail, withStar } from '../lib/favourite';
+import { useMe } from '../lib/me';
+import { withStar } from '../lib/favourite';
 import { useMetric } from '../lib/metric';
 import { sourceLink } from '../lib/source';
 import { hasImperial, metricIngredient } from '../lib/units';
@@ -14,7 +15,8 @@ type Notice =
   | { kind: 'added'; count: number }
   | { kind: 'duplicate'; title: string }
   | { kind: 'changed' }
-  | { kind: 'error' };
+  | { kind: 'error' }
+  | { kind: 'star' };
 
 function LoadFailure({ message }: { message: string }) {
   return (
@@ -68,7 +70,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [metric] = useMetric();
-  const me = useMyEmail();
+  const me = useMe()?.email;
   const inFlight = useRef(false);
   const addAgainRef = useRef<HTMLButtonElement>(null);
   const duplicate = notice?.kind === 'duplicate';
@@ -120,11 +122,13 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
     if (!me) return;
     const put = (value: boolean) =>
       setRecipe((cur) => cur && { ...cur, favouritedBy: withStar(cur.favouritedBy, me, value) });
+    setNotice((n) => (n?.kind === 'star' ? null : n));
     put(on);
     try {
       await setFavourite(recipe!.id, on);
     } catch {
       put(!on);
+      setNotice({ kind: 'star' });
     }
   }
 
@@ -209,6 +213,7 @@ function Overview({ id, onReload }: { id: string; onReload: () => void }) {
         </p>
       )}
       {notice?.kind === 'error' && <p className="field-error" role="alert">Could not add to the shopping list</p>}
+      {notice?.kind === 'star' && <p className="field-error" role="alert">Couldn't save that favourite. Try again.</p>}
       {notice?.kind === 'changed' && (
         <div className="status dup" role="alert">
           <p>This recipe was changed on another device. Reload to see the latest ingredients.</p>

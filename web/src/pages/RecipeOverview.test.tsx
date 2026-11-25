@@ -5,10 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { RecipeOverview } from './RecipeOverview';
 import type { Recipe } from '../api';
+import { MeProvider } from '../lib/me';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
-  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn(), getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }), setFavourite: vi.fn() };
+  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn(), getMe: vi.fn().mockResolvedValue({ email: 'a@b.c', name: 'A' }), setFavourite: vi.fn() };
 });
 import { addToShopping, ApiError, getRecipe, setFavourite } from '../api';
 
@@ -30,13 +31,15 @@ const other: Recipe = { ...base, id: 'b', title: 'Soup', ingredients: [{ group: 
 
 function renderAt(path = '/recipe/a') {
   return render(
+    <MeProvider me={{ email: 'a@b.c', name: 'A' }}>
     <MemoryRouter initialEntries={[path]}>
       <Link to="/recipe/b">to-b</Link>
       <Routes>
         <Route path="/" element={<p>LIBRARY</p>} />
         <Route path="/recipe/:id" element={<RecipeOverview />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
+    </MeProvider>,
   );
 }
 const box = (name: string) => screen.findByRole('checkbox', { name: `We have this: ${name}` });
@@ -76,6 +79,7 @@ describe('RecipeOverview heart', () => {
     expect(await heart(true)).toBeTruthy();
     fail(new Error('offline'));
     await waitFor(async () => expect(await heart(false)).toBeTruthy());
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't save that favourite/);
   });
 });
 

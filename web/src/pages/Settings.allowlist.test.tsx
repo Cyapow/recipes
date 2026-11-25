@@ -35,7 +35,7 @@ beforeEach(() => {
     lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   } as never);
   vi.mocked(getAiStatus).mockReset().mockResolvedValue({ providers: [], active: null });
-  vi.mocked(getMe).mockReset().mockResolvedValue({ email: 'me@x.com' });
+  vi.mocked(getMe).mockReset().mockResolvedValue({ email: 'me@x.com', name: 'Me' });
   vi.mocked(listAllowed).mockReset().mockResolvedValue(rows);
   vi.mocked(addAllowed).mockReset().mockResolvedValue(undefined);
   vi.mocked(removeAllowed).mockReset().mockResolvedValue(undefined);

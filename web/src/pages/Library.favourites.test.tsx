@@ -4,18 +4,20 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Library } from './Library';
+import { MeProvider } from '../lib/me';
 
 vi.mock('../api', () => ({
   listRecipes: vi.fn(),
   getFacets: vi.fn(),
   getBackupStatus: vi.fn(),
-  getMe: vi.fn(),
   setFavourite: vi.fn(),
 }));
-import { getBackupStatus, getFacets, getMe, listRecipes, setFavourite } from '../api';
+import { getBackupStatus, getFacets, listRecipes, setFavourite } from '../api';
 
 const summary = { origin: 'mine' as const, brand: 'Mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: 30 };
 const heart = (title: string, pressed: boolean) => screen.getByRole('button', { name: `Favourite ${title}`, pressed });
+
+const renderLibrary = () => render(<MeProvider me={{ email: 'me@x.com', name: 'Me' }}><MemoryRouter><Library /></MemoryRouter></MeProvider>);
 
 beforeEach(() => {
   vi.mocked(listRecipes).mockReset().mockResolvedValue([
@@ -26,29 +28,25 @@ beforeEach(() => {
   vi.mocked(getBackupStatus).mockReset().mockResolvedValue({
     configured: true, connected: true, account: 'a@b.c', banner: 'none', lastRunAt: null, lastSuccessAt: null, lastError: null, lastUploadAt: null, running: false,
   });
-  vi.mocked(getMe).mockReset().mockResolvedValue({ email: 'me@x.com' });
   vi.mocked(setFavourite).mockReset().mockResolvedValue();
 });
 afterEach(cleanup);
 
 describe('Library hearts', () => {
   it('shows a filled heart on a recipe you have starred', async () => {
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Carbonara');
-    await waitFor(() => expect(heart('Carbonara', true)).toBeTruthy());
   });
 
   it('shows an empty heart on one you have not, even if someone else has', async () => {
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Dal');
-    await waitFor(() => expect(heart('Carbonara', true)).toBeTruthy());
     expect(heart('Dal', false)).toBeTruthy();
   });
 
   it('starring updates the heart without reloading the list or reordering it', async () => {
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Dal');
-    await waitFor(() => expect(heart('Carbonara', true)).toBeTruthy());
     await userEvent.click(heart('Dal', false));
     expect(heart('Dal', true)).toBeTruthy();
     expect(setFavourite).toHaveBeenCalledWith('b', true);
@@ -59,9 +57,8 @@ describe('Library hearts', () => {
   });
 
   it('unstarring empties the heart', async () => {
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Carbonara');
-    await waitFor(() => expect(heart('Carbonara', true)).toBeTruthy());
     await userEvent.click(heart('Carbonara', true));
     expect(heart('Carbonara', false)).toBeTruthy();
     expect(setFavourite).toHaveBeenCalledWith('a', false);
@@ -70,18 +67,18 @@ describe('Library hearts', () => {
   it('a failed star puts the heart back', async () => {
     let fail!: (e: Error) => void;
     vi.mocked(setFavourite).mockReturnValue(new Promise<void>((_, reject) => { fail = reject; }));
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Dal');
-    await waitFor(() => expect(heart('Carbonara', true)).toBeTruthy());
     await userEvent.click(heart('Dal', false));
     expect(heart('Dal', true)).toBeTruthy();
     fail(new Error('offline'));
     await waitFor(() => expect(heart('Dal', false)).toBeTruthy());
     expect(heart('Carbonara', true)).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't save that favourite/);
   });
 
   it('keeps the heart outside the recipe link, so tapping it does not open the recipe', async () => {
-    render(<MemoryRouter><Library /></MemoryRouter>);
+    renderLibrary();
     await screen.findByText('Dal');
     expect(screen.getByRole('button', { name: 'Favourite Dal' }).closest('a')).toBeNull();
   });

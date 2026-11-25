@@ -6,7 +6,8 @@ import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { FavouriteButton } from '../components/FavouriteButton';
 import { BackupBanner } from '../components/BackupBanner';
 import { CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
-import { useMyEmail, withStar } from '../lib/favourite';
+import { useMe } from '../lib/me';
+import { withStar } from '../lib/favourite';
 import { formatMinutes, originLabel } from '../lib/text';
 import { monogram, monogramColors } from '../lib/monogram';
 import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
@@ -45,7 +46,8 @@ export function Library() {
   const [backup, setBackup] = useState<BackupStatus | null>(null);
   const [backupFailed, setBackupFailed] = useState(false);
   const [drafts, setDrafts] = useState<Draft[]>(() => listDrafts());
-  const me = useMyEmail();
+  const me = useMe()?.email;
+  const [starFailed, setStarFailed] = useState(false);
 
   useEffect(() => {
     getBackupStatus().then(setBackup).catch(() => setBackupFailed(true));
@@ -78,11 +80,13 @@ export function Library() {
     if (!me) return;
     const put = (value: boolean) =>
       setRows((cur) => cur && cur.map((r) => (r.id === id ? { ...r, favouritedBy: withStar(r.favouritedBy, me, value) } : r)));
+    setStarFailed(false);
     put(on);
     try {
       await setFavourite(id, on);
     } catch {
       put(!on);
+      setStarFailed(true);
     }
   };
 
@@ -186,6 +190,7 @@ export function Library() {
         </section>
       )}
       {error && <p className="field-error" role="alert">{error}</p>}
+      {starFailed && <p className="field-error" role="alert">Couldn't save that favourite. Try again.</p>}
       {rows && rows.length === 0 && <p className="empty">No recipes yet.</p>}
       <ul className="rows">
         {rows?.map((r) => (

@@ -9,7 +9,7 @@ import type { Recipe } from '../api';
 
 vi.mock('../api', async () => {
   const actual = await vi.importActual<typeof import('../api')>('../api');
-  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn(), getMe: vi.fn().mockResolvedValue({ email: 'a@b.c' }) };
+  return { ...actual, getRecipe: vi.fn(), addToShopping: vi.fn() };
 });
 import { getRecipe } from '../api';
 
