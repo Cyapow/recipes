@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import { FakeDrive } from './fakeDrive.js';
 import { createBackupService } from './service.js';
 import { getBackupFingerprint, getBackupSnapshot, getBackupStatus } from './status.js';
@@ -14,7 +15,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'svc-test-'));
   mkdirSync(path.join(dir, 'images'));
   db = openDb(path.join(dir, 'recipes.db'));
-  createRecipeRepo(db).create({
+  createRecipeRepo(db, createFavouritesRepo(db)).create({
     title: 'Soup', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
     prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 'x', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [],
   });

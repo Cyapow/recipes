@@ -6,6 +6,7 @@ import { buildApp } from '../app.js';
 import { openDb } from '../db.js';
 import type { RecipeInput } from './schema.js';
 import { signedIn } from '../auth/testing.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 
 function make() {
   const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
@@ -73,6 +74,7 @@ describe('recipe routes', () => {
     expect((await app.inject({ url: '/api/tags' })).json()).toEqual({
       brands: [{ name: 'Mine', count: 1 }],
       tags: [{ group: 'other', name: 'quick', count: 1 }, { group: 'other', name: 'x', count: 1 }],
+      people: [{ email: 'cook@example.com', name: 'Cook', count: 0 }],
     });
   });
 
@@ -192,6 +194,50 @@ describe('recipe routes', () => {
       expect(put.statusCode).toBe(200);
       const raw = db.prepare('SELECT steps_json FROM recipes WHERE id = ?').get(id) as { steps_json: string };
       expect(JSON.parse(raw.steps_json)).toEqual([{ text: 'Brown the mince', imageId: null, ingredients: [] }]);
+    });
+  });
+
+  describe('favourites', () => {
+    function makeWithFavourites() {
+      const config = { dataDir: mkdtempSync(path.join(tmpdir(), 'recipes-routes-')) } as never;
+      const db = openDb(':memory:');
+      const app = signedIn(buildApp({ config, db }), db);
+      return { app, favourites: createFavouritesRepo(db) };
+    }
+
+    it('GET /api/recipes?favourite=a@x.com narrows the list', async () => {
+      const { app, favourites } = makeWithFavourites();
+      const a = (await app.inject({ method: 'POST', url: '/api/recipes', payload: { ...base, title: 'A' } })).json();
+      await app.inject({ method: 'POST', url: '/api/recipes', payload: { ...base, title: 'B' } });
+      favourites.add('a@x.com', a.id, new Date());
+      const res = await app.inject({ url: '/api/recipes?favourite=a@x.com' });
+      expect(res.json().map((r: { title: string }) => r.title)).toEqual(['A']);
+      expect(res.json()[0].favouritedBy).toEqual(['a@x.com']);
+      const none = await app.inject({ url: '/api/recipes?favourite=nobody@x.com' });
+      expect(none.json()).toEqual([]);
+    });
+
+    it('GET /api/recipes/:id carries favouritedBy', async () => {
+      const { app, favourites } = makeWithFavourites();
+      const a = (await app.inject({ method: 'POST', url: '/api/recipes', payload: base })).json();
+      favourites.add('a@x.com', a.id, new Date());
+      const got = await app.inject({ url: `/api/recipes/${a.id}` });
+      expect(got.json().favouritedBy).toEqual(['a@x.com']);
+    });
+
+    it("a star does not change the recipe's updatedAt", async () => {
+      const { app, favourites } = makeWithFavourites();
+      const a = (await app.inject({ method: 'POST', url: '/api/recipes', payload: base })).json();
+      const before = (await app.inject({ url: `/api/recipes/${a.id}` })).json().updatedAt;
+      favourites.add('a@x.com', a.id, new Date());
+      const after = (await app.inject({ url: `/api/recipes/${a.id}` })).json().updatedAt;
+      expect(after).toBe(before);
+    });
+
+    it('GET /api/tags includes people', async () => {
+      const { app } = makeWithFavourites();
+      const res = await app.inject({ url: '/api/tags' });
+      expect(res.json().people).toEqual([{ email: 'cook@example.com', name: 'Cook', count: 0 }]);
     });
   });
 });

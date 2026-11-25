@@ -12,6 +12,7 @@ const ListQuerySchema = z.object({
   origin: z.enum(['mine', 'other']).optional(),
   brand: many,
   tag: many,
+  favourite: many,
 });
 
 export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<typeof createRecipeRepo>) {
@@ -24,7 +25,7 @@ export function registerRecipeRoutes(app: FastifyInstance, repo: ReturnType<type
       if (!t) return reply.code(400).send({ error: `Invalid tag: ${key}` });
       tags.push(t);
     }
-    return repo.list({ search: q.data.search, origin: q.data.origin, brands: arr(q.data.brand), tags });
+    return repo.list({ search: q.data.search, origin: q.data.origin, brands: arr(q.data.brand), tags, favouritedBy: arr(q.data.favourite) });
   });
 
   app.get<{ Params: { id: string } }>('/api/recipes/:id', async (req, reply) => {

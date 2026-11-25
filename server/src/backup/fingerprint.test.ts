@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import { createShoppingRepo } from '../shopping/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { canonicalJson, computeFingerprint } from './fingerprint.js';
@@ -22,7 +23,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'fp-test-'));
   mkdirSync(path.join(dir, 'images'));
   db = openDb(path.join(dir, 'recipes.db'));
-  repo = createRecipeRepo(db);
+  repo = createRecipeRepo(db, createFavouritesRepo(db));
   repo.create(input('Soup'));
   repo.create(input('Stew'));
   writeFileSync(path.join(dir, 'images', H1), 'x');

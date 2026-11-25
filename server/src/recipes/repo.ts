@@ -1,5 +1,7 @@
 import type { Database } from 'better-sqlite3';
 import crypto from 'node:crypto';
+import { createAuthRepo, displayNameFor, normaliseEmail } from '../auth/repo.js';
+import type { FavouritesRepo } from '../favourites/repo.js';
 import { normaliseTags, type Tag, type TagGroup } from './categories.js';
 import { normaliseSteps, type Recipe, type RecipeInput, type RecipeSummary } from './schema.js';
 
@@ -23,11 +25,12 @@ type Row = {
   updated_at: string;
 };
 
-export type ListQuery = { search?: string; origin?: 'mine' | 'other'; brands?: string[]; tags?: Tag[] };
+export type ListQuery = { search?: string; origin?: 'mine' | 'other'; brands?: string[]; tags?: Tag[]; favouritedBy?: string[] };
 
 export type Facets = {
   brands: { name: string; count: number }[];
   tags: { group: TagGroup; name: string; count: number }[];
+  people: { email: string; name: string; count: number }[];
 };
 
 function parseJson(s: string): unknown {
@@ -38,7 +41,7 @@ function parseJson(s: string): unknown {
   }
 }
 
-function toRecipe(r: Row): Recipe {
+function toRecipe(r: Row): Omit<Recipe, 'favouritedBy'> {
   const ingredients = JSON.parse(r.ingredients_json);
   return {
     id: r.id,
@@ -61,7 +64,7 @@ function toRecipe(r: Row): Recipe {
   };
 }
 
-function toSummary(r: Row): RecipeSummary {
+function toSummary(r: Row): Omit<RecipeSummary, 'favouritedBy'> {
   const imageIds: string[] = JSON.parse(r.image_ids_json);
   const hasTime = r.prep_minutes !== null || r.cook_minutes !== null;
   return {
@@ -96,7 +99,8 @@ function values(id: string, i: RecipeInput) {
   };
 }
 
-export function createRecipeRepo(db: Database) {
+export function createRecipeRepo(db: Database, favourites: FavouritesRepo) {
+  const auth = createAuthRepo(db);
   const insert = db.prepare(`INSERT INTO recipes
     (id, title, description, origin, brand, source_name, source_url, servings, prep_minutes, cook_minutes, notes,
      ingredients_json, steps_json, tags_json, image_ids_json, created_at, updated_at)
@@ -117,7 +121,8 @@ export function createRecipeRepo(db: Database) {
     },
     get(id: string): Recipe | undefined {
       const row = getStmt.get(id) as Row | undefined;
-      return row ? toRecipe(row) : undefined;
+      if (!row) return undefined;
+      return { ...toRecipe(row), favouritedBy: favourites.forRecipes([id]).get(id) ?? [] };
     },
     update(id: string, input: RecipeInput): Recipe | undefined {
       const info = updateStmt.run({ ...values(id, input), now: new Date().toISOString() });
@@ -147,6 +152,15 @@ export function createRecipeRepo(db: Database) {
         });
         where.push(`lower(brand) IN (${names.join(', ')})`);
       }
+      if (q.favouritedBy?.length) {
+        const names = q.favouritedBy.map((e, i) => {
+          params[`f${i}`] = normaliseEmail(e);
+          return `@f${i}`;
+        });
+        where.push(
+          `EXISTS (SELECT 1 FROM favourites f WHERE f.recipe_id = recipes.id AND f.email IN (${names.join(', ')}))`,
+        );
+      }
       const byGroup = new Map<TagGroup, string[]>();
       for (const t of q.tags ?? []) byGroup.set(t.group, [...(byGroup.get(t.group) ?? []), t.name]);
       let g = 0;
@@ -162,7 +176,9 @@ export function createRecipeRepo(db: Database) {
         g++;
       }
       const sql = `SELECT * FROM recipes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC, title`;
-      return (db.prepare(sql).all(params) as Row[]).map(toSummary);
+      const summaries = (db.prepare(sql).all(params) as Row[]).map(toSummary);
+      const stars = favourites.forRecipes(summaries.map((s) => s.id));
+      return summaries.map((s) => ({ ...s, favouritedBy: stars.get(s.id) ?? [] }));
     },
     facets(): Facets {
       const brands = db
@@ -179,7 +195,12 @@ export function createRecipeRepo(db: Database) {
         }
       }
       const tags = [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-      return { brands, tags };
+      const starred = favourites.countsByEmail();
+      const people = auth
+        .listAllowed()
+        .map((p) => ({ email: p.email, name: displayNameFor(p.email, p.name), count: starred.get(p.email) ?? 0 }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      return { brands, tags, people };
     },
     brandForHost(host: string): string | null {
       const want = host.toLowerCase().replace(/^www\./, '');

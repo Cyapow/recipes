@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { IMAGE_ID_RE } from '../images/store.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import type { DriveClient } from './drive.js';
 import { computeFingerprint } from './fingerprint.js';
 import { getBackupFingerprint, getBackupSnapshot, recordBackup } from './status.js';
@@ -94,7 +95,7 @@ export async function runBackup(deps: {
       const sqliteFile = path.join(tmp, `${base}.sqlite`);
       const jsonFile = path.join(tmp, `${base}.json`);
       await deps.db.backup(sqliteFile);
-      const repo = createRecipeRepo(deps.db);
+      const repo = createRecipeRepo(deps.db, createFavouritesRepo(deps.db));
       const recipes = repo.list({}).map((s) => repo.get(s.id)!);
       await writeFile(jsonFile, JSON.stringify({ exportedAt: started.toISOString(), recipes }, null, 2));
 

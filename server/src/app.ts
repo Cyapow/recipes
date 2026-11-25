@@ -17,6 +17,7 @@ import { registerImageRoutes } from './images/routes.js';
 import { registerImportRoutes } from './import/routes.js';
 import { fetchBytes, fetchPage } from './import/fetchPage.js';
 import { createImageStore, type ImageStore } from './images/store.js';
+import { createFavouritesRepo } from './favourites/repo.js';
 import { createRecipeRepo } from './recipes/repo.js';
 import { registerRecipeRoutes } from './recipes/routes.js';
 import { createShoppingRepo } from './shopping/repo.js';
@@ -68,7 +69,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     secureCookie: Boolean(deps.config.publicBaseUrl?.startsWith('https://')),
   });
   app.get('/api/health', async () => ({ ok: true }));
-  const recipeRepo = createRecipeRepo(deps.db);
+  const favouritesRepo = createFavouritesRepo(deps.db);
+  const recipeRepo = createRecipeRepo(deps.db, favouritesRepo);
   registerRecipeRoutes(app, recipeRepo);
   const shopping = createShoppingRepo(deps.db);
   registerShoppingRoutes(app, { shopping, recipes: recipeRepo });

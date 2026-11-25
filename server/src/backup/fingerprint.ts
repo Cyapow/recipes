@@ -2,6 +2,7 @@ import type { Database } from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import { listBackupImageNames } from './run.js';
 
 /** JSON with object keys sorted at every level, so key order never affects the result. */
@@ -27,7 +28,7 @@ export function canonicalJson(v: unknown): string {
  * either later must be added here. Only the addresses are hashed, not their added-at times.
  */
 export async function computeFingerprint(db: Database, dataDir: string): Promise<string> {
-  const repo = createRecipeRepo(db);
+  const repo = createRecipeRepo(db, createFavouritesRepo(db));
   const recipes = repo
     .list({})
     .map((s) => repo.get(s.id)!)

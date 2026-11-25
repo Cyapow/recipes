@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDrive } from '../src/backup/fakeDrive.js';
 import { runBackup } from '../src/backup/run.js';
 import { latestSchemaVersion, openDb } from '../src/db.js';
+import { createFavouritesRepo } from '../src/favourites/repo.js';
 import { createRecipeRepo } from '../src/recipes/repo.js';
 import { createShoppingRepo } from '../src/shopping/repo.js';
 import type { RecipeInput } from '../src/recipes/schema.js';
@@ -39,7 +40,7 @@ beforeEach(async () => {
   mkdirSync(path.join(src, 'images'), { recursive: true });
   for (const n of [H1, H2, `thumb-${H1}`, `thumb-${H2}`]) writeFileSync(path.join(src, 'images', n), `bytes-${n}`);
   db = openDb(path.join(src, 'recipes.sqlite'));
-  const repo = createRecipeRepo(db);
+  const repo = createRecipeRepo(db, createFavouritesRepo(db));
   repo.create(input('Soup', [H1]));
   repo.create(input('Stew', [H1, H2]));
   const drive = new FakeDrive();
@@ -71,7 +72,7 @@ describe('restoreFromDirectory', () => {
     expect(keys).not.toContain('backup.lastFingerprint');
     expect(keys).not.toContain('backup.lastSnapshot');
     expect(keys).not.toContain('backup.lastUploadAt');
-    expect(createRecipeRepo(restored).list({})).toEqual(createRecipeRepo(db).list({}));
+    expect(createRecipeRepo(restored, createFavouritesRepo(restored)).list({})).toEqual(createRecipeRepo(db, createFavouritesRepo(db)).list({}));
     // first run after the restore does a full backup
     const drive2 = new FakeDrive();
     const r = await runBackup({ db: restored, dataDir, drive: drive2 });
@@ -83,8 +84,8 @@ describe('restoreFromDirectory', () => {
   it('round-trips recipes and images (Drive layout nested in "Recipes backup")', async () => {
     const out = await restoreFromDirectory(backupDir, dataDir);
     const restored = open();
-    const rr = createRecipeRepo(restored);
-    const orig = createRecipeRepo(db);
+    const rr = createRecipeRepo(restored, createFavouritesRepo(restored));
+    const orig = createRecipeRepo(db, createFavouritesRepo(db));
     expect(rr.list({})).toEqual(orig.list({}));
     for (const s of orig.list({})) expect(rr.get(s.id)).toEqual(orig.get(s.id));
     restored.close();
@@ -137,7 +138,7 @@ describe('restoreFromDirectory', () => {
     expect(names).not.toContain('recipes.sqlite-wal');
     expect(names).not.toContain('recipes.sqlite-shm');
     const restored = open();
-    expect(createRecipeRepo(restored).list({}).length).toBe(2);
+    expect(createRecipeRepo(restored, createFavouritesRepo(restored)).list({}).length).toBe(2);
     restored.close();
   });
 
@@ -262,7 +263,7 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
     const out = await restoreFromDirectory(backupDir, dataDir);
     expect(out.missingStepImages).toBe(0);
     const restored = open();
-    const repo = createRecipeRepo(restored);
+    const repo = createRecipeRepo(restored, createFavouritesRepo(restored));
     const soup = repo.list({}).find((r) => r.title === 'Soup')!;
     expect(repo.get(soup.id)!.steps).toEqual([
       { text: 'Boil', imageId: null, ingredients: [] },
@@ -272,7 +273,7 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
   });
 
   it('restores shopping rows intact', async () => {
-    const recipe = createRecipeRepo(db).get(createRecipeRepo(db).list({})[0].id)!;
+    const recipe = createRecipeRepo(db, createFavouritesRepo(db)).get(createRecipeRepo(db, createFavouritesRepo(db)).list({})[0].id)!;
     createShoppingRepo(db).add({ id: recipe.id, title: recipe.title }, recipe.ingredients);
     const before = createShoppingRepo(db).list();
     expect(before.length).toBeGreaterThan(0);
@@ -300,7 +301,7 @@ describe('restore: step photos, legacy steps and shopping rows', () => {
     const migrated = open();
     expect(migrated.pragma('user_version', { simple: true })).toBe(latestSchemaVersion());
     expect(createShoppingRepo(migrated).list()).toEqual([]);
-    expect(createRecipeRepo(migrated).list({})).toHaveLength(2);
+    expect(createRecipeRepo(migrated, createFavouritesRepo(migrated)).list({})).toHaveLength(2);
     migrated.close();
   });
 });

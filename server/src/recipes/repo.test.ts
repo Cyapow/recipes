@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
+import { createFavouritesRepo, type FavouritesRepo } from '../favourites/repo.js';
+import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from './repo.js';
 import type { RecipeInput } from './schema.js';
 
@@ -33,8 +35,12 @@ const tag = (name: string) => ({ group: 'other' as const, name });
 const pasta = { group: 'main' as const, name: 'pasta' };
 
 let repo: ReturnType<typeof createRecipeRepo>;
+let favourites: FavouritesRepo;
+let db: ReturnType<typeof openDb>;
 beforeEach(() => {
-  repo = createRecipeRepo(openDb(':memory:'));
+  db = openDb(':memory:');
+  favourites = createFavouritesRepo(db);
+  repo = createRecipeRepo(db, favourites);
 });
 
 describe('recipe repo', () => {
@@ -42,7 +48,7 @@ describe('recipe repo', () => {
     const created = repo.create(base);
     const got = repo.get(created.id)!;
     expect(got).toEqual(created);
-    const { id, createdAt, updatedAt, ...rest } = got;
+    const { id, createdAt, updatedAt, favouritedBy, ...rest } = got;
     expect(rest).toEqual(base);
     expect(id).toBeTruthy();
     expect(createdAt).toBeTruthy();
@@ -148,6 +154,7 @@ describe('recipe repo', () => {
           { group: 'meal', name: 'Dinner', count: 1 },
           { group: 'cuisine', name: 'Italian', count: 1 },
         ],
+        people: [],
       });
     });
 
@@ -162,8 +169,7 @@ describe('recipe repo', () => {
   });
 
   it('reads a legacy string-array tags_json as Other tags and a missing brand as null', () => {
-    const db = openDb(':memory:');
-    const r = createRecipeRepo(db);
+    const r = repo;
     const c = r.create(base);
     db.prepare('UPDATE recipes SET tags_json = ?, brand = NULL WHERE id = ?').run('["pasta","dinner"]', c.id);
     const got = r.get(c.id)!;
@@ -179,8 +185,7 @@ describe('recipe repo', () => {
   });
 
   it('repo.get never throws on malformed stored steps and always yields valid Steps', () => {
-    const db = openDb(':memory:');
-    const r = createRecipeRepo(db);
+    const r = repo;
     const c = r.create(base); // 2 ingredients
     const H = 'd'.repeat(64) + '.jpg';
     const stored = [
@@ -202,5 +207,72 @@ describe('recipe repo', () => {
       expect(r.get(c.id)!.steps).toEqual([]);
       expect(r.list({})).toHaveLength(1);
     }
+  });
+
+  describe('favourites', () => {
+    const now = new Date('2026-01-01T00:00:00Z');
+    const mk = (title: string) => repo.create({ ...base, title });
+    const titles = (q: Parameters<typeof repo.list>[0]) => repo.list(q).map((r) => r.title).sort();
+
+    it("filters to one person's favourites", () => {
+      const a = mk('A');
+      mk('B');
+      favourites.add('a@x.com', a.id, now);
+      expect(titles({ favouritedBy: ['a@x.com'] })).toEqual(['A']);
+    });
+
+    it('several addresses mean any of them, not all', () => {
+      const a = mk('A');
+      const b = mk('B');
+      mk('C');
+      favourites.add('a@x.com', a.id, now);
+      favourites.add('b@x.com', b.id, now);
+      expect(titles({ favouritedBy: ['a@x.com', 'b@x.com'] })).toEqual(['A', 'B']);
+    });
+
+    it('an address nobody matches returns nothing rather than everything', () => {
+      favourites.add('a@x.com', mk('A').id, now);
+      expect(repo.list({ favouritedBy: ['nobody@x.com'] })).toEqual([]);
+    });
+
+    it('attaches favouritedBy, sorted, to every summary', () => {
+      const a = mk('A');
+      mk('B');
+      favourites.add('z@x.com', a.id, now);
+      favourites.add('b@x.com', a.id, now);
+      const rows = repo.list({});
+      expect(rows.find((r) => r.title === 'A')!.favouritedBy).toEqual(['b@x.com', 'z@x.com']);
+      expect(rows.find((r) => r.title === 'B')!.favouritedBy).toEqual([]);
+    });
+
+    it('attaches favouritedBy to a single fetched recipe and on create', () => {
+      const a = mk('A');
+      expect(a.favouritedBy).toEqual([]);
+      favourites.add('a@x.com', a.id, now);
+      expect(repo.get(a.id)!.favouritedBy).toEqual(['a@x.com']);
+    });
+
+    it("a star does not change the recipe's updatedAt", () => {
+      const a = mk('A');
+      favourites.add('a@x.com', a.id, now);
+      expect(repo.get(a.id)!.updatedAt).toBe(a.updatedAt);
+    });
+
+    it('people facets list everyone on the allowlist, including a never-signed-in person at 0', () => {
+      const auth = createAuthRepo(db);
+      auth.addAllowed('ann@x.com', now);
+      auth.addAllowed('bob@x.com', now);
+      auth.addAllowed('cy@x.com', now);
+      const a = mk('A');
+      const b = mk('B');
+      favourites.add('bob@x.com', a.id, now);
+      favourites.add('bob@x.com', b.id, now);
+      favourites.add('ann@x.com', a.id, now);
+      expect(repo.facets().people).toEqual([
+        { email: 'bob@x.com', name: 'Bob', count: 2 },
+        { email: 'ann@x.com', name: 'Ann', count: 1 },
+        { email: 'cy@x.com', name: 'Cy', count: 0 },
+      ]);
+    });
   });
 });

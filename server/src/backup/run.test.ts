@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../db.js';
 import { createRecipeRepo } from '../recipes/repo.js';
+import { createFavouritesRepo } from '../favourites/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { FakeDrive } from './fakeDrive.js';
 import { computeFingerprint } from './fingerprint.js';
@@ -25,7 +26,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'bk-test-'));
   mkdirSync(path.join(dir, 'images'));
   db = openDb(path.join(dir, 'recipes.db'));
-  const repo = createRecipeRepo(db);
+  const repo = createRecipeRepo(db, createFavouritesRepo(db));
   repo.create(input('Soup'));
   repo.create(input('Stew'));
   for (const n of [H1, H2, `thumb-${H1}`, `thumb-${H2}`]) writeFileSync(path.join(dir, 'images', n), n);
@@ -221,7 +222,7 @@ describe('runBackup', () => {
 
 describe('skip when unchanged', () => {
   const run = (n: number, extra: { force?: boolean } = {}) => runBackup({ db, dataDir: dir, drive, now: day(n), ...extra });
-  const repo = () => createRecipeRepo(db);
+  const repo = () => createRecipeRepo(db, createFavouritesRepo(db));
 
   it('first run uploads and stores the fingerprint and lastUploadAt', async () => {
     const r = await run(0);

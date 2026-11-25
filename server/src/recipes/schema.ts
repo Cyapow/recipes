@@ -117,6 +117,7 @@ export const RecipeSchema = RecipeCoreSchema.extend({
   id: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  favouritedBy: z.array(z.string()),
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 
@@ -135,4 +136,5 @@ export type RecipeSummary = {
   tags: Tag[];
   thumbnailId: string | null;
   totalMinutes: number | null;
+  favouritedBy: string[];
 };
