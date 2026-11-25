@@ -23,6 +23,8 @@ What changed:
 - Signed-out requests to `/api` paths that do not exist now answer 401, not 404. This is deliberate: it stops a signed-out client from finding out which routes exist.
 - The app moves from the LAN box to Hetzner behind nginx, replacing the LAN-only Caddy guard (`deploy/recipes.caddy` is gone). Sign-in is what protects it now. The domain, `PUBLIC_BASE_URL` and the Google redirect URI for Drive are unchanged.
 - Migration `008_auth.sql` takes the database to schema version 8 (the allowlist and the sessions). It runs on first start, on top of the LAN box's schema version 7. Once it has run, a snapshot taken by the new build cannot be restored into an older build.
+- Favourites are part of the backup too, and the backup fingerprint now includes them, so the first nightly backup after this deploy uploads once even if no recipe changed and nobody has starred anything yet. Like the allowlist change above, that and your post-upgrade "Back up now" check create NEWER snapshots, so a rollback must still name the pre-upgrade file explicitly.
+- Migration `009_favourites.sql` takes the database to schema version 9 (each person's starred recipes). It runs on first start, on top of schema version 8. Once it has run, a snapshot taken by the new build cannot be restored into an older build; `server/scripts/restore.ts` refuses a snapshot with a newer schema version.
 
 After deploying:
 
