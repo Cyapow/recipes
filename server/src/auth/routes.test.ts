@@ -6,9 +6,11 @@ import { registerAuthRoutes } from './routes.js';
 import type { IdTokenVerifier } from './verify.js';
 
 const fake: IdTokenVerifier = async (t) =>
-  t === 'good' ? { email: 'Mat@Example.com', emailVerified: true }
-  : t === 'unverified' ? { email: 'mat@example.com', emailVerified: false }
-  : t === 'stranger' ? { email: 'stranger@example.com', emailVerified: true }
+  t === 'good' ? { email: 'Mat@Example.com', emailVerified: true, name: null }
+  : t === 'named' ? { email: 'mat@example.com', emailVerified: true, name: 'Mat Chapman' }
+  : t === 'renamed' ? { email: 'mat@example.com', emailVerified: true, name: 'Matthew Chapman' }
+  : t === 'unverified' ? { email: 'mat@example.com', emailVerified: false, name: null }
+  : t === 'stranger' ? { email: 'stranger@example.com', emailVerified: true, name: null }
   : null;
 
 const REFUSAL = "This Google account isn't on the list";
@@ -116,7 +118,30 @@ describe('auth config, me and signout', () => {
     const cookie = cookieOf(await signIn(app, 'good'));
     const res = await app.inject({ url: '/api/auth/me', headers: { cookie } });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ email: 'mat@example.com' });
+    expect(res.json()).toEqual({ email: 'mat@example.com', name: 'Mat' });
+  });
+
+  it('stores the name on sign-in and returns it from /api/auth/me', async () => {
+    const { app } = setup();
+    const cookie = cookieOf(await signIn(app, 'named'));
+    const me = await app.inject({ url: '/api/auth/me', headers: { cookie } });
+    expect(me.json()).toEqual({ email: 'mat@example.com', name: 'Mat Chapman' });
+  });
+
+  it('refreshes a changed name on the next sign-in', async () => {
+    const { app, repo } = setup();
+    await signIn(app, 'named');
+    await signIn(app, 'renamed');
+    expect(repo.listAllowed()[0]?.name).toBe('Matthew Chapman');
+  });
+
+  it('leaves a stored name alone when the token has no name', async () => {
+    const { app, repo } = setup();
+    await signIn(app, 'named');
+    const cookie = cookieOf(await signIn(app, 'good'));
+    expect(repo.listAllowed()[0]?.name).toBe('Mat Chapman');
+    const me = await app.inject({ url: '/api/auth/me', headers: { cookie } });
+    expect(me.json().name).toBe('Mat Chapman');
   });
 
   it('GET /api/auth/me answers 401 without a valid session', async () => {

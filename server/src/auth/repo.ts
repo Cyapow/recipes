@@ -5,13 +5,15 @@ import { createHash, randomBytes } from 'node:crypto';
 export const SESSION_TTL_MS = 90 * 24 * 3600 * 1000;
 const LAST_SEEN_INTERVAL_MS = 24 * 3600 * 1000;
 
-export type AllowedEmail = { email: string; addedAt: string };
+export type AllowedEmail = { email: string; addedAt: string; name: string | null };
 
 export type AuthRepo = {
   listAllowed(): AllowedEmail[];
   isAllowed(email: string): boolean;
   addAllowed(email: string, now: Date): void;
   removeAllowed(email: string): void;
+  /** A no-op for null: a token without a name claim must not blank a name we already hold. */
+  setDisplayName(email: string, name: string | null): void;
   createSession(email: string, now: Date): string;
   sessionEmail(token: string, now: Date): string | null;
   deleteSession(token: string): void;
@@ -22,13 +24,21 @@ export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** What to show for a person: their Google name, else the part of the address before the @, capitalised. */
+export function displayNameFor(email: string, storedName: string | null): string {
+  if (storedName) return storedName;
+  const local = email.split('@')[0] ?? '';
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+
 // The database is backed up off-box, so only the hash of a token may ever be stored.
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export function createAuthRepo(db: Database): AuthRepo {
-  const list = db.prepare('SELECT email, added_at AS addedAt FROM allowed_emails ORDER BY email');
+  const list = db.prepare('SELECT email, added_at AS addedAt, display_name AS name FROM allowed_emails ORDER BY email');
   const allowedStmt = db.prepare('SELECT 1 FROM allowed_emails WHERE email = ?');
   const insertAllowed = db.prepare('INSERT OR IGNORE INTO allowed_emails (email, added_at) VALUES (?, ?)');
+  const updateName = db.prepare('UPDATE allowed_emails SET display_name = ? WHERE email = ?');
   const deleteAllowed = db.prepare('DELETE FROM allowed_emails WHERE email = ?');
   const deleteSessionsFor = db.prepare('DELETE FROM sessions WHERE email = ?');
   const insertSession = db.prepare(
@@ -52,6 +62,9 @@ export function createAuthRepo(db: Database): AuthRepo {
     },
     removeAllowed(email) {
       remove(normaliseEmail(email));
+    },
+    setDisplayName(email, name) {
+      if (name !== null) updateName.run(name, normaliseEmail(email));
     },
     createSession(email, now) {
       const token = randomBytes(32).toString('hex');

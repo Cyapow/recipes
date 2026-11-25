@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { cookieAttrs, readCookie } from '../cookies.js';
-import { normaliseEmail, SESSION_TTL_MS, type AuthRepo } from './repo.js';
+import { displayNameFor, normaliseEmail, SESSION_TTL_MS, type AuthRepo } from './repo.js';
 import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './verify.js';
 
 export const SESSION_COOKIE = 'recipes_session';
@@ -50,6 +50,7 @@ export function registerAuthRoutes(
     const email = normaliseEmail(identity.email);
     if (!deps.repo.isAllowed(email)) return reply.code(403).send({ error: REFUSAL });
 
+    deps.repo.setDisplayName(email, identity.name);
     const at = new Date(now());
     deps.repo.pruneSessions(at);
     const token = deps.repo.createSession(email, at);
@@ -62,7 +63,8 @@ export function registerAuthRoutes(
     const token = readSessionCookie(req.headers.cookie);
     const email = req.email ?? (token ? deps.repo.sessionEmail(token, new Date(now())) : null);
     if (!email) return reply.code(401).send({ error: 'Sign in required' });
-    return { email };
+    const stored = deps.repo.listAllowed().find((a) => a.email === email)?.name ?? null;
+    return { email, name: displayNameFor(email, stored) };
   });
 
   app.post('/api/auth/signout', async (req, reply) => {

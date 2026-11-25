@@ -15,7 +15,7 @@ describe('createGoogleIdTokenVerifier', () => {
       .mockResolvedValue(ticket({ email: 'cook@example.com', email_verified: true }));
 
     const verify = createGoogleIdTokenVerifier('client-123');
-    expect(await verify('a-token')).toEqual({ email: 'cook@example.com', emailVerified: true });
+    expect(await verify('a-token')).toEqual({ email: 'cook@example.com', emailVerified: true, name: null });
     // audience is what rejects a token minted for another OAuth client.
     expect(stub).toHaveBeenCalledWith({ idToken: 'a-token', audience: 'client-123' });
   });
@@ -25,7 +25,26 @@ describe('createGoogleIdTokenVerifier', () => {
     expect(await createGoogleIdTokenVerifier('client-123')('a-token')).toEqual({
       email: 'cook@example.com',
       emailVerified: false,
+      name: null,
     });
+  });
+
+  it('returns the name claim when Google sends one', async () => {
+    vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue(
+      ticket({ email: 'cook@example.com', email_verified: true, name: 'Elisa Beckett' }),
+    );
+    expect(await createGoogleIdTokenVerifier('client-123')('a-token')).toEqual({
+      email: 'cook@example.com',
+      emailVerified: true,
+      name: 'Elisa Beckett',
+    });
+  });
+
+  it('returns null for the name when the claim is absent', async () => {
+    vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue(
+      ticket({ email: 'cook@example.com', email_verified: true }),
+    );
+    expect((await createGoogleIdTokenVerifier('client-123')('a-token'))?.name).toBeNull();
   });
 
   it('is null for a payload without an email', async () => {

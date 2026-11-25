@@ -72,7 +72,7 @@ describe('auth guard', () => {
     const { app, db } = setup();
     expect((await app.inject({ method: 'GET', url: '/api/auth/me' })).statusCode).toBe(401);
     const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: authHeaders(db) });
-    expect(res.json()).toEqual({ email: 'cook@example.com' });
+    expect(res.json()).toEqual({ email: 'cook@example.com', name: 'Cook' });
   });
 
   it('an unknown or expired cookie is a clean 401, not a 500', async () => {

@@ -22,13 +22,13 @@ describe('allowlist', () => {
     repo.addAllowed('  Foo@Gmail.com ', now);
     expect(repo.isAllowed('foo@gmail.com')).toBe(true);
     expect(repo.isAllowed('FOO@GMAIL.COM')).toBe(true);
-    expect(repo.listAllowed()).toEqual([{ email: 'foo@gmail.com', addedAt: now.toISOString() }]);
+    expect(repo.listAllowed()).toEqual([{ email: 'foo@gmail.com', addedAt: now.toISOString(), name: null }]);
   });
 
   it('add is idempotent and keeps the first addedAt', () => {
     repo.addAllowed('foo@gmail.com', now);
     repo.addAllowed('Foo@gmail.com', at(now, HOUR));
-    expect(repo.listAllowed()).toEqual([{ email: 'foo@gmail.com', addedAt: now.toISOString() }]);
+    expect(repo.listAllowed()).toEqual([{ email: 'foo@gmail.com', addedAt: now.toISOString(), name: null }]);
   });
 
   it('lists in email order', () => {

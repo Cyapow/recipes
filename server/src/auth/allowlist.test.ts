@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { openDb } from '../db.js';
-import { createAuthRepo } from './repo.js';
+import { createAuthRepo, displayNameFor } from './repo.js';
 import { signedIn } from './testing.js';
 import type { IdTokenVerifier } from './verify.js';
 
-const verify: IdTokenVerifier = async (t) => ({ email: t, emailVerified: true });
+const verify: IdTokenVerifier = async (t) => ({ email: t, emailVerified: true, name: null });
 
 const ENV_EMAIL = 'mat@example.com';
 const SELF = 'cook@example.com';
@@ -47,6 +47,19 @@ describe('allowlist management', () => {
       ['wife@example.com', false],
     ]);
     expect(emails.every((e) => !Number.isNaN(Date.parse(e.addedAt)))).toBe(true);
+  });
+
+  it('lists a person who has never signed in with a null name', async () => {
+    const { app, repo } = setup();
+    repo.addAllowed('wife@example.com', new Date());
+    const res = await app.inject({ method: 'GET', url: '/api/auth/allowed' });
+    const wife = (res.json().emails as { email: string; name: string | null }[]).find((e) => e.email === 'wife@example.com');
+    expect(wife?.name).toBeNull();
+  });
+
+  it('falls back to the capitalised local part', () => {
+    expect(displayNameFor('wife@example.com', null)).toBe('Wife');
+    expect(displayNameFor('wife@example.com', 'Elisa Beckett')).toBe('Elisa Beckett');
   });
 
   it('adds an address, normalised', async () => {
