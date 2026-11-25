@@ -47,6 +47,13 @@ describe('createGoogleIdTokenVerifier', () => {
     expect((await createGoogleIdTokenVerifier('client-123')('a-token'))?.name).toBeNull();
   });
 
+  it.each(['', '   '])('treats a %j name claim as no name', async (name) => {
+    vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue(
+      ticket({ email: 'cook@example.com', email_verified: true, name }),
+    );
+    expect((await createGoogleIdTokenVerifier('client-123')('a-token'))?.name).toBeNull();
+  });
+
   it('is null for a payload without an email', async () => {
     vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue(ticket({ email_verified: true }));
     expect(await createGoogleIdTokenVerifier('client-123')('a-token')).toBeNull();

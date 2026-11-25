@@ -62,6 +62,10 @@ describe('allowlist management', () => {
     expect(displayNameFor('wife@example.com', 'Elisa Beckett')).toBe('Elisa Beckett');
   });
 
+  it('shows the whole address when the local part is empty', () => {
+    expect(displayNameFor('@x.com', null)).toBe('@x.com');
+  });
+
   it('adds an address, normalised', async () => {
     const { app, repo } = setup();
     const res = await add(app, ' Wife@Example.com ');

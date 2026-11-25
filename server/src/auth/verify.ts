@@ -15,8 +15,8 @@ export function createGoogleIdTokenVerifier(clientId: string): IdTokenVerifier {
       return {
         email: payload.email,
         emailVerified: payload.email_verified === true,
-        // Google never guarantees the name claim, so absence is normal, not an error.
-        name: payload.name ?? null,
+        // Google never guarantees the name claim, so absence is normal, not an error; a blank one is no name either.
+        name: payload.name?.trim() || null,
       };
     } catch (err) {
       // Never the token itself; this is the only trace of a wrong client ID, clock skew or a cert fetch failure.

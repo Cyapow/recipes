@@ -28,6 +28,7 @@ export function normaliseEmail(email: string): string {
 export function displayNameFor(email: string, storedName: string | null): string {
   if (storedName) return storedName;
   const local = email.split('@')[0] ?? '';
+  if (!local) return email;
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
 

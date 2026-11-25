@@ -1,9 +1,10 @@
 import Fastify from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { OAuth2Client, type LoginTicket } from 'google-auth-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openDb } from '../db.js';
 import { createAuthRepo } from './repo.js';
 import { registerAuthRoutes } from './routes.js';
-import type { IdTokenVerifier } from './verify.js';
+import { createGoogleIdTokenVerifier, type IdTokenVerifier } from './verify.js';
 
 const fake: IdTokenVerifier = async (t) =>
   t === 'good' ? { email: 'Mat@Example.com', emailVerified: true, name: null }
@@ -15,14 +16,14 @@ const fake: IdTokenVerifier = async (t) =>
 
 const REFUSAL = "This Google account isn't on the list";
 
-function setup(o: { secureCookie?: boolean; noClient?: boolean } = {}) {
+function setup(o: { secureCookie?: boolean; noClient?: boolean; verify?: IdTokenVerifier } = {}) {
   const db = openDb(':memory:');
   const repo = createAuthRepo(db);
   repo.addAllowed('mat@example.com', new Date());
   const app = Fastify();
   registerAuthRoutes(app, {
     repo,
-    verify: fake,
+    verify: o.verify ?? fake,
     clientId: o.noClient ? undefined : 'client-id',
     envEmails: ['mat@example.com'],
     secureCookie: o.secureCookie ?? false,
@@ -104,6 +105,20 @@ describe('google sign-in', () => {
     expect(sessionCount(db)).toBe(1);
     await signIn(app, 'good');
     expect(sessionCount(db)).toBe(1);
+  });
+});
+
+describe('a blank name claim', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(['', '   '])('does not overwrite a stored name when the token carries %j', async (name) => {
+    const { app, repo } = setup({ verify: createGoogleIdTokenVerifier('client-id') });
+    repo.setDisplayName('mat@example.com', 'Mat Chapman');
+    vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+      getPayload: () => ({ email: 'mat@example.com', email_verified: true, name }),
+    } as LoginTicket);
+    expect((await signIn(app, 'any')).statusCode).toBe(200);
+    expect(repo.listAllowed()[0]?.name).toBe('Mat Chapman');
   });
 });
 
