@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ApiError, deleteMeal, getMeal, listRecipes, scheduleMeal, updateMeal,
-  type MealIngredientLine, type MealPatch, type MealWithIngredients, type RecipeSummary, type StageWithWhen,
+  ApiError, deleteMeal, getMeal, scheduleMeal, updateMeal,
+  type MealIngredientLine, type MealPatch, type MealWithIngredients, type StageWithWhen,
 } from '../api';
 import { BackIcon } from '../components/Icons';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -127,22 +127,12 @@ function MealEditor({ meal, busy, onSave, onCancel }: {
   onSave: (patch: MealPatch) => void;
   onCancel: () => void;
 }) {
-  const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [title, setTitle] = useState(meal.title);
   const [serveAt, setServeAt] = useState(() => serveInput(meal.serveAt));
   // A recipe that has been deleted cannot be picked again; the server keeps its entry and its title either way.
   const [courses, setCourses] = useState<Record<string, Course>>(() =>
     Object.fromEntries(meal.recipes.flatMap((r) => (r.recipeId ? [[r.recipeId, r.course] as const] : []))),
   );
-
-  useEffect(() => {
-    let live = true;
-    listRecipes()
-      .then((rs) => live && setRecipes(rs))
-      .catch(() => live && setLoadError('Could not load your recipes'));
-    return () => { live = false; };
-  }, []);
 
   const picked = Object.keys(courses);
   const serveDate = serveAt ? new Date(serveAt) : null;
@@ -164,7 +154,6 @@ function MealEditor({ meal, busy, onSave, onCancel }: {
         });
       }}
     >
-      {loadError && <p className="field-error" role="alert">{loadError}</p>}
       <label className="budget-field">
         Name of the meal
         <input maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -176,7 +165,6 @@ function MealEditor({ meal, busy, onSave, onCancel }: {
       <h3 className="planner-sub">Recipes in this meal</h3>
       {atLimit && <p className="sub">A meal holds {MAX_MEAL_RECIPES} recipes at most. Untick one to pick another.</p>}
       <RecipeCourses
-        recipes={recipes}
         courses={courses}
         atLimit={atLimit}
         onToggle={(id) =>

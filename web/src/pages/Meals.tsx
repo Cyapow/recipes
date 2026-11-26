@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createMeal, listMeals, listRecipes, type MealSummaryWithServeText, type RecipeSummary } from '../api';
+import { createMeal, listMeals, type MealSummaryWithServeText } from '../api';
 import type { Course } from '../../../server/src/meals/courses';
 import { MAX_MEAL_RECIPES } from '../../../server/src/meals/limits';
 import { BackIcon } from '../components/Icons';
@@ -12,7 +12,6 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function Meals() {
   const navigate = useNavigate();
   const [meals, setMeals] = useState<MealSummaryWithServeText[] | null>(null);
-  const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null);
   /** The ticked recipes, each with its course. */
   const [courses, setCourses] = useState<Record<string, Course>>({});
   const [title, setTitle] = useState('');
@@ -23,7 +22,6 @@ export function Meals() {
 
   useEffect(() => {
     listMeals().then(setMeals).catch(() => setLoadError('Could not load your meals'));
-    listRecipes().then(setRecipes).catch(() => setLoadError('Could not load your recipes'));
   }, []);
 
   const pickedIds = Object.keys(courses);
@@ -93,7 +91,6 @@ export function Meals() {
           <p className="sub">A meal holds {MAX_MEAL_RECIPES} recipes at most. Untick one to pick another.</p>
         )}
         <RecipeCourses
-          recipes={recipes}
           courses={courses}
           atLimit={pickedIds.length >= MAX_MEAL_RECIPES}
           onToggle={toggle}
