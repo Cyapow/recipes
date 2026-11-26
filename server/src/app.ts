@@ -7,6 +7,8 @@ import type { Database } from 'better-sqlite3';
 import { createAiClient, type AiClient } from './ai/client.js';
 import { providerOrder } from './ai/registry.js';
 import { registerAiRoutes } from './ai/routes.js';
+import { createMealsRepo } from './meals/repo.js';
+import { registerMealRoutes } from './meals/routes.js';
 import { registerAuthGuard } from './auth/guard.js';
 import { createAuthRepo } from './auth/repo.js';
 import { registerAuthRoutes } from './auth/routes.js';
@@ -86,6 +88,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     images,
   };
   registerAiRoutes(app, ai, deps.config, web);
+  registerMealRoutes(app, { meals: createMealsRepo(deps.db), recipes: recipeRepo, ai });
   registerImportRoutes(app, { ...web, ai, brandForHost: (host) => recipeRepo.brandForHost(host) });
 
   const google = deps.google ?? createGoogleAuth(deps.config, path.join(deps.config.dataDir, 'google-token.json'));

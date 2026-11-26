@@ -18,7 +18,7 @@ export const MAX_REVISE_CHARS = 2_000;
 export const MAX_REVISE_RECIPE_CHARS = 20_000;
 export const MAX_PHOTOS = 6;
 
-function aiFailure(err: unknown, reply: FastifyReply) {
+export function aiFailure(err: unknown, reply: FastifyReply) {
   if (err instanceof AiRefusedError) return reply.code(502).send({ error: 'The AI declined this request', code: 'other' });
   if (err instanceof AiInvalidOutputError) return reply.code(502).send({ error: 'AI returned an invalid recipe', code: 'other' });
   if (err instanceof AiRequestError) return reply.code(502).send({ error: err.message, code: err.code });
