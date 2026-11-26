@@ -9,10 +9,18 @@ import { derive, stepId } from '../lib/stepIdentity';
 import { StepEditor } from './StepEditor';
 import type { StepMarks } from '../lib/stepMarks';
 import { CropDialog } from './CropDialog';
+import { GapsPanel } from './GapsPanel';
+import type { Answer } from '../lib/gaps';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
   gaps?: Gap[];
+  /** Makes the gaps panel answerable. Without it the panel is a read-only list. */
+  onAnswer?(answers: Answer[]): void;
+  /** True while the answers are being applied. */
+  answering?: boolean;
+  /** Why the last apply failed, shown in the gaps panel. */
+  answerError?: string | null;
   onSave(input: RecipeInput): void;
   /** Disables Save and relabels it while a save is in flight. */
   saving?: boolean;
@@ -38,7 +46,7 @@ const num = (s: string): number | null => {
 };
 const str = (s: string): string | null => (s.trim() === '' ? null : s.trim());
 
-export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange, marks, inputRef }: RecipeFormProps) {
+export function RecipeForm({ initial, gaps, onAnswer, answering, answerError, onSave, saving = false, onChange, facets, dishCrop, onDishCropChange, marks, inputRef }: RecipeFormProps) {
   const listId = useId();
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description ?? '');
@@ -202,16 +210,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
 
   return (
     <>
-      {gaps && gaps.length > 0 && (
-        <section className="gaps" aria-label="Check these">
-          <h2>Check these</h2>
-          <ul>
-            {gaps.map((g) => (
-              <li key={g.about}>{g.question ?? g.about}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {gaps && <GapsPanel gaps={gaps} onAnswer={onAnswer} applying={answering} error={answerError} />}
       <form className="recipe-form" onSubmit={submit} noValidate>
         <label>
           Title

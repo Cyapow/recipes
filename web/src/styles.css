@@ -114,6 +114,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .gaps { border: 1px solid var(--amber-line); border-radius: 18px; padding: 14px 16px; background: var(--amber-bg); color: var(--amber-fg); }
 .gaps h2 { font-size: 1.125rem; margin: 0 0 6px; }
 .gaps ul { margin: 0; padding-left: 20px; line-height: 1.5; }
+.gaps li label { display: flex; flex-direction: column; gap: 4px; font-size: .9375rem; }
+.gaps li + li { margin-top: 10px; }
+.gaps input { min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--amber-line); background: var(--card); }
+.gaps input:disabled { opacity: .6; }
+.gaps > .primary { width: 100%; margin-top: 12px; }
 .field label { font-size: .875rem; font-weight: 700; }
 .recipe-form > .primary, .form-submit { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
 .page > label, .page > form > label { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
