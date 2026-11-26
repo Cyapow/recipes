@@ -35,10 +35,12 @@ const NO_FILTERS: Filters = { brands: [], tags: [], people: [] };
  *
  * What a row looks like is the caller's: it renders one, and is handed a way to change that row in place.
  */
-export function RecipeBrowser({ renderRow, storageKey, beforeList, onResults }: {
+export function RecipeBrowser({ renderRow, storageKey, afterSearch, beforeList, onResults }: {
   renderRow: (recipe: RecipeSummary, patch: RowPatch) => ReactNode;
   /** Where filters survive a page change, in sessionStorage. Omitted: this browser's filters are its own. */
   storageKey?: string;
+  /** Rendered between the search box and the filter bar — the library's "Describe it / From a link" row. */
+  afterSearch?: ReactNode;
   /** Rendered between the filter bar and the results — the picker's "Already picked" block. */
   beforeList?: ReactNode;
   onResults?: (rows: RecipeSummary[]) => void;
@@ -112,6 +114,7 @@ export function RecipeBrowser({ renderRow, storageKey, beforeList, onResults }: 
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
+      {afterSearch}
       <div className="filter-bar">
         <button ref={filtersBtn} type="button" className="btn small filter-btn" aria-haspopup="dialog" onClick={() => setSheetOpen(true)}>
           {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
@@ -130,8 +133,8 @@ export function RecipeBrowser({ renderRow, storageKey, beforeList, onResults }: 
         onChange={setFilters}
         onClose={closeSheet}
       />
-      {error && <p className="field-error" role="alert">{error}</p>}
       {beforeList}
+      {error && <p className="field-error" role="alert">{error}</p>}
       {rows && rows.length === 0 && <p className="empty">{narrowed ? 'No recipes match that.' : 'No recipes yet.'}</p>}
       <ul className="rows">{rows?.map((r) => renderRow(r, patch(r.id)))}</ul>
     </>

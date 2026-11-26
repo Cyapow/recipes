@@ -125,6 +125,15 @@ describe('RecipeBrowser', () => {
     await waitFor(() => expect(onResults.mock.calls.at(-1)?.[0].map((r: RecipeSummary) => r.id)).toEqual(['r1', 'r2']));
   });
 
+  it('puts the caller\'s own block between the search box and the filters', async () => {
+    const { container } = render(<RecipeBrowser renderRow={row} afterSearch={<p>Describe it</p>} />);
+    await screen.findByText('Roast chicken');
+
+    const order = [...container.querySelectorAll('.search-field, p, .filter-bar')].map((e) =>
+      e.classList.contains('search-field') ? 'search' : e.classList.contains('filter-bar') ? 'filters' : 'caller');
+    expect(order).toEqual(['search', 'caller', 'filters']);
+  });
+
   it('renders what the caller puts above the results', async () => {
     render(<RecipeBrowser renderRow={row} beforeList={<p>Already picked</p>} />);
     expect(await screen.findByText('Already picked')).toBeTruthy();

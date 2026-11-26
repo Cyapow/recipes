@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { Library, loadFilters } from './Library';
+import { Library, LIBRARY_FILTERS_KEY } from './Library';
+import { loadFilters } from '../components/RecipeBrowser';
 import { MeProvider } from '../lib/me';
 
 vi.mock('../api', () => ({
@@ -131,11 +132,11 @@ describe('Library favourites filter', () => {
 
   it('a stored filter from before this feature loads without crashing', () => {
     sessionStorage.setItem('recipes.libraryFilters', JSON.stringify({ brands: [], tags: [] }));
-    expect(loadFilters().people).toEqual([]);
+    expect(loadFilters(LIBRARY_FILTERS_KEY).people).toEqual([]);
   });
 
   it('keeps only addresses from a stored filter', () => {
     sessionStorage.setItem('recipes.libraryFilters', JSON.stringify({ brands: [], tags: [], people: ['a@x.com', 3] }));
-    expect(loadFilters().people).toEqual(['a@x.com']);
+    expect(loadFilters(LIBRARY_FILTERS_KEY).people).toEqual(['a@x.com']);
   });
 });
