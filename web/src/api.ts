@@ -2,12 +2,18 @@ import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step } from '../.
 import type { ShoppingItem } from '../../server/src/shopping/repo';
 import { tagKey, type Tag } from '../../server/src/recipes/categories';
 import type { Box1000 } from '../../server/src/images/store';
+import type { Meal, MealPatch, MealStage, MealSummary, NewMeal } from '../../server/src/meals/repo';
+import type { MealIngredientLine } from '../../server/src/meals/ingredients';
 
 import { forgetSignedIn, notifyUnauthorized } from './lib/session';
 
 export type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step, ShoppingItem };
 
 export type { Box1000, Tag };
+
+export type { Meal, MealIngredientLine, MealPatch, MealStage, MealSummary, NewMeal };
+export type StageWithWhen = MealStage & { at: string; dayGroup: string };
+export type MealWithIngredients = Omit<Meal, 'stages'> & { stages: StageWithWhen[]; ingredients: MealIngredientLine[] };
 
 export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[]; favouritedBy?: string[] };
 
@@ -334,3 +340,31 @@ export const addAllowed = (email: string): Promise<void> =>
 
 export const removeAllowed = (email: string): Promise<void> =>
   request<unknown>(`/api/auth/allowed/${encodeURIComponent(email)}`, { method: 'DELETE' }).then(() => undefined);
+
+export async function listMeals(): Promise<MealSummary[]> {
+  return (await request<{ meals: MealSummary[] }>('/api/meals')).meals;
+}
+
+/** A 400 here carries a plain sentence in `body.error`, which ApiError keeps for the caller to show. */
+export const createMeal = (m: NewMeal): Promise<Meal> =>
+  request('/api/meals', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(m) });
+
+export const getMeal = (id: string): Promise<MealWithIngredients> => request(`/api/meals/${encodeURIComponent(id)}`);
+
+export const updateMeal = (id: string, patch: MealPatch): Promise<MealWithIngredients> =>
+  request(`/api/meals/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+
+export const deleteMeal = (id: string): Promise<void> =>
+  request(`/api/meals/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Drafts the schedule. A meal that already has one answers 409 unless `replace` is true. */
+export const scheduleMeal = (id: string, replace = false): Promise<MealWithIngredients> =>
+  request(`/api/meals/${encodeURIComponent(id)}/schedule`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ replace }),
+  });

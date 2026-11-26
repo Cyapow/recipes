@@ -5,7 +5,7 @@ import { tagKey, type Tag } from '../../../server/src/recipes/categories';
 import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { FavouriteButton } from '../components/FavouriteButton';
 import { BackupBanner } from '../components/BackupBanner';
-import { CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { CalendarIcon, CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { useMe } from '../lib/me';
 import { withStar } from '../lib/favourite';
 import { formatMinutes, originLabel } from '../lib/text';
@@ -107,6 +107,7 @@ export function Library() {
         <nav className="actions">
           <Link className="btn icon-btn" to="/new" aria-label="New recipe"><PlusIcon /></Link>
           <Link className="btn icon-btn" to="/planner" aria-label="Meal planner"><ListIcon /></Link>
+          <Link className="btn icon-btn" to="/meals" aria-label="Meals"><CalendarIcon /></Link>
           <Link className="btn icon-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>
           <Link className="btn icon-btn" to="/settings" aria-label="Settings"><GearIcon /></Link>
         </nav>
