@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeInput } from '../recipes/schema.js';
-import { buildPlanMessage, PLAN_SYSTEM_PROMPT, planToolSchema, type PlanMealInput } from './schedule.js';
+import { applySchedule, buildPlanMessage, PLAN_SYSTEM_PROMPT, planToolSchema, type AiPlanOutput, type PlanMealInput } from './schedule.js';
 
 const lamb: RecipeInput = {
   title: 'Roast lamb', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
@@ -65,5 +65,78 @@ describe('buildPlanMessage', () => {
     const msg = buildPlanMessage(input);
     expect(msg.match(/<\s*\/\s*meal\s*>/gi)).toHaveLength(1);
     expect(msg.match(/&lt;\/meal>/g)).toHaveLength(4);
+  });
+});
+
+describe('applySchedule', () => {
+  const recipes = [
+    { id: 'r1', stepCount: 3 },
+    { id: 'r2', stepCount: 2 },
+  ];
+  type Stage = AiPlanOutput['stages'][number];
+  const stage = (over: Partial<Stage> = {}): Stage => ({
+    recipeIndex: 0, stepIndices: [0], text: 'Roast the lamb', offsetMinutes: 90, durationMinutes: 60, estimated: false, ...over,
+  });
+  const apply = (stages: Stage[], watchOut: string[] = []) => applySchedule({ stages, watchOut }, recipes);
+
+  it('maps recipeIndex to the recipe id and keeps in-range step indices, sorted and deduped', () => {
+    const out = apply([stage({ recipeIndex: 0, stepIndices: [2, 0, 2, 0] })]);
+    expect(out.stages[0]!.recipeId).toBe('r1');
+    expect(out.stages[0]!.stepIndices).toEqual([0, 2]);
+  });
+
+  it.each([[-1], [1.5], [99]])('treats recipeIndex %s as no recipe and drops its step links', (recipeIndex) => {
+    const out = apply([stage({ recipeIndex, stepIndices: [0, 1] })]);
+    expect(out.stages[0]!.recipeId).toBeNull();
+    expect(out.stages[0]!.stepIndices).toEqual([]);
+    expect(out.stages[0]!.text).toBe('Roast the lamb');
+  });
+
+  it('drops a step index past the end of that recipe', () => {
+    const out = apply([stage({ stepIndices: [1, 7, -2, 2.5] })]);
+    expect(out.stages[0]!.stepIndices).toEqual([1]);
+  });
+
+  it("checks step indices against the stage's own recipe", () => {
+    const out = apply([stage({ recipeIndex: 1, stepIndices: [0, 1, 2] })]);
+    expect(out.stages[0]!.recipeId).toBe('r2');
+    expect(out.stages[0]!.stepIndices).toEqual([0, 1]);
+  });
+
+  it('orders stages furthest-before-serving first', () => {
+    const out = apply([stage({ offsetMinutes: 30, text: 'c' }), stage({ offsetMinutes: 2880, text: 'a' }), stage({ offsetMinutes: 120, text: 'b' })]);
+    expect(out.stages.map((s) => s.offsetMinutes)).toEqual([2880, 120, 30]);
+    expect(out.stages.map((s) => s.text)).toEqual(['a', 'b', 'c']);
+  });
+
+  it.each([[-5], [2.7]])('rounds a nonsense offset (%s) to a usable whole number of minutes', (offsetMinutes) => {
+    const out = apply([stage({ offsetMinutes })]);
+    expect(out.stages[0]!.offsetMinutes).toBeGreaterThanOrEqual(0);
+    expect(Number.isInteger(out.stages[0]!.offsetMinutes)).toBe(true);
+  });
+
+  it('keeps a duration only when it is a positive whole number', () => {
+    const durations = [40, 0, -3, 2.5, null].map((durationMinutes) => stage({ durationMinutes }));
+    expect(apply(durations).stages.map((s) => s.durationMinutes)).toEqual([40, null, null, null, null]);
+  });
+
+  it('drops a stage with no text and keeps every stage that has some', () => {
+    const out = apply([stage({ text: 'Peel' }), stage({ text: '   ' }), stage({ text: '' }), stage({ text: ' Boil ' })]);
+    expect(out.stages.map((s) => s.text)).toEqual(['Peel', 'Boil']);
+  });
+
+  it('trims watchOut and drops empty notes', () => {
+    const out = apply([], ['  the oven is busy at 12:30 ', '', '   ']);
+    expect(out.watchOut).toEqual(['the oven is busy at 12:30']);
+  });
+
+  it('leaves doneAt null on every drafted stage', () => {
+    const out = apply([stage(), stage({ recipeIndex: 1 })]);
+    expect(out.stages.map((s) => s.doneAt)).toEqual([null, null]);
+  });
+
+  it('carries estimated through only for a stage that has a duration', () => {
+    const out = apply([stage({ estimated: true, durationMinutes: 45 }), stage({ estimated: true, durationMinutes: 0 })]);
+    expect(out.stages.map((s) => s.estimated)).toEqual([true, false]);
   });
 });

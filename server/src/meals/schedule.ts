@@ -3,6 +3,7 @@ import { defang, sanitizeForStrict } from '../ai/draft.js';
 import type { ProviderTool } from '../ai/providers/types.js';
 import { renderRecipe } from '../ai/render.js';
 import type { RecipeInput } from '../recipes/schema.js';
+import type { StageInput } from './repo.js';
 
 export const PLAN_TOOL_NAME = 'plan_meal';
 
@@ -76,4 +77,46 @@ export function buildPlanMessage(input: PlanMealInput): string {
   const recipes = input.recipes.map(({ course, recipe }, n) => `Recipe ${n} (${course}): ${recipe.title}\n${renderRecipe(recipe)}`);
   const meal = [`Meal: ${input.title}`, `Serve at: ${input.serveAt}`, '', ...recipes.flatMap((r) => [r, ''])].join('\n').trimEnd();
   return `Work out the schedule for this meal.\n<meal>\n${defang(meal, PLAN_TAGS)}\n</meal>`;
+}
+
+export type AppliedSchedule = { stages: StageInput[]; watchOut: string[] };
+
+/** A whole number of minutes from zero up: the model may send a negative or fractional offset despite the prompt. */
+function wholeMinutes(n: number): number {
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+}
+
+/**
+ * Turn the model's draft schedule into stages the app can store. Every link is decided here, from the meal's own
+ * recipes: a stage keeps a recipe only through an in-range `recipeIndex`, and only the step indices that exist in
+ * that recipe. A stage keeps its text and loses just the links and numbers that cannot be true; one with no text
+ * says nothing a person can act on, so it goes. Stages come out furthest before serving first, nothing is done yet,
+ * and `estimated` only survives where a duration does, since there is nothing left to be an estimate otherwise.
+ */
+export function applySchedule(plan: AiPlanOutput, recipes: { id: string; stepCount: number }[]): AppliedSchedule {
+  const stages = plan.stages
+    .map((s): StageInput | null => {
+      const text = s.text.trim();
+      if (!text) return null;
+      const recipe = Number.isInteger(s.recipeIndex) ? recipes[s.recipeIndex] : undefined;
+      const stepIndices = recipe
+        ? [...new Set(s.stepIndices.filter((i) => Number.isInteger(i) && i >= 0 && i < recipe.stepCount))].sort((a, b) => a - b)
+        : [];
+      const durationMinutes =
+        s.durationMinutes != null && Number.isInteger(s.durationMinutes) && s.durationMinutes > 0 ? s.durationMinutes : null;
+      return {
+        recipeId: recipe?.id ?? null,
+        offsetMinutes: wholeMinutes(s.offsetMinutes),
+        durationMinutes,
+        estimated: durationMinutes != null && s.estimated,
+        text,
+        stepIndices,
+        doneAt: null,
+      };
+    })
+    .filter((s): s is StageInput => s != null)
+    // Array.sort is stable, so stages at the same offset keep the order the model gave them.
+    .sort((a, b) => b.offsetMinutes - a.offsetMinutes);
+  const watchOut = plan.watchOut.map((w) => w.trim()).filter(Boolean);
+  return { stages, watchOut };
 }
