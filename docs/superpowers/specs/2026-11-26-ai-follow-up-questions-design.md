@@ -87,8 +87,10 @@ Things that would make this worse than the panel it replaces:
 - The AI never invents. This is the rule the whole AI pipeline is built on (`SYSTEM_PROMPT`, "A
   half-remembered recipe must stay half-remembered") and questions do not weaken it: a question is the model
   saying what it would have had to invent.
-- Everything arriving from the model or the person is untrusted data. Answers go into the prompt inside
-  XML-style tags through the existing `defang`, under a tag name added to `REVISE_TAGS`.
+- Everything arriving from the model or the person is untrusted data. Answers need no new prompt tag: the
+  client builds them into the instruction text, so they arrive inside the `<instruction>` block that
+  `buildReviseMessage` already defangs. Both halves of a pair are untrusted — the question is the model's
+  words and the answer is the person's.
 - Four providers share these prompts and both tool schemas (`server/src/ai/providers/`). The gap shape is a
   flat object of two strings; objects nested inside arrays already pass every provider's strict schema
   (`AiStepSchema`, `TagSchema`), so this adds no new schema risk.
