@@ -14,7 +14,7 @@
 
 - `Gap = { about: string; question: string | null }` — a flat object of two strings, nothing more (strict tool schemas across four providers).
 - `question: null` renders as a plain bullet with no answer box, exactly as the panel renders today.
-- At most **8** gaps, keeping the first eight ("most important first"), truncated *after* the photos route appends its own gap.
+- At most **8** gaps, keeping the first eight ("most important first"). On the photos path the appended `brand` gap is always kept: when the list is already full it takes the eighth place, displacing the least important model gap, so the total never exceeds eight.
 - `question` at most **140** characters; a blank, whitespace-only or over-long question becomes `null` rather than being truncated.
 - Answer inputs: `maxLength` **200**; at most **8** pairs per apply.
 - `MAX_REVISE_CHARS` rises from `2_000` to `4_000`.
@@ -28,7 +28,7 @@
 
 Five things the spec implies that no task's happy path exercises. Each has its test pinned to the task that owns the code.
 
-1. **A gap list longer than eight arrives from the model** — the person sees eight, not a wall, and the photos route's appended `brand` gap counts towards the eight rather than making nine (Task 2).
+1. **A gap list longer than eight arrives from the model** — the person sees eight, not a wall, and the photos route's appended `brand` gap takes a place within the eight rather than making nine or being dropped (Task 2).
 2. **An ingredient whose item is entirely stop words** (`optional extra`) can never link to a step, so it must never be reported as unused, on any number of applies (Task 2).
 3. **An apply whose revise call fails** — every answer box keeps what was typed in it and an error shows in the panel; nothing typed is lost to a failed call (Task 5).
 4. **A device draft written before this change** (`gaps: ['servings']`) resumes as bullets instead of throwing on read (Task 1).
@@ -208,7 +208,7 @@ it('allows a 4000-character instruction and refuses 4001', () => { /* MAX_REVISE
 
 - [ ] **Step 6: Run them to verify they fail, then wire the helpers in**
 
-Call both helpers at the end of `toRecipeDraft` and `applyRevision` (after step links are final — the unused check depends on them). In `routes.ts`: `MAX_REVISE_CHARS = 4_000`; the photos route's appended gap becomes `{ about: 'brand', question: 'Whose recipe card is this?' }` and the result goes back through `normaliseGaps` so the append cannot push the list to nine.
+Call both helpers at the end of `toRecipeDraft` and `applyRevision` (after step links are final — the unused check depends on them). In `routes.ts`: `MAX_REVISE_CHARS = 4_000`; the model's gaps go through `normaliseGaps` and the appended gap becomes `{ about: 'brand', question: 'Whose recipe card is this?' }`, taking the eighth place when the list is already full. The brand gap is never the one dropped — on a card with no printed brand it is the question the person is most likely to want.
 
 - [ ] **Step 7: Run the suite and both typechecks**
 
