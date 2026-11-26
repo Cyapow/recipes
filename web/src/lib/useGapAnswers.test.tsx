@@ -57,4 +57,34 @@ describe('useGapAnswers', () => {
     expect(reviseRecipe).not.toHaveBeenCalled();
     expect(onRevised).not.toHaveBeenCalled();
   });
+
+  // The panel the message sat under is remounted with empty boxes by an apply, so the message must not outlive it.
+  it('clears an earlier refusal once the answers apply', async () => {
+    const { result } = setup({ ...recipe, title: '  ' });
+    await act(async () => {
+      await expect(result.current.onAnswer(answers)).rejects.toThrow();
+    });
+    expect(result.current.answerError).toBe(ANSWER_NEEDS_TITLE);
+    // The form reports a titled recipe, as it does once the person types the title the message asked for.
+    vi.mocked(reviseRecipe).mockResolvedValue({ ...recipe, gaps: [], stepsFrom: [0] });
+    await act(async () => {
+      result.current.inputRef.current = () => recipe;
+      await result.current.onAnswer(answers);
+    });
+    expect(result.current.answerError).toBeNull();
+  });
+
+  it('clears a failed apply once a later one succeeds', async () => {
+    vi.mocked(reviseRecipe).mockRejectedValueOnce(new Error('network'));
+    const { result } = setup();
+    await act(async () => {
+      await expect(result.current.onAnswer(answers)).rejects.toThrow();
+    });
+    expect(result.current.answerError).not.toBeNull();
+    vi.mocked(reviseRecipe).mockResolvedValue({ ...recipe, gaps: [], stepsFrom: [0] });
+    await act(async () => {
+      await result.current.onAnswer(answers);
+    });
+    expect(result.current.answerError).toBeNull();
+  });
 });
