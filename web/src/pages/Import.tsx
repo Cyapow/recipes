@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, importRecipe, saveRecipe, type Gap, type ImportResult, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
@@ -46,24 +46,13 @@ export function Import() {
 
   // Answering: the form is reloaded (new key) with the revision. The answers go to /api/ai/revise, so the page is
   // not fetched again. The draft is seconds old and unsaved, so no step marks, no summary and no Undo here.
-  const formInput = useRef<(() => RecipeInput) | null>(null);
-  const [revision, setRevision] = useState(0);
-  const { answering, answerError, onAnswer, clearAnswerError } = useGapAnswers({
+  const { answering, answerError, onAnswer, clearAnswerError, inputRef, revision } = useGapAnswers({
     gaps,
     setGaps,
-    // The panel is only on screen while there is a result, so there is always one to fall back on.
-    current: () => formInput.current?.() ?? result!.input,
-    onRevised: (input) => {
-      setResult((r) => (r ? { ...r, input } : r));
-      setRevision((n) => n + 1);
-    },
+    input: result?.input ?? null,
+    onRevised: (input) => setResult((r) => (r ? { ...r, input } : r)),
+    save: (input, merged) => kept.save({ url, input, gaps: merged }),
   });
-
-  // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
-  // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-answer contents.
-  useEffect(() => {
-    if (revision > 0 && result) kept.save({ url, input: result.input, gaps });
-  }, [revision]);
 
   async function run() {
     if (busyRef.current || answering || !url.trim()) return;
@@ -149,7 +138,7 @@ export function Import() {
       {result?.meta.usable && draftedBy(result.meta.provider) && <p className="hint">{draftedBy(result.meta.provider)}</p>}
       {result && !fetchFailed && !result.meta.usable && !result.meta.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
-        <RecipeForm facets={facets} key={`${result.n}:${revision}`} initial={result.input} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
+        <RecipeForm facets={facets} key={`${result.n}:${revision}`} initial={result.input} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} inputRef={inputRef} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
       )}
     </main>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { describeRecipe, saveRecipe, type AiProviderName, type Gap, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
@@ -27,24 +27,13 @@ export function Describe() {
 
   // Answering: the form is reloaded (new key) with the revision. The draft is seconds old and unsaved, so there are
   // no step marks, no change summary and no Undo here — the editor has those for instructions typed by hand.
-  const formInput = useRef<(() => RecipeInput) | null>(null);
-  const [revision, setRevision] = useState(0);
-  const { answering, answerError, onAnswer, clearAnswerError } = useGapAnswers({
+  const { answering, answerError, onAnswer, clearAnswerError, inputRef, revision } = useGapAnswers({
     gaps,
     setGaps,
-    // The panel is only on screen while there is a draft, so there is always one to fall back on.
-    current: () => formInput.current?.() ?? draft!.input,
-    onRevised: (input) => {
-      setDraft((d) => (d ? { ...d, input } : d));
-      setRevision((n) => n + 1);
-    },
+    input: draft?.input ?? null,
+    onRevised: (input) => setDraft((d) => (d ? { ...d, input } : d)),
+    save: (input, merged) => kept.save({ text, input, gaps: merged }),
   });
-
-  // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
-  // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-answer contents.
-  useEffect(() => {
-    if (revision > 0 && draft) kept.save({ text, input: draft.input, gaps });
-  }, [revision]);
 
   async function create() {
     if (busyRef.current || answering || !text.trim()) return;
@@ -105,7 +94,7 @@ export function Describe() {
       {error && <p className="field-error" role="alert">{error}</p>}
       {draft && draftedBy(draft.provider) && <p className="hint">{draftedBy(draft.provider)}</p>}
       {draft && (
-        <RecipeForm facets={facets} key={`${draft.n}:${revision}`} initial={draft.input} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => kept.save({ text, input })} />
+        <RecipeForm facets={facets} key={`${draft.n}:${revision}`} initial={draft.input} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} inputRef={inputRef} onSave={onSave} saving={saving} onChange={(input) => kept.save({ text, input })} />
       )}
     </main>
   );

@@ -21,11 +21,12 @@ const recipe: RecipeInput = {
   steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [],
 };
 
-function setup(input: RecipeInput = recipe) {
+function setup(input: RecipeInput | null = recipe) {
   const setGaps = vi.fn();
   const onRevised = vi.fn();
-  const { result } = renderHook(() => useGapAnswers({ gaps: [wine], setGaps, current: () => input, onRevised }));
-  return { result, setGaps, onRevised };
+  const save = vi.fn();
+  const { result } = renderHook(() => useGapAnswers({ gaps: [wine], setGaps, input, onRevised, save }));
+  return { result, setGaps, onRevised, save };
 }
 
 // The panel reads a resolved onAnswer as "applied" and clears every box it sent, so a refusal must reject.
@@ -38,6 +39,13 @@ describe('useGapAnswers', () => {
     });
     await expect(result.current.onAnswer(answers)).rejects.toThrow(/in flight/);
     expect(reviseRecipe).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses when there is nothing to revise yet', async () => {
+    const { result, save } = setup(null);
+    await expect(result.current.onAnswer(answers)).rejects.toThrow(/nothing to revise/);
+    expect(reviseRecipe).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('refuses, and says why, when the recipe has no title', async () => {
