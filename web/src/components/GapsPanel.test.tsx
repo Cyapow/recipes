@@ -111,18 +111,23 @@ describe('GapsPanel', () => {
     expect(screen.getByRole('alert').textContent).toBe('Could not apply');
   });
 
-  it('clears the boxes it sent when the apply resolves, and keeps the rest', async () => {
+  // The panel's own contract, not something the app shows: every page that answers today puts `revision` in the
+  // form's key, so a successful apply remounts this panel and clears every box. This asserts the panel is
+  // nonetheless safe under a parent that keeps it mounted - it must not show a sent answer back to the person.
+  it('clears only the boxes it sent when the apply resolves, for a parent that keeps it mounted', async () => {
     const onAnswer = vi.fn().mockResolvedValue(undefined);
     render(<GapsPanel gaps={[wine, oven]} onAnswer={onAnswer} />);
     await userEvent.type(screen.getByLabelText(wine.question), '150ml');
-    // Whitespace is not an answer, so it is not sent and must survive the resolve.
+    // Whitespace is not an answer, so it was not sent and the clear must leave it alone.
     await userEvent.type(screen.getByLabelText(oven.question), '  ');
     await userEvent.click(screen.getByRole('button'));
     await waitFor(() => expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe(''));
     expect((screen.getByLabelText(oven.question) as HTMLInputElement).value).toBe('  ');
   });
 
-  it('drops answered questions and keeps what was typed in the rest', async () => {
+  // Same contract as above, from the gap list's side: a shorter list drops the boxes for the questions that have
+  // gone. What a kept box holds is again only visible to a parent that does not remount the panel.
+  it('drops the boxes for questions that have left the list, keeping the rest as typed', async () => {
     const { rerender } = render(<GapsPanel gaps={[wine, oven]} onAnswer={ok} />);
     await userEvent.type(screen.getByLabelText(wine.question), '150ml');
     await userEvent.type(screen.getByLabelText(oven.question), '18');

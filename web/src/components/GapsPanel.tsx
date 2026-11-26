@@ -14,7 +14,8 @@ export type GapsPanelProps = {
 };
 
 export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: GapsPanelProps) {
-  // Typed text, keyed by `about`. Kept across a failed apply, and for the gaps left unanswered.
+  // Typed text, keyed by `about`. Kept across a failed apply. A successful one remounts this panel from the
+  // page's form key, so it does not survive that: an unanswered question comes back with an empty box.
   const [inFlight, setInFlight] = useState(false);
   const sending = useRef(false);
   const [typed, setTyped] = useState<Record<string, string>>({});
@@ -39,6 +40,9 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
     const about = toSend.map((a) => a.gap.about);
     try {
       await onAnswer(toSend);
+      // Belt and braces: every page that answers today puts `revision` in the form's key, so a successful apply
+      // remounts this panel and takes `typed` with it. The clear is the panel's own contract all the same - it
+      // must not show a sent answer again under a parent that keeps it mounted.
       setTyped((t) => Object.fromEntries(Object.entries(t).filter(([k]) => !about.includes(k))));
     } catch {
       // the parent shows the error; every box keeps what was typed

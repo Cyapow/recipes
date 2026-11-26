@@ -298,7 +298,10 @@ mode, used when the page passes `onAnswer`:
 - One labelled text input per gap that has a question. A gap with no question stays a bullet.
 - The button is disabled until something is typed, and counts what will be sent: `Answer 1 question`,
   `Answer 3 questions`. In flight it shows a spinner and `Answering…`, matching every other AI button.
-- Answered questions leave the list. Unanswered ones stay, with whatever was typed into them still there.
+- Answered questions leave the list. Unanswered ones stay, but with empty boxes: a successful apply reloads the
+  form with the revision, which remounts the panel, so every box is cleared and the questions that were not
+  answered come back blank. Since the list is capped at eight and an apply sends up to eight answers, every
+  non-blank box always goes out, so the only text a remount can clear is whitespace.
 - An apply that fails leaves every box as it was with an error in the panel, so nothing typed is lost to a
   failed call.
 - Without `onAnswer` the panel is exactly today's bullet list.
