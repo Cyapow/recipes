@@ -31,8 +31,9 @@ describe('meal routes', () => {
   const stage = (over: Partial<StageInput> = {}): StageInput => ({
     recipeId: a, offsetMinutes: 120, durationMinutes: 30, estimated: false, text: 'Season the lamb', stepIndices: [0], doneAt: null, ...over,
   });
+  // Furthest before serving first, as applySchedule hands them over and as the repo stores them.
   const makePlan = () => ({
-    stages: [stage(), stage({ offsetMinutes: 2880, text: 'Salt it', recipeId: b })],
+    stages: [stage({ offsetMinutes: 2880, text: 'Salt it', recipeId: b }), stage()],
     watchOut: ['Oven is shared'],
     provider: 'openai' as const,
     model: 'gpt-x',
@@ -81,8 +82,8 @@ describe('meal routes', () => {
     expect(got.ingredients).toHaveLength(1);
     expect(got.ingredients[0]).toMatchObject({ item: 'lamb', unit: 'g', quantity: 1000 });
     expect(got.stages.map((s: { at: string; dayGroup: string }) => [s.at, s.dayGroup])).toEqual([
-      ['2026-11-29T11:00:00.000Z', 'on the day'],
       ['2026-11-27T13:00:00.000Z', 'two days before'],
+      ['2026-11-29T11:00:00.000Z', 'on the day'],
     ]);
   });
 
@@ -130,7 +131,7 @@ describe('meal routes', () => {
     expect(res.statusCode).toBe(200);
     expect(planMeal).toHaveBeenCalledTimes(1);
     expect(res.json().stages).toHaveLength(2);
-    expect(res.json().stages[0]).toMatchObject({ text: 'Season the lamb', at: '2026-11-29T11:00:00.000Z', dayGroup: 'on the day' });
+    expect(res.json().stages[0]).toMatchObject({ text: 'Salt it', at: '2026-11-27T13:00:00.000Z', dayGroup: 'two days before' });
     expect(res.json().watchOut).toEqual(['Oven is shared']);
     const stored = (await app.inject({ method: 'GET', url: `/api/meals/${id}` })).json();
     expect(stored.stages).toHaveLength(2);
@@ -249,7 +250,30 @@ describe('meal routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ title: 'Later lunch', serveAt: '2026-11-29T15:00:00.000Z' });
     expect(res.json().stages[0].doneAt).toBe('2026-11-27T10:00:00.000Z');
-    expect(res.json().stages[0].at).toBe('2026-11-29T13:00:00.000Z');
+    // The first stage is 2880 minutes before serving, so moving serving to 15:00 moves it with it.
+    expect(res.json().stages[0].at).toBe('2026-11-27T15:00:00.000Z');
+  });
+
+  it('put puts the stages back in time order, so a make-ahead stage added by hand comes first', async () => {
+    const app = make();
+    const id = await created(app);
+    const put = (stages: StageInput[]) => app.inject({ method: 'PUT', url: `/api/meals/${id}`, payload: { stages } });
+    const texts = (res: Awaited<ReturnType<typeof put>>) => res.json().stages.map((s: { text: string }) => s.text);
+    const built = [
+      stage({ offsetMinutes: 180, text: 'Season' }),
+      stage({ offsetMinutes: 60, text: 'Roast' }),
+      stage({ offsetMinutes: 10, text: 'Carve' }),
+    ];
+    expect(texts(await put(built))).toEqual(['Season', 'Roast', 'Carve']);
+    // The screen sends the stages it holds with one appended, the way "Add a step of your own" does.
+    const appended = await put([...built, stage({ offsetMinutes: 2880, text: 'Make the stock' })]);
+    expect(texts(appended)).toEqual(['Make the stock', 'Season', 'Roast', 'Carve']);
+    expect(appended.json().stages.map((s: { dayGroup: string }) => s.dayGroup)).toEqual([
+      'two days before', 'on the day', 'on the day', 'on the day',
+    ]);
+    // Retiming one moves it, rather than leaving it where it was.
+    const retimed = await put([...built.slice(0, 1), stage({ offsetMinutes: 1440, text: 'Roast' }), ...built.slice(2)]);
+    expect(texts(retimed)).toEqual(['Roast', 'Season', 'Carve']);
   });
 
   it('put 400s a stage with a negative offset or a recipe that does not exist', async () => {

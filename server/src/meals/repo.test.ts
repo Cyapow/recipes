@@ -95,6 +95,33 @@ describe('meals repo', () => {
     expect(repo.replaceStages('nope', [], [])).toBeUndefined();
   });
 
+  it('stores stages furthest before serving first, however they were sent', () => {
+    const meal = newMeal();
+    const got = repo.update(meal.id, {
+      stages: [
+        stage({ offsetMinutes: 180, text: 'Season' }),
+        stage({ offsetMinutes: 60, text: 'Roast' }),
+        stage({ offsetMinutes: 10, text: 'Carve' }),
+        // Appended by hand, as the plan view's own form does: it belongs two days before everything else.
+        stage({ offsetMinutes: 2880, text: 'Make the stock' }),
+      ],
+    })!;
+    expect(got.stages.map((s) => [s.offsetMinutes, s.text])).toEqual([
+      [2880, 'Make the stock'],
+      [180, 'Season'],
+      [60, 'Roast'],
+      [10, 'Carve'],
+    ]);
+    expect(got.stages.map((s) => s.position)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('keeps the order stages arrived in where their offsets are equal', () => {
+    const meal = newMeal();
+    const texts = ['first', 'second', 'third'];
+    const got = repo.update(meal.id, { stages: texts.map((text) => stage({ offsetMinutes: 90, text })) })!;
+    expect(got.stages.map((s) => s.text)).toEqual(texts);
+  });
+
   it('update leaves absent keys alone and ticks a stage through stages', () => {
     const meal = newMeal();
     repo.replaceStages(meal.id, [stage()], ['careful']);

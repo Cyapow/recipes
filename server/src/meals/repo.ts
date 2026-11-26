@@ -155,22 +155,31 @@ export function createMealsRepo(db: Database) {
     );
   }
 
+  /**
+   * Stages are stored furthest before serving first, whatever order the caller sent them in: an edit that appends
+   * a make-ahead stage, or retimes one, must not leave the plan's day headings or the live view's "what's next"
+   * out of order. applySchedule sorts the same way for a fresh draft; doing it here as well means the order of a
+   * stored schedule is the server's, once, for every path that writes one. Array.sort is stable, so stages at the
+   * same offset keep the order they arrived in.
+   */
   function writeStages(mealId: string, stages: StageInput[]): void {
     deleteStages.run(mealId);
-    stages.forEach((s, i) =>
-      insertStage.run(
-        crypto.randomUUID(),
-        mealId,
-        s.recipeId,
-        s.offsetMinutes,
-        s.durationMinutes,
-        s.estimated ? 1 : 0,
-        s.text,
-        JSON.stringify(s.stepIndices),
-        s.doneAt,
-        i,
-      ),
-    );
+    [...stages]
+      .sort((x, y) => y.offsetMinutes - x.offsetMinutes)
+      .forEach((s, i) =>
+        insertStage.run(
+          crypto.randomUUID(),
+          mealId,
+          s.recipeId,
+          s.offsetMinutes,
+          s.durationMinutes,
+          s.estimated ? 1 : 0,
+          s.text,
+          JSON.stringify(s.stepIndices),
+          s.doneAt,
+          i,
+        ),
+      );
   }
 
   function read(id: string): Meal | undefined {
