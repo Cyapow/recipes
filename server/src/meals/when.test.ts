@@ -17,6 +17,15 @@ describe('stageWhen', () => {
   it('gives the instant the stage happens', () => {
     expect(stageWhen('2026-11-29T13:00:00.000Z', 120).at).toBe('2026-11-29T11:00:00.000Z');
   });
+  it('gives the clock time in the server zone, beside the heading it belongs to', () => {
+    // Serve 00:30 BST on 29 June (23:30Z on the 28th); the stage 3 hours earlier is 21:30 BST on the 28th, 20:30Z.
+    const w = stageWhen('2026-06-28T23:30:00.000Z', 180);
+    expect([w.clock, w.dayGroup]).toEqual(['21:30', 'the day before']);
+    // 23:30 BST is 22:30Z, still the 28th in UTC but the hour differs; and a stage at 00:10 BST is the 28th in UTC.
+    expect(stageWhen('2026-06-28T23:30:00.000Z', 0).clock).toBe('00:30');
+    expect(stageWhen('2026-06-28T23:30:00.000Z', 20).clock).toBe('00:10');
+    expect(stageWhen('2026-11-29T00:30:00.000Z', 60).clock).toBe('23:30');
+  });
   it('counts calendar days, not 24-hour blocks, across the clocks changing', () => {
     // Serve 13:00 GMT on Sunday 25 Oct 2026 (the clocks went back that morning). 25 real hours earlier is
     // 12:00 BST on Saturday: one calendar day, though more than 24 hours. (The spring case below is the one that

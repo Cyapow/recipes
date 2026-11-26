@@ -14,7 +14,7 @@ import { ApiError, getMeal, scheduleMeal, updateMeal } from '../api';
 
 const stage = (over: object = {}) => ({
   id: 's1', recipeId: 'r1', offsetMinutes: 180, durationMinutes: 30, estimated: false, text: 'Brine the chicken',
-  stepIndices: [0], doneAt: null, position: 0, at: '2026-12-05T18:30:00.000Z', dayGroup: 'the day before', ...over,
+  stepIndices: [0], doneAt: null, position: 0, at: '2026-12-05T18:30:00.000Z', clock: '18:30', dayGroup: 'the day before', ...over,
 });
 const meal = (over: object = {}) => ({
   id: 'm1', title: 'Sunday lunch', serveAt: '2026-12-06T13:30:00.000Z', watchOut: [], scheduleStale: false,
@@ -34,8 +34,8 @@ const meal = (over: object = {}) => ({
   ],
   stages: [
     stage(),
-    stage({ id: 's2', text: 'Make the gravy', recipeId: 'r2', offsetMinutes: 60, durationMinutes: 40, estimated: true, at: '2026-12-06T12:30:00.000Z', dayGroup: 'on the day', position: 1 }),
-    stage({ id: 's3', text: 'Carve', recipeId: null, offsetMinutes: 10, durationMinutes: null, at: '2026-12-06T13:20:00.000Z', dayGroup: 'on the day', position: 2 }),
+    stage({ id: 's2', text: 'Make the gravy', recipeId: 'r2', offsetMinutes: 60, durationMinutes: 40, estimated: true, at: '2026-12-06T12:30:00.000Z', clock: '12:30', dayGroup: 'on the day', position: 1 }),
+    stage({ id: 's3', text: 'Carve', recipeId: null, offsetMinutes: 10, durationMinutes: null, at: '2026-12-06T13:20:00.000Z', clock: '13:20', dayGroup: 'on the day', position: 2 }),
   ],
   ...over,
 }) as never;
@@ -77,6 +77,18 @@ describe('Meal plan', () => {
     expect(row.textContent).toContain('18:30');
     expect(row.textContent).toContain('30 min');
     expect(within(row).getByRole('link', { name: 'Roast chicken' })).toBeTruthy();
+  });
+
+  it('shows the server clock string under the server heading, not a time worked out in the browser', async () => {
+    // 23:30Z is a different calendar day from the server's 'the day before' heading in some zones; the clock says what the server decided.
+    vi.mocked(getMeal).mockResolvedValue(
+      meal({ stages: [stage({ at: '2026-12-06T23:30:00.000Z', clock: '00:30', dayGroup: 'the day before', text: 'Chill overnight' })] }),
+    );
+    view();
+    const row = (await screen.findByText('Chill overnight')).closest('li')!;
+    expect(row.textContent).toContain('00:30');
+    expect(row.textContent).not.toContain('23:30');
+    expect(screen.getByRole('heading', { level: 3, name: 'the day before' })).toBeTruthy();
   });
 
   it('marks an estimated stage as an estimate rather than a stated time', async () => {

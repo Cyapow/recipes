@@ -8,7 +8,6 @@ import { BackIcon } from '../components/Icons';
 import { describeAiError } from '../lib/aiError';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 const serveText = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
@@ -112,7 +111,7 @@ function StageRow({ stage, recipeTitle, editing, busy, onEdit, onSave, onCancel,
   const link = stage.recipeId !== null && recipeTitle !== null;
   return (
     <li className="meal-stage">
-      <span className="meal-time">{clock(stage.at)}</span>
+      <span className="meal-time">{stage.clock}</span>
       <span className="meal-stage-body">
         <span className="meal-stage-text">{stage.text}</span>
         <span className="sub">
@@ -217,7 +216,7 @@ export function Meal() {
   const addStage = (offsetMinutes: number, text: string) =>
     saveStages([
       ...meal.stages,
-      { id: '', recipeId: null, offsetMinutes, durationMinutes: null, estimated: false, text, stepIndices: [], doneAt: null, position: meal.stages.length, at: '', dayGroup: '' },
+      { id: '', recipeId: null, offsetMinutes, durationMinutes: null, estimated: false, text, stepIndices: [], doneAt: null, position: meal.stages.length, at: '', dayGroup: '', clock: '' },
     ]);
 
   return (
