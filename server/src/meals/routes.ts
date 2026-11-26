@@ -3,11 +3,12 @@ import { z } from 'zod';
 import type { AiClient, PlanMealRequest } from '../ai/client.js';
 import { aiFailure } from '../ai/routes.js';
 import type { createRecipeRepo } from '../recipes/repo.js';
+import { COURSES } from './courses.js';
 import { mergeMealIngredients } from './ingredients.js';
 import {
   MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
 } from './limits.js';
-import { COURSES, type Meal, type MealsRepo, type MealRecipeInput } from './repo.js';
+import type { Meal, MealsRepo, MealRecipeInput } from './repo.js';
 import { describeServeAt, stageWhen } from './when.js';
 
 /**
@@ -65,6 +66,12 @@ export function registerMealRoutes(
   const present = (meal: Meal) => ({
     ...meal,
     serveText: describeServeAt(meal.serveAt),
+    // A recipe that still exists is named as it is named now; the stored snapshot is what a deleted one left behind,
+    // which is the only thing the schema froze it for.
+    recipes: meal.recipes.map((r) => {
+      const live = r.recipeId ? recipes.get(r.recipeId) : undefined;
+      return live ? { ...r, recipeTitle: live.title } : r;
+    }),
     stages: meal.stages.map((s) => ({ ...s, ...stageWhen(meal.serveAt, s.offsetMinutes) })),
     ingredients: mergeMealIngredients(liveRecipes(meal).map(({ recipe }) => ({ title: recipe.title, ingredients: recipe.ingredients }))),
   });

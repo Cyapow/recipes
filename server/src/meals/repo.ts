@@ -1,7 +1,5 @@
 import type { Database } from 'better-sqlite3';
-
-export const COURSES = ['starter', 'main', 'side', 'dessert', 'other'] as const;
-export type Course = (typeof COURSES)[number];
+import type { Course } from './courses.js';
 
 export type MealRecipe = {
   id: string;

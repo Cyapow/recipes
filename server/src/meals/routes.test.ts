@@ -101,6 +101,15 @@ describe('meal routes', () => {
       .toBe('Monday 13 July 2026, 00:30');
   });
 
+  it('names a recipe as it is named now, and keeps the snapshot only for one that has gone', async () => {
+    const app = make();
+    const id = await created(app);
+    recipes.update(a, { ...recipes.get(a)!, title: 'Slow-roast lamb' });
+    recipes.delete(b);
+    const got = (await app.inject({ method: 'GET', url: `/api/meals/${id}` })).json();
+    expect(got.recipes.map((r: { recipeTitle: string }) => r.recipeTitle)).toEqual(['Slow-roast lamb', 'Sticky toffee']);
+  });
+
   it('400s a create with no recipes, an unknown course, or a serveAt that is not a date', async () => {
     const app = make();
     expect((await create(app, { recipes: [] })).statusCode).toBe(400);

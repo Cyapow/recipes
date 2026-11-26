@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, createMeal, listMeals, listRecipes, type MealSummaryWithServeText, type RecipeSummary } from '../api';
-import { COURSES, type Course } from '../../../server/src/meals/repo';
+import type { Course } from '../../../server/src/meals/courses';
 import { BackIcon } from '../components/Icons';
+import { RecipeCourses } from '../components/RecipeCourses';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -91,26 +92,12 @@ export function Meals() {
           <input type="datetime-local" value={serveAt} onChange={(e) => setServeAt(e.target.value)} />
         </label>
         <h3 className="planner-sub">Recipes</h3>
-        {recipes && recipes.length === 0 && <p className="empty">No recipes yet.</p>}
-        <ul className="rows planner-recipes">
-          {recipes?.map((r) => (
-            <li key={r.id}>
-              <label className="planner-pick">
-                <input type="checkbox" checked={r.id in courses} onChange={() => toggle(r.id)} />
-                <span>{r.title}</span>
-              </label>
-              {r.id in courses && (
-                <select
-                  aria-label={`Course for ${r.title}`}
-                  value={courses[r.id]}
-                  onChange={(e) => setCourses((c) => ({ ...c, [r.id]: e.target.value as Course }))}
-                >
-                  {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              )}
-            </li>
-          ))}
-        </ul>
+        <RecipeCourses
+          recipes={recipes}
+          courses={courses}
+          onToggle={toggle}
+          onCourse={(id, course) => setCourses((c) => ({ ...c, [id]: course }))}
+        />
         {error && <p className="field-error" role="alert">{error}</p>}
         <div className="shopping-actions">
           <button type="submit" className="primary share-btn" disabled={!ready || saving}>Create meal</button>
