@@ -5,7 +5,8 @@ import { tagKey, type Tag } from '../../../server/src/recipes/categories';
 import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { FavouriteButton } from '../components/FavouriteButton';
 import { BackupBanner } from '../components/BackupBanner';
-import { CalendarIcon, CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { CalendarIcon, CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, MoreIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { MoreSheet, type MoreItem } from '../components/MoreSheet';
 import { useMe } from '../lib/me';
 import { withStar } from '../lib/favourite';
 import { formatMinutes, originLabel } from '../lib/text';
@@ -13,6 +14,16 @@ import { monogram, monogramColors } from '../lib/monogram';
 import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
 
 const STORAGE_KEY = 'recipes.libraryFilters';
+
+/**
+ * Everything the top bar has no room for. New recipe and the shopping list stay on the bar: one is how the library
+ * grows, the other is the thing you open standing in a shop. Planning happens sitting down, so it can afford a tap.
+ */
+const MORE: MoreItem[] = [
+  { to: '/meals', label: 'Meals', icon: <CalendarIcon /> },
+  { to: '/planner', label: 'Meal planner', icon: <ListIcon /> },
+  { to: '/settings', label: 'Settings', icon: <GearIcon /> },
+];
 
 function isTag(t: unknown): t is Tag {
   return !!t && typeof t === 'object' && typeof (t as Tag).group === 'string' && typeof (t as Tag).name === 'string';
@@ -42,6 +53,8 @@ export function Library() {
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [sheetOpen, setSheetOpen] = useState(false);
   const filtersBtn = useRef<HTMLButtonElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const [facets, setFacets] = useState<Facets>({ brands: [], tags: [], people: [] });
   const [rows, setRows] = useState<RecipeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +112,10 @@ export function Library() {
     setSheetOpen(false);
     filtersBtn.current?.focus();
   };
+  const closeMore = () => {
+    setMoreOpen(false);
+    moreBtn.current?.focus();
+  };
 
   return (
     <main className="page">
@@ -106,12 +123,20 @@ export function Library() {
         <h1 className="library-title">Recipes</h1>
         <nav className="actions">
           <Link className="btn icon-btn" to="/new" aria-label="New recipe"><PlusIcon /></Link>
-          <Link className="btn icon-btn" to="/planner" aria-label="Meal planner"><ListIcon /></Link>
-          <Link className="btn icon-btn" to="/meals" aria-label="Meals"><CalendarIcon /></Link>
           <Link className="btn icon-btn" to="/shopping" aria-label="Shopping list"><CartIcon /></Link>
-          <Link className="btn icon-btn" to="/settings" aria-label="Settings"><GearIcon /></Link>
+          <button
+            ref={moreBtn}
+            type="button"
+            className="btn icon-btn"
+            aria-label="More"
+            aria-haspopup="dialog"
+            onClick={() => setMoreOpen(true)}
+          >
+            <MoreIcon />
+          </button>
         </nav>
       </header>
+      <MoreSheet open={moreOpen} items={MORE} onClose={closeMore} />
       {backup && <BackupBanner banner={backup.banner} lastError={backup.lastError} />}
       {backupFailed && <p className="hint" role="status">Couldn't check backup status</p>}
       <label className="search-field">

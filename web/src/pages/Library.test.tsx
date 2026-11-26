@@ -153,8 +153,35 @@ describe('Library redesign', () => {
     expect(href('From a link')).toBe('/import');
     expect(href('From photos')).toBe('/photos');
     expect(href('New recipe')).toBe('/new');
-    expect(href('Settings')).toBe('/settings');
     expect(href('Shopping list')).toBe('/shopping');
+  });
+
+  // The bar overflowed the right edge of a 390pt phone once a fifth icon was added: the title alone wants about
+  // 150px of the 350 a page has there, and five 44px buttons with their gaps want 252 more. Everything past the
+  // first few belongs behind "More", so this holds the line at three for whoever adds the sixth feature.
+  it('keeps the top bar to three buttons, the rest behind More', async () => {
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    expect(document.querySelectorAll('.bar .actions .icon-btn')).toHaveLength(3);
+    expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Meals' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Meal planner' })).toBeNull();
+  });
+
+  it('opens the rest from the More button and returns the focus to it', async () => {
+    render(<MemoryRouter><Library /></MemoryRouter>);
+    await screen.findByText('Carbonara');
+    const more = screen.getByRole('button', { name: 'More' });
+    expect(more.getAttribute('aria-haspopup')).toBe('dialog');
+
+    await userEvent.click(more);
+    expect(screen.getByRole('link', { name: 'Meal planner' }).getAttribute('href')).toBe('/planner');
+    expect(screen.getByRole('link', { name: 'Meals' }).getAttribute('href')).toBe('/meals');
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(more);
   });
   it('shows a monogram tile without a thumbnail and an image with one', async () => {
     render(<MemoryRouter><Library /></MemoryRouter>);

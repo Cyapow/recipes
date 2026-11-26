@@ -53,10 +53,10 @@ export function FilterSheet({ open, facets, filters, count, onChange, onClose }:
 
   return (
     <>
-      <div className="filter-sheet-backdrop" data-testid="filter-backdrop" onClick={onClose} />
-      <div className="filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
-        <div className="filter-sheet-grab" aria-hidden="true" />
-        <h2 id="filter-sheet-title" className="filter-sheet-title" tabIndex={-1} ref={heading}>Filters</h2>
+      <div className="bottom-sheet-backdrop" data-testid="filter-backdrop" onClick={onClose} />
+      <div className="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
+        <div className="bottom-sheet-grab" aria-hidden="true" />
+        <h2 id="filter-sheet-title" className="bottom-sheet-title" tabIndex={-1} ref={heading}>Filters</h2>
         <div className="filter-sheet-body">
           {brands.length > 0 && (
             <section>
