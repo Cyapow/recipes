@@ -11,6 +11,7 @@ vi.mock('../api', async (orig) => ({
   getMeal: vi.fn(), scheduleMeal: vi.fn(), updateMeal: vi.fn(), deleteMeal: vi.fn(), listRecipes: vi.fn(),
 }));
 import { ApiError, deleteMeal, getMeal, listRecipes, scheduleMeal, updateMeal } from '../api';
+import { MAX_MEAL_RECIPES } from '../../../server/src/meals/limits';
 
 const recipe = (id: string, title: string) => ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
 
@@ -127,10 +128,14 @@ describe('Meal plan', () => {
     expect(box.textContent).toContain('Both need the oven at different heats');
   });
 
-  it('says the schedule has fallen behind the recipes when the meal is stale', async () => {
+  it('says the schedule has fallen behind the recipes when the meal is stale, however it was made', async () => {
     vi.mocked(getMeal).mockResolvedValue(meal({ scheduleStale: true }));
     view();
-    expect((await screen.findByRole('region', { name: 'Check these' })).textContent).toContain('fallen behind');
+    const box = await screen.findByRole('region', { name: 'Check these' });
+    // A schedule written by hand goes stale the same way, so the note must not claim the AI drafted it.
+    expect(within(box).getByRole('listitem').textContent).toBe(
+      'The recipes have changed since this schedule was made, so it may have fallen behind them.',
+    );
   });
 
   it('shows no Check these box when there is nothing to check', async () => {
@@ -285,6 +290,43 @@ describe('Meal plan', () => {
     await userEvent.click(await screen.findByLabelText('Trifle'));
     await userEvent.click(screen.getByRole('button', { name: 'Save the meal' }));
     expect((await screen.findByRole('region', { name: 'Check these' })).textContent).toContain('fallen behind');
+  });
+
+  it('shows the server\'s own sentence when a changed meal is refused', async () => {
+    vi.mocked(updateMeal).mockRejectedValue(
+      new ApiError('Request failed (400)', 400, { error: 'One of those recipes no longer exists' }),
+    );
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    await userEvent.click(await screen.findByLabelText('Trifle'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save the meal' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('One of those recipes no longer exists');
+    // The form stays open on a failure, with the picks still in it, so the change is not lost.
+    expect(screen.getByLabelText('Name of the meal')).toBeTruthy();
+  });
+
+  it('falls back to its own words when a failure carries no sentence', async () => {
+    vi.mocked(updateMeal).mockRejectedValue(new Error('offline'));
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    await userEvent.click(await screen.findByLabelText('Trifle'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save the meal' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not save your changes');
+  });
+
+  it('stops short of the recipes a meal may hold, rather than letting the save be refused', async () => {
+    const many = Array.from({ length: MAX_MEAL_RECIPES + 2 }, (_, i) => recipe(`x${i}`, `Dish ${i}`));
+    vi.mocked(listRecipes).mockResolvedValue(many);
+    vi.mocked(getMeal).mockResolvedValue(meal({ recipes: [], stages: [] }));
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    await screen.findByLabelText('Dish 0');
+    for (let i = 0; i < MAX_MEAL_RECIPES; i += 1) await userEvent.click(screen.getByLabelText(`Dish ${i}`));
+    expect((screen.getByLabelText(`Dish ${MAX_MEAL_RECIPES}`) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Dish 0') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.getByText(`A meal holds ${MAX_MEAL_RECIPES} recipes at most. Untick one to pick another.`)).toBeTruthy();
+    await userEvent.click(screen.getByLabelText('Dish 0'));
+    expect((screen.getByLabelText(`Dish ${MAX_MEAL_RECIPES}`) as HTMLInputElement).disabled).toBe(false);
   });
 
   it('will not save a meal with no recipes left in it', async () => {

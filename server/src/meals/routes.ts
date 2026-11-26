@@ -6,7 +6,7 @@ import type { createRecipeRepo } from '../recipes/repo.js';
 import { COURSES } from './courses.js';
 import { mergeMealIngredients } from './ingredients.js';
 import {
-  MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
+  MAX_MEAL_RECIPES, MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
 } from './limits.js';
 import type { Meal, MealsRepo, MealRecipeInput } from './repo.js';
 import { describeServeAt, stageWhen } from './when.js';
@@ -16,7 +16,6 @@ import { describeServeAt, stageWhen } from './when.js';
  * and a meal is a handful of recipes at 1-3 kB each, so this is generous.
  */
 export const MAX_MEAL_CHARS = 20_000;
-const MAX_MEAL_RECIPES = 20;
 
 /** An ISO instant, however the client wrote it: stored normalised so every comparison and sort agrees. */
 const Instant = z

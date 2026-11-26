@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, createMeal, listMeals, listRecipes, type MealSummaryWithServeText, type RecipeSummary } from '../api';
+import { createMeal, listMeals, listRecipes, type MealSummaryWithServeText, type RecipeSummary } from '../api';
 import type { Course } from '../../../server/src/meals/courses';
+import { MAX_MEAL_RECIPES } from '../../../server/src/meals/limits';
 import { BackIcon } from '../components/Icons';
 import { RecipeCourses } from '../components/RecipeCourses';
+import { describeMealError } from '../lib/mealError';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
-function failureMessage(e: unknown): string {
-  const body = e instanceof ApiError ? (e.body as { error?: unknown } | undefined) : undefined;
-  return typeof body?.error === 'string' ? body.error : 'Could not create the meal';
-}
 
 export function Meals() {
   const navigate = useNavigate();
@@ -51,7 +48,7 @@ export function Meals() {
       });
       navigate(`/meals/${encodeURIComponent(meal.id)}`);
     } catch (err) {
-      setError(failureMessage(err));
+      setError(describeMealError(err, 'Could not create the meal'));
       setSaving(false);
     }
   }
@@ -92,9 +89,13 @@ export function Meals() {
           <input type="datetime-local" value={serveAt} onChange={(e) => setServeAt(e.target.value)} />
         </label>
         <h3 className="planner-sub">Recipes</h3>
+        {pickedIds.length >= MAX_MEAL_RECIPES && (
+          <p className="sub">A meal holds {MAX_MEAL_RECIPES} recipes at most. Untick one to pick another.</p>
+        )}
         <RecipeCourses
           recipes={recipes}
           courses={courses}
+          atLimit={pickedIds.length >= MAX_MEAL_RECIPES}
           onToggle={toggle}
           onCourse={(id, course) => setCourses((c) => ({ ...c, [id]: course }))}
         />

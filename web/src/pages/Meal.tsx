@@ -7,9 +7,11 @@ import {
 import { BackIcon } from '../components/Icons';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { describeAiError } from '../lib/aiError';
+import { describeMealError } from '../lib/mealError';
 import { KeepOn } from '../components/KeepOn';
 import { RecipeCourses } from '../components/RecipeCourses';
 import type { Course } from '../../../server/src/meals/courses';
+import { MAX_MEAL_RECIPES } from '../../../server/src/meals/limits';
 import { SERVING_DAY } from '../../../server/src/meals/when';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -76,7 +78,9 @@ function Ingredients({ lines }: { lines: MealIngredientLine[] }) {
 
 function Notes({ meal }: { meal: MealWithIngredients }) {
   const notes = [
-    ...(meal.scheduleStale ? ['The recipes have changed since this schedule was drafted, so it may have fallen behind them.'] : []),
+    // "made", not "drafted": a schedule written by hand falls behind its recipes the same way, and the flag cannot
+    // know which it was.
+    ...(meal.scheduleStale ? ['The recipes have changed since this schedule was made, so it may have fallen behind them.'] : []),
     ...meal.watchOut,
   ];
   if (notes.length === 0) return null;
@@ -143,6 +147,7 @@ function MealEditor({ meal, busy, onSave, onCancel }: {
   const picked = Object.keys(courses);
   const serveDate = serveAt ? new Date(serveAt) : null;
   const valid = title.trim() !== '' && picked.length > 0 && serveDate !== null && !Number.isNaN(serveDate.getTime());
+  const atLimit = picked.length >= MAX_MEAL_RECIPES;
 
   return (
     <form
@@ -169,9 +174,11 @@ function MealEditor({ meal, busy, onSave, onCancel }: {
         <input type="datetime-local" value={serveAt} onChange={(e) => setServeAt(e.target.value)} />
       </label>
       <h3 className="planner-sub">Recipes in this meal</h3>
+      {atLimit && <p className="sub">A meal holds {MAX_MEAL_RECIPES} recipes at most. Untick one to pick another.</p>}
       <RecipeCourses
         recipes={recipes}
         courses={courses}
+        atLimit={atLimit}
         onToggle={(id) =>
           setCourses((c) => (id in c ? Object.fromEntries(Object.entries(c).filter(([k]) => k !== id)) : { ...c, [id]: 'main' }))
         }
@@ -330,8 +337,10 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
     try {
       onMeal(await updateMeal(id, patch));
       return true;
-    } catch {
-      setError('Could not save your changes');
+    } catch (err) {
+      // A refusal the person can act on — a recipe deleted in another tab, the same one picked twice — arrives as a
+      // sentence from the server, and is shown as it was written rather than as "something went wrong".
+      setError(describeMealError(err, 'Could not save your changes'));
       return false;
     } finally {
       setBusy(false);
@@ -354,8 +363,8 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
     try {
       await deleteMeal(id);
       nav('/meals');
-    } catch {
-      setError('Could not delete this meal');
+    } catch (err) {
+      setError(describeMealError(err, 'Could not delete this meal'));
       setBusy(false);
     }
   }

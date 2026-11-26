@@ -5,6 +5,8 @@
  * with nothing on screen to explain it.
  */
 
+/** How many recipes one meal may hold. The picker stops short of it so the route never has to refuse one. */
+export const MAX_MEAL_RECIPES = 20;
 export const MAX_STAGES = 100;
 /** Sixty days in minutes: both how far before serving a stage may start and how long it may last. */
 export const MAX_STAGE_MINUTES = 60 * 24 * 60;
