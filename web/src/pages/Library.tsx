@@ -4,13 +4,12 @@ import { getBackupStatus, listRecipes, getFacets, setFavourite, type BackupStatu
 import { tagKey, type Tag } from '../../../server/src/recipes/categories';
 import { FilterSheet, type Filters } from '../components/FilterSheet';
 import { FavouriteButton } from '../components/FavouriteButton';
+import { RecipeFace } from '../components/RecipeFace';
 import { BackupBanner } from '../components/BackupBanner';
 import { CalendarIcon, CameraIcon, CartIcon, ChevronIcon, CloseIcon, GearIcon, LinkIcon, ListIcon, MoreIcon, PlusIcon, SearchIcon, SparklesIcon } from '../components/Icons';
 import { MoreSheet, type MoreItem } from '../components/MoreSheet';
 import { useMe } from '../lib/me';
 import { withStar } from '../lib/favourite';
-import { formatMinutes, originLabel } from '../lib/text';
-import { monogram, monogramColors } from '../lib/monogram';
 import { draftHref, draftKindLabel, draftTitle, listDrafts, removeDraft, type Draft } from '../lib/drafts';
 
 const STORAGE_KEY = 'recipes.libraryFilters';
@@ -44,9 +43,6 @@ export function loadFilters(): Filters {
   return { brands: [], tags: [], people: [] };
 }
 
-export function subtitle(r: RecipeSummary): string {
-  return [originLabel(r), r.tags[0]?.name, formatMinutes(r.totalMinutes)].filter(Boolean).join(' · ');
-}
 
 export function Library() {
   const [search, setSearch] = useState('');
@@ -237,17 +233,7 @@ export function Library() {
         {rows?.map((r) => (
           <li key={r.id} className="row-item">
             <Link className="row" to={`/recipe/${r.id}`}>
-              {r.thumbnailId ? (
-                <span className="thumb"><img src={`/api/images/${r.thumbnailId}/thumb`} alt="" /></span>
-              ) : (
-                <span className="thumb" aria-hidden="true" style={{ background: monogramColors(r.title).bg, color: monogramColors(r.title).fg }}>
-                  {monogram(r.title)}
-                </span>
-              )}
-              <span className="meta">
-                <span className="title">{r.title}</span>
-                <span className="sub">{subtitle(r)}</span>
-              </span>
+              <RecipeFace recipe={r} />
               <ChevronIcon />
             </Link>
             {me && (
