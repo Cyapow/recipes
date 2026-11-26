@@ -40,7 +40,7 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
     const out = await createAiClient(only(name)).extractRecipe({ kind: 'description', text: TEXT });
     expect(out.provider).toBe(name);
     const draft = out.draft;
-    expect(draft.gaps.join(' ').toLowerCase()).toContain('wine');
+    expect(draft.gaps.map((g) => g.about).join(' ').toLowerCase()).toContain('wine');
     const wine = draft.ingredients.find((i) => /wine/i.test(i.item));
     expect(wine?.quantity ?? null).toBeNull();
     // Nothing stated about servings or times.
@@ -79,11 +79,11 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
     expect(titleWords.length, `title "${draft.title}"`).toBeGreaterThanOrEqual(2);
     expect(draft.title.trim().split(/\s+/).length).toBeLessThanOrEqual(8);
     for (const w of titleWords) expect(inputWords.has(w), `title "${draft.title}" invents "${w}"`).toBe(true);
-    expect(draft.gaps).toContain('title chosen from your description');
+    expect(draft.gaps.map((g) => g.about)).toContain('title chosen from your description');
 
     const wine = draft.ingredients.find((i) => /wine/i.test(i.item));
     expect(wine?.quantity ?? null).toBeNull();
-    expect(draft.gaps.join(' ').toLowerCase()).toContain('wine');
+    expect(draft.gaps.map((g) => g.about).join(' ').toLowerCase()).toContain('wine');
     for (const ing of draft.ingredients) {
       expect(words(ing.item).every((w) => inputWords.has(w)), `invented: ${ing.item}`).toBe(true);
     }
@@ -106,6 +106,6 @@ describe.each(PROVIDERS)('live: describe-to-recipe ($name)', ({ name, hasKey }) 
     const out = await createAiClient(only(name)).extractRecipe({ kind: 'description', text: NAMED });
     expect(out.provider).toBe(name);
     expect(out.draft.title.toLowerCase()).toContain('spag bol');
-    expect(out.draft.gaps).not.toContain('title chosen from your description');
+    expect(out.draft.gaps.map((g) => g.about)).not.toContain('title chosen from your description');
   }, 60_000);
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { deleteRecipe, getRecipe, reviseRecipe, saveRecipe, type RecipeInput } from '../api';
+import { deleteRecipe, getRecipe, reviseRecipe, saveRecipe, type Gap, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
 import { ReviseBox } from '../components/ReviseBox';
 import { describeAiError } from '../lib/aiError';
@@ -29,13 +29,13 @@ export function Editor() {
   // Revising: the form is reloaded (new key) with the revision, and the contents before it are kept for Undo.
   const formInput = useRef<(() => RecipeInput) | null>(null);
   const [revision, setRevision] = useState(0);
-  const [gaps, setGaps] = useState<string[]>(draft.existing?.gaps ?? []);
+  const [gaps, setGaps] = useState<Gap[]>(draft.existing?.gaps ?? []);
   const [marks, setMarks] = useState<StepMarks | undefined>();
   const [summary, setSummary] = useState<string[] | null>(null);
   const [reviseBusy, setReviseBusy] = useState(false);
   const [reviseError, setReviseError] = useState<string | null>(null);
   const before = useRef<RecipeInput | null>(null);
-  const beforeGaps = useRef<string[]>([]);
+  const beforeGaps = useRef<Gap[]>([]);
 
   // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
   // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-revision contents.

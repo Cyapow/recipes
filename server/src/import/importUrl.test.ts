@@ -7,7 +7,7 @@ import { extractMetaText, extractVisibleText, importFromUrl } from './importUrl.
 const fixture = (n: string) => readFileSync(new URL(`../../test-fixtures/${n}`, import.meta.url), 'utf8');
 const aiDraft: RecipeDraft = {
   title: 'Nan soup', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null, prepMinutes: null, cookMinutes: 20,
-  ingredients: [{ group: null, quantity: null, unit: null, item: 'onion', note: null }], steps: [{ text: 'Fry an onion', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['servings'],
+  ingredients: [{ group: null, quantity: null, unit: null, item: 'onion', note: null }], steps: [{ text: 'Fry an onion', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: [{ about: 'servings', question: null }],
 };
 const page = (name: string, finalUrl = 'https://www.bbcgoodfood.com/recipes/easy-pancakes') => vi.fn(async () => ({ html: fixture(name), finalUrl }));
 const extraction = (draft: RecipeDraft) => ({ draft, provider: 'gemini' as const, model: 'g-1' });
@@ -77,7 +77,7 @@ describe('importFromUrl', () => {
     expect(arg.text).not.toContain('tracking');
     expect(r).toMatchObject({ provider: 'gemini', model: 'g-1' });
     expect(r.draft).not.toHaveProperty('provider');
-    expect(r.draft).toMatchObject({ title: 'Nan soup', origin: 'other', sourceName: 'nan.example', sourceUrl: 'https://www.nan.example/soup', gaps: ['servings'], imageIds: [] });
+    expect(r.draft).toMatchObject({ title: 'Nan soup', origin: 'other', sourceName: 'nan.example', sourceUrl: 'https://www.nan.example/soup', gaps: [{ about: 'servings', question: null }], imageIds: [] });
   });
   it('is not usable without an AI client', async () => {
     const r = await importFromUrl('https://x.test', { fetchPage: page('no-recipe.html', 'https://www.nan.example/soup'), fetchBytes: img().fetchBytes, ai: undefined, images: images() });

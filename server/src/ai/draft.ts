@@ -3,7 +3,7 @@ import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
 import { canonicalBrand, normaliseTags } from '../recipes/categories.js';
 import type { ProviderTool } from './providers/types.js';
-import { RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
+import { GapSchema, RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
 /** What the model may say about a step: its text and which ingredients it names. No photo, ever. */
 export const AiStepSchema = z.object({ text: z.string(), ingredients: z.array(z.number().int()) });
@@ -20,7 +20,7 @@ export type DishBox = z.infer<typeof DishBoxSchema>;
 export const AiDraftSchema = RecipeCoreSchema.extend({
   tags: z.array(TagSchema),
   steps: z.array(AiStepSchema),
-  gaps: z.array(z.string()),
+  gaps: z.array(GapSchema),
   dishPhoto: DishBoxSchema.nullable(),
 });
 /** Validates the model's output: links may be any numbers; toRecipeDraft drops the unusable ones. */

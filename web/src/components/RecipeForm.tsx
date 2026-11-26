@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { cropImage, uploadImage, type Box1000, type Facets } from '../api';
-import type { Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
+import type { Gap, Ingredient, RecipeInput, Step } from '../../../server/src/recipes/schema';
 import { canonicalUnit } from '../../../server/src/recipes/amount';
 import { IngredientRows } from './IngredientRows';
 import { KNOWN_BRANDS, TAG_GROUPS, canonicalBrand, normaliseTags, originForBrand, type TagGroup } from '../../../server/src/recipes/categories';
@@ -12,7 +12,7 @@ import { CropDialog } from './CropDialog';
 
 export type RecipeFormProps = {
   initial: RecipeInput;
-  gaps?: string[];
+  gaps?: Gap[];
   onSave(input: RecipeInput): void;
   /** Disables Save and relabels it while a save is in flight. */
   saving?: boolean;
@@ -207,7 +207,7 @@ export function RecipeForm({ initial, gaps, onSave, saving = false, onChange, fa
           <h2>Check these</h2>
           <ul>
             {gaps.map((g) => (
-              <li key={g}>{g}</li>
+              <li key={g.about}>{g.question ?? g.about}</li>
             ))}
           </ul>
         </section>

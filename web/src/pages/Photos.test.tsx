@@ -33,7 +33,7 @@ const draft: PhotosDraft = {
   servings: 2, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'chicken', note: null }],
   steps: [{ text: 'Roast it', imageId: null, ingredients: [] }], notes: null, tags: [],
-  imageIds: ['crop.jpg', 'front.jpg', 'back.jpg'], gaps: ['quantity for chicken'],
+  imageIds: ['crop.jpg', 'front.jpg', 'back.jpg'], gaps: [{ about: 'quantity for chicken', question: null }],
   dishCrop: { sourceImageId: 'front.jpg', x0: 100, y0: 100, x1: 600, y1: 600 },
 };
 
@@ -196,7 +196,7 @@ describe('Photos', () => {
   it('resumes a kept draft with its photos and form', () => {
     putDraft({
       id: 'p1', kind: 'photos', savedAt: 1, photoIds: ['front.jpg', 'back.jpg'],
-      input: { ...draft, gaps: undefined } as never, gaps: ['quantity for chicken'], dishCrop: draft.dishCrop,
+      input: { ...draft, gaps: undefined } as never, gaps: [{ about: 'quantity for chicken', question: null }], dishCrop: draft.dishCrop,
     });
     app('/photos?draft=p1');
     expect(thumbs().filter((li) => li.closest('.photo-picker'))).toHaveLength(2);

@@ -14,7 +14,7 @@ const draft = {
   title: 'Spag bol', description: null, origin: 'other', brand: 'Gousto', dishPhoto: { image: 0, x0: 0, y0: 0, x1: 500, y1: 500 }, sourceName: 'x', sourceUrl: 'http://x',
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
-  steps: [], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
+  steps: [], notes: null, tags: [], imageIds: [], gaps: [{ about: 'quantity for red wine', question: null }],
 };
 const extraction = { draft, provider: 'openai' as const, model: 'gpt-x' };
 const make = (ai?: AiClient, config: Record<string, unknown> = {}, web: Record<string, unknown> = {}) => {
@@ -37,9 +37,9 @@ describe('POST /api/ai/describe', () => {
   });
 
   it('drops a brand gap, since the caller sets the brand', async () => {
-    const withGap = { ...extraction, draft: { ...draft, gaps: ['Brand', 'servings'] } };
+    const withGap = { ...extraction, draft: { ...draft, gaps: [{ about: 'Brand', question: null }, { about: 'servings', question: null }] } };
     const res = await post(make({ extractRecipe: vi.fn().mockResolvedValue(withGap) }), { text: 'x' });
-    expect(res.json().gaps).toEqual(['servings']);
+    expect(res.json().gaps).toEqual([{ about: 'servings', question: null }]);
   });
 
   it('400 on empty, whitespace or missing text', async () => {
@@ -163,7 +163,7 @@ describe('POST /api/ai/photos', () => {
     app.inject({ method: 'POST', url: '/api/ai/photos', payload: payload as never });
   const photoDraft = (over: Record<string, unknown> = {}) => ({
     ...extraction,
-    draft: { ...draft, brand: 'HelloFresh', gaps: ['servings'], dishPhoto: { image: 1, x0: 0, y0: 0, x1: 500, y1: 500 }, ...over },
+    draft: { ...draft, brand: 'HelloFresh', gaps: [{ about: 'servings', question: null }], dishPhoto: { image: 1, x0: 0, y0: 0, x1: 500, y1: 500 }, ...over },
   });
 
   it('crops the dish and puts the crop before the originals', async () => {
@@ -218,17 +218,17 @@ describe('POST /api/ai/photos', () => {
   });
 
   it('adds a brand gap when the AI found no brand', async () => {
-    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: ['servings'] })) });
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: [{ about: 'servings', question: null }] })) });
     const body = (await photos(app, { imageIds: ids })).json();
     expect(body.origin).toBe('other');
     expect(body.brand).toBeNull();
     expect(body.sourceName).toBeNull();
-    expect(body.gaps).toEqual(['servings', 'brand']);
+    expect(body.gaps).toEqual([{ about: 'servings', question: null }, { about: 'brand', question: null }]);
   });
 
   it('does not repeat a brand gap the AI already listed', async () => {
-    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: [' Brand '] })) });
-    expect((await photos(app, { imageIds: ids })).json().gaps).toEqual([' Brand ']);
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps: [{ about: ' Brand ', question: null }] })) });
+    expect((await photos(app, { imageIds: ids })).json().gaps).toEqual([{ about: ' Brand ', question: null }]);
   });
 
   it('503 without AI', async () => {
@@ -262,7 +262,7 @@ describe('POST /api/ai/revise', () => {
     ...recipe,
     steps: [{ text: 'Brown the mince.', imageId: null, ingredients: [0] }, { text: 'Let it cool for 20 minutes.', imageId: null, ingredients: [] }],
   };
-  const revision = { input: revised, stepsFrom: [0, null], gaps: ['servings'], provider: 'openai' as const, model: 'gpt-x' };
+  const revision = { input: revised, stepsFrom: [0, null], gaps: [{ about: 'servings', question: null }], provider: 'openai' as const, model: 'gpt-x' };
   const revise = (app: ReturnType<typeof make>, payload: unknown) =>
     app.inject({ method: 'POST', url: '/api/ai/revise', payload: payload as never });
   const fake = (impl = vi.fn().mockResolvedValue(revision)) => ({ reviseRecipe: impl }) as unknown as AiClient;
@@ -271,7 +271,7 @@ describe('POST /api/ai/revise', () => {
     const reviseRecipe = vi.fn().mockResolvedValue(revision);
     const res = await revise(make(fake(reviseRecipe)), { recipe, instruction: ' let it cool ' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ...revised, stepsFrom: [0, null], gaps: ['servings'], provider: 'openai', model: 'gpt-x' });
+    expect(res.json()).toEqual({ ...revised, stepsFrom: [0, null], gaps: [{ about: 'servings', question: null }], provider: 'openai', model: 'gpt-x' });
     expect(reviseRecipe).toHaveBeenCalledWith({ recipe, instruction: 'let it cool' });
   });
 

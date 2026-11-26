@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Box1000, RecipeInput } from '../api';
+import type { Box1000, Gap, RecipeInput } from '../api';
 
 export type DraftKind = 'new' | 'edit' | 'describe' | 'import' | 'photos';
 
@@ -14,7 +14,7 @@ export type Draft = {
   /** The form contents. */
   input?: RecipeInput;
   /** "Check these" notes from the AI, kept with the form. */
-  gaps?: string[];
+  gaps?: Gap[];
   /** Describe: what the user typed. */
   text?: string;
   /** Import: the page address. */
@@ -28,11 +28,23 @@ export type Draft = {
 const KEY = 'recipes.drafts';
 const MAX = 20;
 
+/** Drafts saved before gaps had questions hold plain strings: read them as gaps with no question. */
+function withGaps(d: Draft): Draft {
+  if (!Array.isArray(d.gaps)) return d;
+  const gaps = (d.gaps as unknown[]).flatMap((g): Gap[] =>
+    typeof g === 'string' ? [{ about: g, question: null }]
+    : g && typeof g === 'object' && typeof (g as Gap).about === 'string' ? [{ about: (g as Gap).about, question: typeof (g as Gap).question === 'string' ? (g as Gap).question : null }]
+    : []);
+  return { ...d, gaps };
+}
+
 function read(): Draft[] {
   try {
     const raw = localStorage.getItem(KEY);
     const list = raw ? (JSON.parse(raw) as unknown) : [];
-    return Array.isArray(list) ? (list as Draft[]).filter((d) => d && typeof d.id === 'string' && typeof d.kind === 'string') : [];
+    return Array.isArray(list)
+      ? (list as Draft[]).filter((d) => d && typeof d.id === 'string' && typeof d.kind === 'string').map(withGaps)
+      : [];
   } catch {
     return [];
   }

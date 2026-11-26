@@ -1,4 +1,5 @@
-import type { Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step } from '../../server/src/recipes/schema';
+import type { Gap, Recipe, RecipeDraft, RecipeInput, RecipeSummary, Step } from '../../server/src/recipes/schema';
+export type { Gap };
 import type { ShoppingItem } from '../../server/src/shopping/repo';
 import { tagKey, type Tag } from '../../server/src/recipes/categories';
 import type { Box1000 } from '../../server/src/images/store';
@@ -121,7 +122,7 @@ export async function describeRecipe(text: string): Promise<AiDraft> {
 }
 
 /** A revised recipe; stepsFrom[i] is the index of the original step that step i came from, or null if new. */
-export type Revision = RecipeInput & { gaps: string[]; stepsFrom: (number | null)[]; provider?: AiProviderName; model?: string };
+export type Revision = RecipeInput & { gaps: Gap[]; stepsFrom: (number | null)[]; provider?: AiProviderName; model?: string };
 
 export async function reviseRecipe(recipe: RecipeInput, instruction: string): Promise<Revision> {
   const res = await apiFetch('/api/ai/revise', {

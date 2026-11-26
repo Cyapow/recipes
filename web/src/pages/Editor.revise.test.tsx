@@ -128,8 +128,8 @@ describe('Editor revise', () => {
 
   it('undo puts back the "Check these" list the revision replaced', async () => {
     vi.mocked(reviseRecipe)
-      .mockResolvedValueOnce(revised({ gaps: ['How long does it set for?'] }))
-      .mockResolvedValueOnce(revised({ gaps: ['How much sugar?'] }));
+      .mockResolvedValueOnce(revised({ gaps: [{ about: 'How long does it set for?', question: null }] }))
+      .mockResolvedValueOnce(revised({ gaps: [{ about: 'How much sugar?', question: null }] }));
     const user = userEvent.setup();
     app();
     await apply(user, 'cool it');
@@ -153,7 +153,7 @@ describe('Editor revise', () => {
   });
 
   it('shows the gaps from a revision in Check these', async () => {
-    vi.mocked(reviseRecipe).mockResolvedValue(revised({ gaps: ['How long does it set for?'] }));
+    vi.mocked(reviseRecipe).mockResolvedValue(revised({ gaps: [{ about: 'How long does it set for?', question: null }] }));
     const user = userEvent.setup();
     app();
     await apply(user, 'cool it');

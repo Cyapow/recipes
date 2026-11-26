@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { canonicalBrand, normaliseTags, originForBrand } from '../recipes/categories.js';
-import { RecipeCoreSchema, TagSchema, normaliseSteps, type RecipeInput } from '../recipes/schema.js';
+import { GapSchema, RecipeCoreSchema, TagSchema, normaliseSteps, type Gap, type RecipeInput } from '../recipes/schema.js';
 import { defang, sanitizeForStrict } from './draft.js';
 import { renderRecipe } from './render.js';
 import type { ProviderTool } from './providers/types.js';
@@ -26,7 +26,7 @@ export const ReviseStepSchema = z.object({
 export const AiRevisionSchema = RecipeCoreSchema.omit({ imageIds: true, origin: true }).extend({
   tags: z.array(TagSchema),
   steps: z.array(ReviseStepSchema),
-  gaps: z.array(z.string()),
+  gaps: z.array(GapSchema),
 });
 /** Validates the model's output: links and `from` may be any numbers; range-checking happens afterwards. */
 export const AiRevisionParseSchema = AiRevisionSchema.extend({
@@ -72,7 +72,7 @@ export type AppliedRevision = {
   input: RecipeInput;
   /** For each revised step, the index of the original step it kept (and so its photo from), or null when new. */
   stepsFrom: (number | null)[];
-  gaps: string[];
+  gaps: Gap[];
 };
 
 /**

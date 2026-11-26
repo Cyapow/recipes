@@ -44,7 +44,7 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
       return {
         ...rest,
         brand: 'Mine',
-        gaps: rest.gaps.filter((g) => g.trim().toLowerCase() !== 'brand'),
+        gaps: rest.gaps.filter((g) => g.about.trim().toLowerCase() !== 'brand'),
         origin: 'mine',
         sourceName: from?.sourceName ?? null,
         sourceUrl: from?.sourceUrl ?? null,
@@ -85,7 +85,7 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
       const brand = rest.brand;
       return {
         ...rest,
-        gaps: brand === null && !rest.gaps.some((g) => g.trim().toLowerCase() === 'brand') ? [...rest.gaps, 'brand'] : rest.gaps,
+        gaps: brand === null && !rest.gaps.some((g) => g.about.trim().toLowerCase() === 'brand') ? [...rest.gaps, { about: 'brand', question: null }] : rest.gaps,
         origin: originForBrand(brand),
         brand,
         sourceName: brand,

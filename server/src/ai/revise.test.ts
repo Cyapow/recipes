@@ -180,10 +180,10 @@ describe('applyRevision', () => {
 
   it('returns the revision s gaps and a stepsFrom the same length as the steps', () => {
     const out = applyRevision(
-      revision({ steps: [{ text: 'Let it cool', ingredients: [], from: null }], gaps: ['how long to cool'] }),
+      revision({ steps: [{ text: 'Let it cool', ingredients: [], from: null }], gaps: [{ about: 'how long to cool', question: null }] }),
       photoRecipe,
     );
-    expect(out.gaps).toEqual(['how long to cool']);
+    expect(out.gaps).toEqual([{ about: 'how long to cool', question: null }]);
     expect(out.stepsFrom).toHaveLength(out.input.steps.length);
   });
 });

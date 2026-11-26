@@ -71,7 +71,7 @@ describe('RecipeForm', () => {
   });
 
   it('shows gaps above the form', () => {
-    render(<RecipeForm initial={empty} gaps={['No cook time', 'Unclear quantity']} onSave={() => {}} />);
+    render(<RecipeForm initial={empty} gaps={[{ about: 'No cook time', question: null }, { about: 'Unclear quantity', question: null }]} onSave={() => {}} />);
     expect(screen.getByText('Check these')).toBeTruthy();
     expect(screen.getByText('No cook time')).toBeTruthy();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);

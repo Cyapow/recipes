@@ -7,7 +7,7 @@ const draft = {
   title: 'Spag bol', description: null, origin: 'mine', brand: 'Mine', dishPhoto: null, sourceName: null, sourceUrl: null,
   servings: null, prepMinutes: null, cookMinutes: null,
   ingredients: [{ group: null, quantity: null, unit: null, item: 'red wine', note: null }],
-  steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: ['quantity for red wine'],
+  steps: [{ text: 'Brown the mince', imageId: null, ingredients: [] }], notes: null, tags: [], imageIds: [], gaps: [{ about: 'quantity for red wine', question: null }],
 };
 const expected = draft;
 const toolUse = (input: unknown) => ({ content: [{ type: 'tool_use', id: 't1', name: 'record_recipe', input }] });
@@ -115,14 +115,14 @@ describe('a multi-step draft with the title gap', () => {
         { text: 'Simmered for an hour', ingredients: [1] },
         { text: 'Tossed it through spaghetti', ingredients: [] },
       ],
-      gaps: ['quantity for red wine', 'title chosen from your description'],
+      gaps: [{ about: 'quantity for red wine', question: null }, { about: 'title chosen from your description', question: null }],
     });
     const out = toRecipeDraft(ai);
     expect(out.steps).toHaveLength(4);
     expect(out.steps.map((s) => s.ingredients)).toEqual([[0], [1], [], []]);
     expect(out.steps.every((s) => s.imageId === null)).toBe(true);
     expect(out.title).toBe('Beef mince and tomato spaghetti');
-    expect(out.gaps).toContain('title chosen from your description');
+    expect(out.gaps).toContainEqual({ about: 'title chosen from your description', question: null });
   });
 });
 

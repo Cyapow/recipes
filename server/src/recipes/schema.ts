@@ -122,8 +122,12 @@ export const RecipeSchema = RecipeCoreSchema.extend({
 export type Recipe = z.infer<typeof RecipeSchema>;
 
 // No transforms here: keep it representable. The AI tool uses its own schema (AiDraftSchema in ai/draft.ts).
+/** Something the AI could not take from its input: `about` names it, `question` (when set) asks the person for it. */
+export const GapSchema = z.object({ about: z.string(), question: z.string().nullable() });
+export type Gap = z.infer<typeof GapSchema>;
+
 export const RecipeDraftSchema = RecipeCoreSchema.extend({
-  gaps: z.array(z.string()),
+  gaps: z.array(GapSchema),
 });
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;
 

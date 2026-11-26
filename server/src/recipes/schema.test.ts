@@ -14,16 +14,29 @@ describe('normaliseSteps', () => {
 });
 
 describe('(g) RecipeDraftSchema', () => {
+  const draft = {
+    title: 't', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
+    prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 's', imageId: null, ingredients: [] }],
+    notes: null, brand: null, tags: [], imageIds: [], gaps: [],
+  };
+
   it('still exists, takes Step objects and converts to JSON schema', async () => {
     const { z } = await import('zod');
-    const draft = {
-      title: 't', description: null, origin: 'mine', sourceName: null, sourceUrl: null, servings: null,
-      prepMinutes: null, cookMinutes: null, ingredients: [], steps: [{ text: 's', imageId: null, ingredients: [] }],
-      notes: null, brand: null, tags: [], imageIds: [], gaps: [],
-    };
     expect(RecipeDraftSchema.safeParse(draft).success).toBe(true);
     expect(() => z.toJSONSchema(RecipeDraftSchema)).not.toThrow();
     expect(RecipeInputSchema.safeParse({ ...draft, steps: ['s'] }).success).toBe(true);
+  });
+
+  it('accepts a gap with a question and one without', () => {
+    const r = RecipeDraftSchema.safeParse({ ...draft, gaps: [
+      { about: 'servings', question: 'How many does this serve?' },
+      { about: 'brand', question: null },
+    ] });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects a bare string gap', () => {
+    expect(RecipeDraftSchema.safeParse({ ...draft, gaps: ['servings'] }).success).toBe(false);
   });
 });
 
