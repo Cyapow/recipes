@@ -4,6 +4,9 @@ import type { AiClient, PlanMealRequest } from '../ai/client.js';
 import { aiFailure } from '../ai/routes.js';
 import type { createRecipeRepo } from '../recipes/repo.js';
 import { mergeMealIngredients } from './ingredients.js';
+import {
+  MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
+} from './limits.js';
 import { COURSES, type Meal, type MealsRepo, type MealRecipeInput } from './repo.js';
 import { describeServeAt, stageWhen } from './when.js';
 
@@ -13,7 +16,6 @@ import { describeServeAt, stageWhen } from './when.js';
  */
 export const MAX_MEAL_CHARS = 20_000;
 const MAX_MEAL_RECIPES = 20;
-const MAX_STAGES = 100;
 
 /** An ISO instant, however the client wrote it: stored normalised so every comparison and sort agrees. */
 const Instant = z
@@ -26,19 +28,20 @@ const Recipes = z.array(RecipeEntry).min(1).max(MAX_MEAL_RECIPES);
 const Title = z.string().trim().min(1).max(200);
 
 const CreateBody = z.object({ title: Title, serveAt: Instant, recipes: Recipes });
-const StageBody = z.object({
+/** Exported so the draft path can be tested against the very schema an edit has to satisfy. */
+export const StageBody = z.object({
   recipeId: z.string().min(1).nullable(),
-  offsetMinutes: z.number().int().min(0).max(60 * 24 * 60),
-  durationMinutes: z.number().int().min(1).max(60 * 24 * 60).nullable(),
+  offsetMinutes: z.number().int().min(0).max(MAX_STAGE_MINUTES),
+  durationMinutes: z.number().int().min(1).max(MAX_STAGE_MINUTES).nullable(),
   estimated: z.boolean(),
-  text: z.string().trim().min(1).max(2000),
-  stepIndices: z.array(z.number().int().min(0)).max(200),
+  text: z.string().trim().min(1).max(MAX_STAGE_TEXT),
+  stepIndices: z.array(z.number().int().min(0)).max(MAX_STAGE_STEPS),
   doneAt: Instant.nullable(),
 });
 const PutBody = z.object({
   title: Title.optional(),
   serveAt: Instant.optional(),
-  watchOut: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+  watchOut: z.array(z.string().trim().min(1).max(MAX_WATCH_OUT_TEXT)).max(MAX_WATCH_OUT).optional(),
   recipes: Recipes.optional(),
   stages: z.array(StageBody).max(MAX_STAGES).optional(),
 });

@@ -3,6 +3,9 @@ import { defang, sanitizeForStrict } from '../ai/draft.js';
 import type { ProviderTool } from '../ai/providers/types.js';
 import { renderRecipe } from '../ai/render.js';
 import type { RecipeInput } from '../recipes/schema.js';
+import {
+  MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
+} from './limits.js';
 import type { StageInput } from './repo.js';
 
 export const PLAN_TOOL_NAME = 'plan_meal';
@@ -81,9 +84,13 @@ export function buildPlanMessage(input: PlanMealInput): string {
 
 export type AppliedSchedule = { stages: StageInput[]; watchOut: string[] };
 
-/** A whole number of minutes from zero up: the model may send a negative or fractional offset despite the prompt. */
+/**
+ * A whole number of minutes from zero up to what a stage may hold: the model may send a negative, fractional or
+ * absurd offset despite the prompt, and a stored schedule outside the bounds the PUT body enforces could never be
+ * edited or ticked again.
+ */
 function wholeMinutes(n: number): number {
-  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  return Number.isFinite(n) ? Math.min(MAX_STAGE_MINUTES, Math.max(0, Math.round(n))) : 0;
 }
 
 /**
@@ -92,18 +99,26 @@ function wholeMinutes(n: number): number {
  * that recipe. A stage keeps its text and loses just the links and numbers that cannot be true; one with no text
  * says nothing a person can act on, so it goes. Stages come out furthest before serving first, nothing is done yet,
  * and `estimated` only survives where a duration does, since there is nothing left to be an estimate otherwise.
+ * Everything is clamped to `limits.ts`, the same bounds the PUT body enforces, so whatever is written here is by
+ * construction something a later edit can save: the stages past the hundredth go, in the order the model gave them,
+ * rather than the end of the cook being the part that is dropped.
  */
 export function applySchedule(plan: AiPlanOutput, recipes: { id: string; stepCount: number }[]): AppliedSchedule {
   const stages = plan.stages
+    .slice(0, MAX_STAGES)
     .map((s): StageInput | null => {
-      const text = s.text.trim();
+      const text = s.text.trim().slice(0, MAX_STAGE_TEXT).trim();
       if (!text) return null;
       const recipe = Number.isInteger(s.recipeIndex) ? recipes[s.recipeIndex] : undefined;
       const stepIndices = recipe
-        ? [...new Set(s.stepIndices.filter((i) => Number.isInteger(i) && i >= 0 && i < recipe.stepCount))].sort((a, b) => a - b)
+        ? [...new Set(s.stepIndices.filter((i) => Number.isInteger(i) && i >= 0 && i < recipe.stepCount))]
+            .sort((a, b) => a - b)
+            .slice(0, MAX_STAGE_STEPS)
         : [];
       const durationMinutes =
-        s.durationMinutes != null && Number.isInteger(s.durationMinutes) && s.durationMinutes > 0 ? s.durationMinutes : null;
+        s.durationMinutes != null && Number.isInteger(s.durationMinutes) && s.durationMinutes > 0
+          ? Math.min(s.durationMinutes, MAX_STAGE_MINUTES)
+          : null;
       return {
         recipeId: recipe?.id ?? null,
         offsetMinutes: wholeMinutes(s.offsetMinutes),
@@ -117,6 +132,10 @@ export function applySchedule(plan: AiPlanOutput, recipes: { id: string; stepCou
     .filter((s): s is StageInput => s != null)
     // Array.sort is stable, so stages at the same offset keep the order the model gave them.
     .sort((a, b) => b.offsetMinutes - a.offsetMinutes);
-  const watchOut = plan.watchOut.map((w) => w.trim()).filter(Boolean);
+  // Deduped: the same note twice says nothing twice, and the notes list keys on the text.
+  const watchOut = [...new Set(plan.watchOut.map((w) => w.trim().slice(0, MAX_WATCH_OUT_TEXT).trim()).filter(Boolean))].slice(
+    0,
+    MAX_WATCH_OUT,
+  );
   return { stages, watchOut };
 }

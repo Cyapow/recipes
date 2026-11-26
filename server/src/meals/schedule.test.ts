@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeInput } from '../recipes/schema.js';
+import {
+  MAX_STAGES, MAX_STAGE_MINUTES, MAX_STAGE_STEPS, MAX_STAGE_TEXT, MAX_WATCH_OUT, MAX_WATCH_OUT_TEXT,
+} from './limits.js';
+import { StageBody } from './routes.js';
 import { applySchedule, buildPlanMessage, PLAN_SYSTEM_PROMPT, planToolSchema, type AiPlanOutput, type PlanMealInput } from './schedule.js';
 
 const lamb: RecipeInput = {
@@ -125,9 +129,42 @@ describe('applySchedule', () => {
     expect(out.stages.map((s) => s.text)).toEqual(['Peel', 'Boil']);
   });
 
-  it('trims watchOut and drops empty notes', () => {
-    const out = apply([], ['  the oven is busy at 12:30 ', '', '   ']);
+  it('trims watchOut, drops empty notes and says nothing twice', () => {
+    const out = apply([], ['  the oven is busy at 12:30 ', '', '   ', 'the oven is busy at 12:30']);
     expect(out.watchOut).toEqual(['the oven is busy at 12:30']);
+  });
+
+  it('clamps a drafted schedule to what the edit path accepts, so the meal stays savable', () => {
+    const out = applySchedule(
+      {
+        stages: Array.from({ length: MAX_STAGES + 5 }, (_, i) =>
+          stage({
+            text: `${'x'.repeat(MAX_STAGE_TEXT + 50)} ${i}`,
+            offsetMinutes: MAX_STAGE_MINUTES + 1000,
+            durationMinutes: MAX_STAGE_MINUTES + 1000,
+            stepIndices: Array.from({ length: MAX_STAGE_STEPS + 10 }, (_, n) => n),
+          }),
+        ),
+        watchOut: Array.from({ length: MAX_WATCH_OUT + 5 }, (_, i) => `note ${i} ${'n'.repeat(MAX_WATCH_OUT_TEXT + 20)}`),
+      },
+      [{ id: 'r1', stepCount: MAX_STAGE_STEPS + 10 }],
+    );
+    expect(out.stages).toHaveLength(MAX_STAGES);
+    expect(out.stages.every((s) => s.text.length <= MAX_STAGE_TEXT)).toBe(true);
+    expect(out.stages.every((s) => s.offsetMinutes === MAX_STAGE_MINUTES)).toBe(true);
+    expect(out.stages.every((s) => s.durationMinutes === MAX_STAGE_MINUTES)).toBe(true);
+    expect(out.stages.every((s) => s.stepIndices.length === MAX_STAGE_STEPS)).toBe(true);
+    expect(out.watchOut).toHaveLength(MAX_WATCH_OUT);
+    expect(out.watchOut.every((w) => w.length <= MAX_WATCH_OUT_TEXT)).toBe(true);
+    // The point of the clamp: every stage written this way can be sent back by the next tick or retime.
+    expect(out.stages.filter((s) => !StageBody.safeParse(s).success)).toEqual([]);
+  });
+
+  it('keeps the first hundred stages the model gave, not the hundred furthest from serving', () => {
+    const many = Array.from({ length: MAX_STAGES + 2 }, (_, i) => stage({ text: `step ${i}`, offsetMinutes: i }));
+    const out = apply(many);
+    expect(out.stages.map((s) => s.text)).toContain('step 0');
+    expect(out.stages.map((s) => s.text)).not.toContain(`step ${MAX_STAGES}`);
   });
 
   it('leaves doneAt null on every drafted stage', () => {
