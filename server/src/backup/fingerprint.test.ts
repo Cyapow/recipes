@@ -7,6 +7,7 @@ import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import { createFavouritesRepo } from '../favourites/repo.js';
 import { createShoppingRepo } from '../shopping/repo.js';
+import { createMealsRepo, type StageInput } from '../meals/repo.js';
 import type { RecipeInput } from '../recipes/schema.js';
 import { canonicalJson, computeFingerprint, fingerprintPayload } from './fingerprint.js';
 
@@ -157,6 +158,68 @@ describe('computeFingerprint', () => {
       expect(JSON.stringify(after.recipes)).not.toContain('favouritedBy');
       expect(after.recipes).toEqual(before.recipes);
       expect(after.favourites).toEqual([{ email: 'cook@example.com', recipeId: id }]);
+    });
+  });
+  describe('meals', () => {
+    const stage = (over: Partial<StageInput> = {}): StageInput => ({
+      recipeId: null, offsetMinutes: 60, durationMinutes: 30, estimated: false,
+      text: 'Roast', stepIndices: [0], doneAt: null, ...over,
+    });
+    const makeMeal = () => {
+      const meals = createMealsRepo(db);
+      const recipeId = repo.list({})[0].id;
+      const meal = meals.create({
+        title: 'Sunday lunch', serveAt: '2026-12-06T13:00:00.000Z', recipes: [{ recipeId, course: 'main' }],
+      });
+      return { meals, meal, recipeId };
+    };
+
+    it('changes when a meal is created, retimed, scheduled or ticked', async () => {
+      const base = await fp();
+      const { meals, meal, recipeId } = makeMeal();
+      const created = await fp();
+      expect(created).not.toBe(base);
+
+      meals.update(meal.id, { serveAt: '2026-12-06T14:00:00.000Z' });
+      const retimed = await fp();
+      expect(retimed).not.toBe(created);
+
+      meals.replaceStages(meal.id, [stage({ recipeId })], ['check the oven']);
+      const scheduled = await fp();
+      expect(scheduled).not.toBe(retimed);
+
+      meals.update(meal.id, { stages: [stage({ recipeId, doneAt: '2026-12-06T11:00:00.000Z' })] });
+      expect(await fp()).not.toBe(scheduled);
+    });
+
+    it('does not change when a meal is saved again with the same contents', async () => {
+      const { meals, meal, recipeId } = makeMeal();
+      meals.replaceStages(meal.id, [stage({ recipeId }), stage({ text: 'Rest', offsetMinutes: 10 })], ['note']);
+      const before = await fp();
+      // Same contents: new created/updated/scheduled times, and fresh row ids for every recipe and stage.
+      const again = meals.get(meal.id)!;
+      meals.update(meal.id, {
+        title: again.title,
+        serveAt: again.serveAt,
+        recipes: again.recipes.map((r) => ({ recipeId: r.recipeId!, course: r.course })),
+        stages: again.stages.map(({ id: _id, position: _p, ...s }) => s),
+      });
+      meals.replaceStages(meal.id, again.stages.map(({ id: _id, position: _p, ...s }) => s), ['note']);
+      const after = meals.get(meal.id)!;
+      expect(after.updatedAt).not.toBe(again.updatedAt);
+      expect(after.stages[0].id).not.toBe(again.stages[0].id);
+      expect(await fp()).toBe(before);
+    });
+
+    it('is unchanged by a recipe edit that does not touch meals', async () => {
+      const { meals } = makeMeal();
+      const before = await fingerprintPayload(db, dir);
+      const id = repo.list({})[0].id;
+      repo.update(id, input('Soup 2'));
+      const after = await fingerprintPayload(db, dir);
+      expect(after.recipes).not.toEqual(before.recipes);
+      expect(after.meals).toEqual(before.meals);
+      expect(after.meals).toEqual(meals.forFingerprint());
     });
   });
 });

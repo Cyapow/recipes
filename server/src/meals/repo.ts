@@ -279,6 +279,26 @@ export function createMealsRepo(db: Database) {
         return read(id);
       },
     ),
+    /**
+     * Every meal with its recipes and stages, for the backup fingerprint: ordered by meal id, then position.
+     * Left out are the things that move on every write without the meal meaning anything different: the
+     * created, updated and scheduled times, and the ids of recipe and stage rows (writeRecipes and
+     * writeStages mint new ones on each save). doneAt stays in, because a ticked stage is real work.
+     */
+    forFingerprint(): unknown[] {
+      return (db.prepare('SELECT id FROM meals ORDER BY id').all() as { id: string }[]).map(({ id }) => {
+        const m = read(id)!;
+        return {
+          id: m.id,
+          title: m.title,
+          serveAt: m.serveAt,
+          watchOut: m.watchOut,
+          scheduleStale: m.scheduleStale,
+          recipes: m.recipes.map(({ id: _id, ...r }) => r),
+          stages: m.stages.map(({ id: _id, ...s }) => s),
+        };
+      });
+    },
     delete: db.transaction((id: string): boolean => {
       return db.prepare('DELETE FROM meals WHERE id = ?').run(id).changes > 0;
     }),

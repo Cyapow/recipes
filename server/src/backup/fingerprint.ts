@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { createAuthRepo } from '../auth/repo.js';
 import { createRecipeRepo } from '../recipes/repo.js';
 import { createFavouritesRepo } from '../favourites/repo.js';
+import { createMealsRepo } from '../meals/repo.js';
 import { listBackupImageNames } from './run.js';
 
 /** JSON with object keys sorted at every level, so key order never affects the result. */
@@ -21,7 +22,8 @@ export function canonicalJson(v: unknown): string {
 
 /**
  * Everything the fingerprint hashes: every full recipe (ordered by id), the sorted backup-eligible image
- * names, the allowlisted email addresses and the sorted favourite pairs.
+ * names, the allowlisted email addresses, the sorted favourite pairs and every meal (ordered by id, its
+ * recipes and stages by position).
  *
  * Recipes go in without favouritedBy: a star is hashed once, under `favourites`, and is not recipe content.
  */
@@ -37,7 +39,7 @@ export async function fingerprintPayload(db: Database, dataDir: string) {
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const images = await listBackupImageNames(dataDir);
   const allowed = createAuthRepo(db).listAllowed().map((a) => a.email);
-  return { recipes, images, allowed, favourites: favourites.allPairs() };
+  return { recipes, images, allowed, favourites: favourites.allPairs(), meals: createMealsRepo(db).forFingerprint() };
 }
 
 /**
@@ -48,6 +50,10 @@ export async function fingerprintPayload(db: Database, dataDir: string) {
  * change on every sign-in and mean nothing after a restore) and display names (cosmetic, re-fetched from
  * Google at the next sign-in). Anything else user-meaningful added later must be added here. Only the
  * addresses are hashed, not their added-at times; favourites go in as email and recipe id pairs.
+ *
+ * Meals go in without createdAt, updatedAt, scheduledAt or the ids of their recipe and stage rows: those
+ * change on every save, so opening and saving an unchanged meal would otherwise trigger an upload. A stage's
+ * doneAt stays in, since ticking one off is real work. Do not "strip all timestamps" here.
  */
 export async function computeFingerprint(db: Database, dataDir: string): Promise<string> {
   return createHash('sha256').update(canonicalJson(await fingerprintPayload(db, dataDir))).digest('hex');
