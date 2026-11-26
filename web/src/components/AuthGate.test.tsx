@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../api';
 import { AuthGate } from './AuthGate';
@@ -48,7 +48,7 @@ describe('AuthGate', () => {
     vi.mocked(getMe).mockRejectedValue(new TypeError('Failed to fetch'));
     view();
     expect(await screen.findByText('the app')).toBeTruthy();
-    expect(screen.getByText(/offline/i)).toBeTruthy();
+    expect(await screen.findByText(/offline/i)).toBeTruthy();
     expect(wasSignedIn()).toBe(true);
   });
 
@@ -57,7 +57,8 @@ describe('AuthGate', () => {
     vi.mocked(getMe).mockRejectedValue(new ApiError('Request failed (502)', 502));
     view();
     expect(await screen.findByText('the app')).toBeTruthy();
-    expect(screen.getByText(/offline/i)).toBeTruthy();
+    // The app shows at once (we were signed in); the notice only follows once getMe() has rejected.
+    expect(await screen.findByText(/offline/i)).toBeTruthy();
   });
 
   it('renders the app at once while a hung getMe() never settles, if we were signed in', async () => {
@@ -83,7 +84,8 @@ describe('AuthGate', () => {
     expect(await screen.findByText(/offline/i)).toBeTruthy();
     vi.mocked(getMe).mockResolvedValue({ email: 'a@b.c', name: 'A' });
     await act(async () => { window.dispatchEvent(new Event('online')); });
-    expect(screen.queryByText(/offline/i)).toBeNull();
+    // The notice goes only once the re-check's promise has resolved and React has re-rendered.
+    await waitFor(() => expect(screen.queryByText(/offline/i)).toBeNull());
     expect(screen.getByText('the app')).toBeTruthy();
   });
 
