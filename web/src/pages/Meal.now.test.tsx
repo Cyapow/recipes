@@ -147,7 +147,8 @@ describe('Meal live view', () => {
     const next = await section('Next');
     const brine = within(next).getByText('Brine the chicken').closest('li')!;
     const gravy = within(next).getByText('Make the gravy').closest('li')!;
-    expect(brine.textContent).toContain('the day before');
+    // The label is its own element above the clock, so the two are spaced by the stylesheet and not by a stray space.
+    expect(brine.querySelector('.meal-day-label')!.textContent).toBe('the day before');
     expect(brine.textContent).toContain('22:00');
     expect(gravy.textContent).not.toContain('on the day');
     expect(gravy.textContent).toContain('11:00');
