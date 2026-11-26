@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeInput } from '../recipes/schema.js';
+import { SYSTEM_PROMPT } from './draft.js';
 import { applyRevision, buildReviseMessage, REVISE_SYSTEM_PROMPT, reviseToolSchema, type AiRevisionOutput } from './revise.js';
 
 const recipe: RecipeInput = {
@@ -51,11 +52,30 @@ describe('REVISE_SYSTEM_PROMPT', () => {
     expect(REVISE_SYSTEM_PROMPT).toMatch(/at most eight/i);
     expect(REVISE_SYSTEM_PROMPT).toMatch(/most important .* first/i);
     expect(REVISE_SYSTEM_PROMPT).toMatch(/named by at least one step/i);
-    expect(REVISE_SYSTEM_PROMPT).toMatch(/never mentions an oven|imply a detail/i);
+  });
+  it('states what a question may not do, and the length the code enforces', () => {
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/in the second person/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/at most 140 characters/);
+    expect(REVISE_SYSTEM_PROMPT).not.toMatch(/about 140/);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never ask the person to confirm what they did say/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never suggest what the answer might be/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never imply a detail/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never mentions an oven/i);
+  });
+  it('draws its worked examples from what a revision can see, never a card', () => {
+    expect(REVISE_SYSTEM_PROMPT).toContain('How long should it cool for?');
+    expect(REVISE_SYSTEM_PROMPT).not.toMatch(/card/i);
+  });
+  it('keeps the question rule the draft prompt\'s own words, not a paraphrase', () => {
+    const shared = 'in the second person, naming what they said and answerable in a few words';
+    expect(SYSTEM_PROMPT).toContain(shared);
+    expect(REVISE_SYSTEM_PROMPT).toContain(shared);
   });
   it('states what an answer to one of those questions may do', () => {
     expect(REVISE_SYSTEM_PROMPT).toMatch(/answers to the questions/i);
-    expect(REVISE_SYSTEM_PROMPT).toMatch(/only what its own question asked about/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/what its own question asked about/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/plus anything else it explicitly states/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never causes a change it does not state/i);
     expect(REVISE_SYSTEM_PROMPT).toMatch(/fills nothing/i);
   });
 });

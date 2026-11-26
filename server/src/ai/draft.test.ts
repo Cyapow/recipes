@@ -68,7 +68,16 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/at most eight/i);
     expect(SYSTEM_PROMPT).toMatch(/most important .* first/i);
     expect(SYSTEM_PROMPT).toMatch(/named by at least one step/i);
-    expect(SYSTEM_PROMPT).toMatch(/never mentions an oven|imply a detail/i);
+  });
+  it('states what a question may not do, and the length the code enforces', () => {
+    expect(SYSTEM_PROMPT).toMatch(/in the second person/i);
+    // "about 140" would licence a question the 140-char guard then nulls, losing it.
+    expect(SYSTEM_PROMPT).toMatch(/at most 140 characters/);
+    expect(SYSTEM_PROMPT).not.toMatch(/about 140/);
+    expect(SYSTEM_PROMPT).toMatch(/never ask the person to confirm what they did say/i);
+    expect(SYSTEM_PROMPT).toMatch(/never suggest what the answer might be/i);
+    expect(SYSTEM_PROMPT).toMatch(/never imply a detail/i);
+    expect(SYSTEM_PROMPT).toMatch(/never mentions an oven/i);
   });
 });
 
@@ -99,6 +108,8 @@ describe('steps and title prompt rules', () => {
     expect(SYSTEM_PROMPT).toMatch(/6 words/);
     expect(SYSTEM_PROMPT).toContain('"title chosen from your description"');
     expect(SYSTEM_PROMPT).toMatch(/never leave the title as a single stray ingredient word/i);
+    // The title question names the title the model chose, which every other question is forbidden to do.
+    expect(SYSTEM_PROMPT).toMatch(/the one question that names your own choice/i);
   });
   it('page text gets the same rules but keeps its list', () => {
     expect(SYSTEM_PROMPT).toMatch(/page text.*same rules.*list.*one-to-one/is);
