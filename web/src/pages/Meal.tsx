@@ -7,7 +7,8 @@ import {
 import { BackIcon } from '../components/Icons';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { describeAiError } from '../lib/aiError';
-import { KeepOn } from './Cook';
+import { KeepOn } from '../components/KeepOn';
+import { SERVING_DAY } from '../../../server/src/meals/when';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -285,8 +286,15 @@ function LiveView({ meal, onMeal, onBack }: { meal: MealWithIngredients; onMeal:
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), CLOCK_MS);
-    return () => clearInterval(timer);
+    const refresh = () => setNow(Date.now());
+    const timer = setInterval(refresh, CLOCK_MS);
+    // A hidden tab throttles the interval, so look again the moment the page is back.
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   async function tick(stage: StageWithWhen) {
@@ -336,17 +344,21 @@ function LiveView({ meal, onMeal, onBack }: { meal: MealWithIngredients; onMeal:
                     type="checkbox"
                     aria-label={`Done: ${s.text}`}
                     checked={s.doneAt !== null}
-                    disabled={busy}
                     onChange={() => void tick(s)}
                   />
-                  <span className="meal-time">{s.clock}</span>
+                  <span className="meal-time">
+                    {s.dayGroup !== SERVING_DAY && <span className="sub meal-day-label">{s.dayGroup} </span>}
+                    {s.clock}
+                  </span>
                   <span className="meal-stage-body">
                     <span className="meal-stage-text">{s.text}</span>
-                    <span className="sub">
-                      {s.durationMinutes !== null && durationText(s.durationMinutes, s.estimated)}
-                      {s.durationMinutes !== null && title && ' · '}
-                      {title}
-                    </span>
+                    {(s.durationMinutes !== null || title) && (
+                      <span className="sub">
+                        {s.durationMinutes !== null && durationText(s.durationMinutes, s.estimated)}
+                        {s.durationMinutes !== null && title && ' · '}
+                        {title}
+                      </span>
+                    )}
                   </span>
                 </li>
               );

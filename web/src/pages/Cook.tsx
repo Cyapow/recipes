@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getRecipe, type Recipe } from '../api';
-import { CameraIcon, CloseIcon, ListIcon, SunIcon } from '../components/Icons';
+import { CameraIcon, CloseIcon, ListIcon } from '../components/Icons';
+import { KeepOn } from '../components/KeepOn';
 import { useSwipe } from '../hooks/useSwipe';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { MetricToggle } from '../components/MetricToggle';
@@ -24,22 +25,6 @@ function LoadFailure({ message }: { message: string }) {
 export function Cook() {
   const { id = '' } = useParams();
   return <CookSlides key={id} id={id} />;
-}
-
-export function KeepOn({ wake }: { wake: ReturnType<typeof useWakeLock> }) {
-  if (!wake.supported) return <p className="keep-on unsupported">Your browser can't keep the screen on</p>;
-  return (
-    <label className="keep-on">
-      <SunIcon />
-      <span>Keep screen on</span>
-      <input
-        type="checkbox"
-        aria-label="Keep screen on"
-        checked={wake.enabled}
-        onChange={(e) => wake.setEnabled(e.target.checked)}
-      />
-    </label>
-  );
 }
 
 /** Ingredients linked to a step; ignores indexes that are out of range or not integers. */

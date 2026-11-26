@@ -1,6 +1,8 @@
 export type StageWhen = { at: string; dayGroup: string; clock: string };
 
-const WORDS = ['on the day', 'the day before', 'two days before'];
+/** The `dayGroup` of a stage on the serving day itself; the live view leaves this one unlabelled. */
+export const SERVING_DAY = 'on the day';
+const WORDS = [SERVING_DAY, 'the day before', 'two days before'];
 
 /** A calendar day as a day number, read in the server's timezone so a clock change cannot skew the difference. */
 function dayNumber(d: Date): number {

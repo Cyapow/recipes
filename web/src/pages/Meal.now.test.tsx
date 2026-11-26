@@ -111,8 +111,46 @@ describe('Meal live view', () => {
     const user = await startFollowing();
     await user.click(await screen.findByRole('checkbox', { name: 'Done: Make the gravy' }));
     await waitFor(() => expect(vi.mocked(updateMeal)).toHaveBeenCalled());
+    act(() => { vi.advanceTimersByTime(10 * 60_000); });
     expect(screen.queryByRole('button', { name: /Draft/ })).toBeNull();
     expect(vi.mocked(scheduleMeal)).not.toHaveBeenCalled();
+    expect(vi.mocked(getMeal)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the stage unticked and says so when the save fails', async () => {
+    vi.mocked(updateMeal).mockRejectedValue(new Error('offline'));
+    const user = await startFollowing();
+    const box = (await screen.findByRole('checkbox', { name: 'Done: Make the gravy' })) as HTMLInputElement;
+    await user.click(box);
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not save your changes');
+    expect(box.checked).toBe(false);
+    expect(within(await section('Due now')).getByText('Make the gravy')).toBeTruthy();
+  });
+
+  it('looks at the clock again as soon as the page is visible', async () => {
+    await startFollowing();
+    expect(within(await section('Next')).getByText('Carve')).toBeTruthy();
+    act(() => {
+      vi.setSystemTime(new Date('2026-12-06T13:21:00.000Z'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(within(await section('Due now')).getByText('Carve')).toBeTruthy();
+  });
+
+  it('labels a stage that is not on the serving day, using the server\'s words', async () => {
+    vi.setSystemTime(new Date('2026-12-05T09:00:00.000Z'));
+    vi.mocked(getMeal).mockResolvedValue(meal([
+      stage({ id: 's1', text: 'Brine the chicken', at: '2026-12-05T22:00:00.000Z', clock: '22:00', dayGroup: 'the day before' }),
+      stage({ id: 's2', text: 'Make the gravy', at: '2026-12-06T11:00:00.000Z', clock: '11:00', position: 1 }),
+    ]));
+    await startFollowing();
+    const next = await section('Next');
+    const brine = within(next).getByText('Brine the chicken').closest('li')!;
+    const gravy = within(next).getByText('Make the gravy').closest('li')!;
+    expect(brine.textContent).toContain('the day before');
+    expect(brine.textContent).toContain('22:00');
+    expect(gravy.textContent).not.toContain('on the day');
+    expect(gravy.textContent).toContain('11:00');
   });
 
   it('says the meal is served when every stage is done', async () => {
