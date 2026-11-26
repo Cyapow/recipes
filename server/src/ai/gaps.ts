@@ -7,11 +7,24 @@ export const MAX_GAPS = 8;
 export const MAX_QUESTION_CHARS = 140;
 
 /**
- * Hold the model's gaps to the limits the form relies on: a blank or over-long question becomes null (the gap
- * stays, as a plain note), and only the first MAX_GAPS are kept. Idempotent, so it is safe to run twice.
+ * Hold the model's gaps to the limits the form relies on: two gaps with the same `about` become one, a blank or
+ * over-long question becomes null (the gap stays, as a plain note), and only the first MAX_GAPS are kept.
+ * Idempotent, so it is safe to run twice.
+ *
+ * The dedupe is not cosmetic. The form keys the answer boxes by `about`, so two gaps sharing one would render
+ * two inputs over a single value: typing in either fills both, and the answer goes into the instruction twice.
+ * Matching trimmed and case-insensitively also folds "Butter" and "butter" into one question. First one wins,
+ * since the model is asked to put the most important first.
  */
 export function normaliseGaps(gaps: Gap[]): Gap[] {
-  return gaps.slice(0, MAX_GAPS).map(({ about, question }) => ({
+  const seen = new Set<string>();
+  const unique = gaps.filter((g) => {
+    const key = g.about.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, MAX_GAPS).map(({ about, question }) => ({
     about,
     question: question !== null && question.trim() !== '' && question.length <= MAX_QUESTION_CHARS ? question : null,
   }));

@@ -25,6 +25,30 @@ describe('normaliseGaps', () => {
     expect(out).toHaveLength(MAX_GAPS);
     expect(out.map((g) => g.about)).toEqual(gaps.slice(0, 8).map((g) => g.about));
   });
+  it('keeps one gap per about, so one answer box cannot serve two questions', () => {
+    expect(
+      normaliseGaps([
+        { about: 'butter', question: 'How much butter?' },
+        { about: 'butter', question: 'Which step uses the butter?' },
+      ]),
+    ).toEqual([{ about: 'butter', question: 'How much butter?' }]);
+  });
+  it('folds two abouts that differ only in case or padding', () => {
+    expect(
+      normaliseGaps([
+        { about: 'Butter', question: 'How much butter?' },
+        { about: ' butter ', question: 'And how much butter?' },
+      ]),
+    ).toEqual([{ about: 'Butter', question: 'How much butter?' }]);
+  });
+  it('dedupes before the cap, so a duplicate does not cost a real gap its place', () => {
+    const gaps: Gap[] = [
+      { about: 'gap 0', question: null },
+      { about: 'gap 0', question: null },
+      ...Array.from({ length: 8 }, (_, i) => ({ about: `gap ${i + 1}`, question: null })),
+    ];
+    expect(normaliseGaps(gaps).map((g) => g.about)).toEqual(['gap 0', 'gap 1', 'gap 2', 'gap 3', 'gap 4', 'gap 5', 'gap 6', 'gap 7']);
+  });
   it('is idempotent', () => {
     const gaps: Gap[] = [
       ...Array.from({ length: 10 }, (_, i) => ({ about: `gap ${i}`, question: i % 2 ? '  ' : `Question ${i}?` })),
