@@ -126,7 +126,11 @@ export function createMealsRepo(db: Database) {
        (id, meal_id, recipe_id, offset_minutes, duration_minutes, estimated, text, step_indices_json, done_at, position)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  const deleteRecipes = db.prepare('DELETE FROM meal_recipes WHERE meal_id = ?');
+  const deleteLinkedRecipes = db.prepare('DELETE FROM meal_recipes WHERE meal_id = ? AND recipe_id IS NOT NULL');
+  const orphanRecipeIds = db.prepare(
+    'SELECT id FROM meal_recipes WHERE meal_id = ? AND recipe_id IS NULL ORDER BY position',
+  );
+  const setRecipePosition = db.prepare('UPDATE meal_recipes SET position = ? WHERE id = ?');
   const deleteStages = db.prepare('DELETE FROM meal_stages WHERE meal_id = ?');
   const list = db.prepare(
     `SELECT m.id, m.title, m.serve_at,
@@ -137,9 +141,17 @@ export function createMealsRepo(db: Database) {
   );
 
   function writeRecipes(mealId: string, recipes: MealRecipeInput[]): void {
-    deleteRecipes.run(mealId);
+    // Rows whose recipe has been deleted (recipe_id NULL) are kept: a caller can only name live recipes, so
+    // replacing everything would silently erase the deleted recipe's entry and its title snapshot, and the
+    // stages that still refer to it would no longer say where they came from. They go first, in their
+    // existing order, so the list does not reorder itself on every edit.
+    deleteLinkedRecipes.run(mealId);
+    const orphans = orphanRecipeIds.all(mealId) as { id: string }[];
+    orphans.forEach((o, i) => setRecipePosition.run(i, o.id));
+    // The title is read from the recipe again here, so a renamed recipe updates its snapshot on the next
+    // edit. That is intended; only a deleted recipe's title is frozen.
     recipes.forEach((r, i) =>
-      insertRecipe.run(crypto.randomUUID(), mealId, r.recipeId, r.recipeId, r.course, i),
+      insertRecipe.run(crypto.randomUUID(), mealId, r.recipeId, r.recipeId, r.course, orphans.length + i),
     );
   }
 

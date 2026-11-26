@@ -165,6 +165,60 @@ describe('meals repo', () => {
     expect(got.stages[0]!.text).toBe('Take the lamb out to come up to room temperature');
   });
 
+  it('editing the recipe set keeps the entry of a deleted recipe, first, with its title', () => {
+    const meal = newMeal();
+    repo.replaceStages(meal.id, [stage()], []);
+    recipes.delete(a);
+    const got = repo.update(meal.id, {
+      recipes: [
+        { recipeId: b, course: 'side' },
+        { recipeId: c, course: 'dessert' },
+      ],
+    })!;
+    expect(got.recipes.map((r) => [r.recipeId, r.recipeTitle, r.position])).toEqual([
+      [null, 'Roast lamb', 0],
+      [b, 'Roast potatoes', 1],
+      [c, 'Trifle', 2],
+    ]);
+    // a second edit does not duplicate or reorder it
+    const again = repo.update(meal.id, { recipes: [{ recipeId: b, course: 'main' }] })!;
+    expect(again.recipes.map((r) => [r.recipeTitle, r.position])).toEqual([
+      ['Roast lamb', 0],
+      ['Roast potatoes', 1],
+    ]);
+  });
+
+  it('changing only a recipe course does not mark the schedule stale', () => {
+    const meal = newMeal();
+    repo.replaceStages(meal.id, [stage()], []);
+    const got = repo.update(meal.id, {
+      recipes: [
+        { recipeId: a, course: 'starter' },
+        { recipeId: b, course: 'side' },
+      ],
+    })!;
+    expect(got.recipes[0]!.course).toBe('starter');
+    expect(got.scheduleStale).toBe(false);
+  });
+
+  it('a meal whose recipes have all been deleted still lists and reads', () => {
+    const meal = newMeal();
+    repo.replaceStages(meal.id, [stage()], []);
+    recipes.delete(a);
+    recipes.delete(b);
+    expect(repo.list().map((m) => [m.title, m.recipeCount, m.stageCount])).toEqual([['Sunday lunch', 2, 1]]);
+    const got = repo.get(meal.id)!;
+    expect(got.recipes.map((r) => [r.recipeId, r.recipeTitle])).toEqual([
+      [null, 'Roast lamb'],
+      [null, 'Roast potatoes'],
+    ]);
+    expect(got.stages[0]!.text).toBe('Take the lamb out to come up to room temperature');
+  });
+
+  it('naming a recipe that does not exist throws', () => {
+    expect(() => repo.create({ title: 'x', serveAt: '2026-11-29T13:00:00.000Z', recipes: [{ recipeId: 'nope', course: 'main' }] })).toThrow(/NOT NULL constraint failed: meal_recipes.recipe_title/);
+  });
+
   it('deleting a meal takes its recipes and stages with it', () => {
     const meal = newMeal();
     repo.replaceStages(meal.id, [stage()], []);
