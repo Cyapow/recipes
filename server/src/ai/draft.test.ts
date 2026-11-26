@@ -63,6 +63,13 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/untrusted/i);
     expect(SYSTEM_PROMPT).toMatch(/calling the record_recipe tool exactly once/);
   });
+  it('asks for every gap as a question, ordered and capped', () => {
+    expect(SYSTEM_PROMPT).toMatch(/"question"/);
+    expect(SYSTEM_PROMPT).toMatch(/at most eight/i);
+    expect(SYSTEM_PROMPT).toMatch(/most important .* first/i);
+    expect(SYSTEM_PROMPT).toMatch(/named by at least one step/i);
+    expect(SYSTEM_PROMPT).toMatch(/never mentions an oven|imply a detail/i);
+  });
 });
 
 describe('steps and title prompt rules', () => {

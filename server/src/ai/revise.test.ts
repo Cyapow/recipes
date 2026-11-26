@@ -46,6 +46,18 @@ describe('REVISE_SYSTEM_PROMPT', () => {
     expect(REVISE_SYSTEM_PROMPT).toMatch(/not set \(null\)/i);
     expect(REVISE_SYSTEM_PROMPT).toMatch(/never move an amount or a unit into "item"/i);
   });
+  it('carries the whole question-writing rule, not a summary of it', () => {
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/"question"/);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/at most eight/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/most important .* first/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/named by at least one step/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/never mentions an oven|imply a detail/i);
+  });
+  it('states what an answer to one of those questions may do', () => {
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/answers to the questions/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/only what its own question asked about/i);
+    expect(REVISE_SYSTEM_PROMPT).toMatch(/fills nothing/i);
+  });
 });
 
 describe('buildReviseMessage', () => {
