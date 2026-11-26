@@ -29,7 +29,7 @@ export function Describe() {
   // no step marks, no change summary and no Undo here — the editor has those for instructions typed by hand.
   const formInput = useRef<(() => RecipeInput) | null>(null);
   const [revision, setRevision] = useState(0);
-  const { answering, answerError, onAnswer } = useGapAnswers({
+  const { answering, answerError, onAnswer, clearAnswerError } = useGapAnswers({
     gaps,
     setGaps,
     // The panel is only on screen while there is a draft, so there is always one to fall back on.
@@ -47,10 +47,11 @@ export function Describe() {
   }, [revision]);
 
   async function create() {
-    if (busyRef.current || !text.trim()) return;
+    if (busyRef.current || answering || !text.trim()) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
+    clearAnswerError();
     try {
       const { gaps: g, provider, model: _model, ...input } = await describeRecipe(text);
       kept.save({ text, input: input as RecipeInput, gaps: g });
@@ -98,7 +99,7 @@ export function Describe() {
         />
       </label>
       <p className="hint">Tip: tap the microphone on your keyboard to dictate. Only what you say is used; anything missing is flagged, not filled in.</p>
-      <button type="button" className="primary" onClick={create} disabled={busy || !text.trim()}>
+      <button type="button" className="primary" onClick={create} disabled={busy || answering || !text.trim()}>
         {busy ? (<><span className="spinner" aria-hidden="true" /> Creating…</>) : 'Create draft'}
       </button>
       {error && <p className="field-error" role="alert">{error}</p>}

@@ -140,4 +140,38 @@ describe('Describe answers', () => {
     await waitFor(() => expect(listDrafts()[0]?.input?.ingredients[0]?.quantity).toBe(150));
     expect(listDrafts()[0]?.gaps).toEqual([oven]);
   });
+
+  it('does not let a new draft start while an answer is in flight', async () => {
+    vi.mocked(reviseRecipe).mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    app();
+    await toDraft(user);
+    await answerTheWine(user);
+    await waitFor(() => expect((screen.getByRole('button', { name: /create draft/i }) as HTMLButtonElement).disabled).toBe(true));
+    expect(describeRecipe).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a failed answer when a new draft is created', async () => {
+    const msg = 'The AI is busy. Try again in a minute.';
+    vi.mocked(reviseRecipe).mockRejectedValue(new ApiError(msg, 502, { error: msg, code: 'unavailable' }));
+    const user = userEvent.setup();
+    app();
+    await toDraft(user);
+    await answerTheWine(user);
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Check these' })).getByRole('alert').textContent).toBe(msg));
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Check these' })).queryByRole('alert')).toBeNull());
+  });
+
+  it('asks for a title before answering a draft that has none', async () => {
+    const user = userEvent.setup();
+    app();
+    await toDraft(user);
+    await user.clear(screen.getByLabelText('Title'));
+    await answerTheWine(user);
+    const panel = screen.getByRole('region', { name: 'Check these' });
+    await waitFor(() => expect(within(panel).getByRole('alert').textContent).toBe('Give the recipe a title first, then answer the questions.'));
+    expect(reviseRecipe).not.toHaveBeenCalled();
+    expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
+  });
 });

@@ -48,7 +48,7 @@ export function Import() {
   // not fetched again. The draft is seconds old and unsaved, so no step marks, no summary and no Undo here.
   const formInput = useRef<(() => RecipeInput) | null>(null);
   const [revision, setRevision] = useState(0);
-  const { answering, answerError, onAnswer } = useGapAnswers({
+  const { answering, answerError, onAnswer, clearAnswerError } = useGapAnswers({
     gaps,
     setGaps,
     // The panel is only on screen while there is a result, so there is always one to fall back on.
@@ -66,10 +66,11 @@ export function Import() {
   }, [revision]);
 
   async function run() {
-    if (busyRef.current || !url.trim()) return;
+    if (busyRef.current || answering || !url.trim()) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
+    clearAnswerError();
     setFetchFailed(false);
     try {
       const { draft: imported, ...meta } = await importRecipe(url.trim());
@@ -138,7 +139,7 @@ export function Import() {
             placeholder="https://www.bbcgoodfood.com/recipes/…"
           />
         </label>
-        <button type="submit" className="primary" disabled={busy || !url.trim()}>
+        <button type="submit" className="primary" disabled={busy || answering || !url.trim()}>
           {busy ? (<><span className="spinner" aria-hidden="true" /> Importing…</>) : 'Import'}
         </button>
       </form>

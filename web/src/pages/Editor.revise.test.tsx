@@ -222,6 +222,37 @@ describe('Editor revise', () => {
     expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
   });
 
+  it('does not say Answering… while a typed instruction is in flight, and refuses an answer then', async () => {
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine] }))
+      .mockImplementationOnce(() => new Promise<Revision>(() => {}));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    await apply(user, 'and again');
+    // No answers went out, so the panel's button still reads as itself rather than "Answering…".
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    expect(vi.mocked(reviseRecipe)).toHaveBeenCalledTimes(2);
+    const panel = screen.getByRole('region', { name: 'Check these' });
+    await waitFor(() => expect(within(panel).getByRole('alert').textContent).toMatch(/Wait for the revision/));
+    expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
+  });
+
+  it('asks for a title before answering a recipe that has none', async () => {
+    vi.mocked(reviseRecipe).mockResolvedValueOnce(revised({ gaps: [wine] }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    await user.clear(screen.getByLabelText('Title'));
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    const panel = screen.getByRole('region', { name: 'Check these' });
+    await waitFor(() => expect(within(panel).getByRole('alert').textContent).toBe('Give the recipe a title first, then answer the questions.'));
+    expect(vi.mocked(reviseRecipe)).toHaveBeenCalledTimes(1);
+    expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
+  });
+
   it('says so when the server has no AI configured', async () => {
     vi.mocked(reviseRecipe).mockRejectedValue(new Error('AI not configured'));
     const user = userEvent.setup();

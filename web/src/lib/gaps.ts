@@ -5,6 +5,9 @@ export type Answer = { gap: Gap; answer: string };
 export const MAX_ANSWERS = 8;
 export const MAX_ANSWER_CHARS = 200;
 
+/** Shown in the panel instead of sending: a recipe with no title is not one /api/ai/revise will take. */
+export const ANSWER_NEEDS_TITLE = 'Give the recipe a title first, then answer the questions.';
+
 /** Builds the single instruction sent to /api/ai/revise from the person's answers. */
 export function answerInstruction(answers: Answer[]): string {
   const lines = answers.map(({ gap, answer }, i) => `${i + 1}. Q: ${gap.question ?? gap.about} A: ${answer}`);

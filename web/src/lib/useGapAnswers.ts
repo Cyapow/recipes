@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { reviseRecipe, type Gap, type RecipeInput } from '../api';
 import { describeAiError } from './aiError';
-import { answerInstruction, mergeGaps, type Answer } from './gaps';
+import { ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from './gaps';
 
 export type GapAnswersOptions = {
   /** The questions on screen. The ones that were not answered are carried across the revision. */
@@ -24,14 +24,22 @@ export function useGapAnswers({ gaps, setGaps, current, onRevised }: GapAnswersO
   const inFlight = useRef(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
 
-  /** Rejects when the apply fails: that is what keeps the typed answers in the panel. */
+  /**
+   * Rejects whenever the answers were not applied — a refusal as much as a failure — because the panel reads a
+   * resolve as success and clears every box it sent.
+   */
   async function onAnswer(answers: Answer[]) {
-    if (inFlight.current) return;
+    if (inFlight.current) throw new Error('an apply is already in flight');
+    const recipe = current();
+    if (!recipe.title.trim()) {
+      setAnswerError(ANSWER_NEEDS_TITLE);
+      throw new Error('the recipe has no title');
+    }
     inFlight.current = true;
     setAnswering(true);
     setAnswerError(null);
     try {
-      const { gaps: returned, stepsFrom: _s, provider: _p, model: _m, ...input } = await reviseRecipe(current(), answerInstruction(answers));
+      const { gaps: returned, stepsFrom: _s, provider: _p, model: _m, ...input } = await reviseRecipe(recipe, answerInstruction(answers));
       // The questions answered are exactly the ones the panel sent, so only those leave the list.
       setGaps(mergeGaps(gaps, answers.map((a) => a.gap), returned));
       onRevised(input);
@@ -44,5 +52,8 @@ export function useGapAnswers({ gaps, setGaps, current, onRevised }: GapAnswersO
     }
   }
 
-  return { answering, answerError, onAnswer };
+  // Called where a page starts a fresh draft: the panel it was shown under is gone, so the message no longer applies.
+  const clearAnswerError = () => setAnswerError(null);
+
+  return { answering, answerError, onAnswer, clearAnswerError };
 }

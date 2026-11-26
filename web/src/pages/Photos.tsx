@@ -38,7 +38,7 @@ export function Photos() {
   // photos are not read again. The draft is seconds old and unsaved, so no step marks, no summary and no Undo here.
   const formInput = useRef<(() => RecipeInput) | null>(null);
   const [revision, setRevision] = useState(0);
-  const { answering, answerError, onAnswer } = useGapAnswers({
+  const { answering, answerError, onAnswer, clearAnswerError } = useGapAnswers({
     gaps,
     setGaps,
     // The panel is only on screen while there is a draft, so there is always one to fall back on.
@@ -94,10 +94,11 @@ export function Photos() {
     });
 
   async function create() {
-    if (busyRef.current || pending > 0 || photoIds.length === 0) return;
+    if (busyRef.current || answering || pending > 0 || photoIds.length === 0) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
+    clearAnswerError();
     try {
       const { gaps: g, provider, model: _m, dishCrop: crop, ...input } = await photosRecipe(photoIds);
       kept.save({ photoIds, input: input as RecipeInput, gaps: g, dishCrop: crop });
@@ -164,7 +165,7 @@ export function Photos() {
           </ul>
         )}
       </div>
-      <button type="button" className="primary" onClick={create} disabled={busy || pending > 0 || photoIds.length === 0}>
+      <button type="button" className="primary" onClick={create} disabled={busy || answering || pending > 0 || photoIds.length === 0}>
         {busy ? (<><span className="spinner" aria-hidden="true" /> Creating…</>) : 'Create draft'}
       </button>
       {error && <p className="field-error" role="alert">{error}</p>}

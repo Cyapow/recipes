@@ -4,7 +4,7 @@ import { deleteRecipe, getRecipe, reviseRecipe, saveRecipe, type Gap, type Recip
 import { RecipeForm } from '../components/RecipeForm';
 import { ReviseBox } from '../components/ReviseBox';
 import { describeAiError } from '../lib/aiError';
-import { answerInstruction, mergeGaps, type Answer } from '../lib/gaps';
+import { ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from '../lib/gaps';
 import { summariseChanges } from '../lib/reviseSummary';
 import { stepMarks, type StepMarks } from '../lib/stepMarks';
 import { describeSaveError } from '../lib/saveError';
@@ -35,6 +35,8 @@ export function Editor() {
   const [summary, setSummary] = useState<string[] | null>(null);
   const [reviseBusy, setReviseBusy] = useState(false);
   const [reviseError, setReviseError] = useState<string | null>(null);
+  // Separate from reviseBusy: the panel's "Answering…" must only show for answers that really went out.
+  const [answering, setAnswering] = useState(false);
   const [answerError, setAnswerError] = useState<string | null>(null);
   const before = useRef<RecipeInput | null>(null);
   const beforeGaps = useRef<Gap[]>([]);
@@ -115,15 +117,31 @@ export function Editor() {
     }
   }
 
-  /** Rejects when the apply fails: that is what keeps the typed answers in the panel. */
+  /**
+   * Rejects whenever the answers were not applied — a refusal as much as a failure — because the panel reads a
+   * resolve as success and clears every box it sent.
+   */
   async function onAnswer(answers: Answer[]) {
-    if (!initial || reviseBusy) return;
+    if (!initial) throw new Error('nothing to revise');
+    const current = formInput.current?.() ?? initial;
+    // One revision at a time: a typed instruction and an answer both reseed the form from what they were sent.
+    if (reviseBusy) {
+      setAnswerError('Wait for the revision to finish, then answer the questions.');
+      throw new Error('a revision is already in flight');
+    }
+    if (!current.title.trim()) {
+      setAnswerError(ANSWER_NEEDS_TITLE);
+      throw new Error('the recipe has no title');
+    }
     setAnswerError(null);
+    setAnswering(true);
     try {
-      await applyRevision(formInput.current?.() ?? initial, answerInstruction(answers), answers.map((a) => a.gap));
+      await applyRevision(current, answerInstruction(answers), answers.map((a) => a.gap));
     } catch (e) {
       setAnswerError(describeAiError(e, 'Could not apply your answers'));
       throw e;
+    } finally {
+      setAnswering(false);
     }
   }
 
@@ -174,7 +192,7 @@ export function Editor() {
       </header>
       {error && <p className="field-error" role="alert">{error}</p>}
       {initial && <ReviseBox busy={reviseBusy} error={reviseError} summary={summary} onApply={onRevise} onUndo={onUndo} />}
-      {initial && <RecipeForm facets={facets} key={`${id ?? 'new'}:${draft.existing?.id ?? ''}:${revision}`} initial={initial} gaps={gaps} onAnswer={onAnswer} answering={reviseBusy} answerError={answerError} marks={marks} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
+      {initial && <RecipeForm facets={facets} key={`${id ?? 'new'}:${draft.existing?.id ?? ''}:${revision}`} initial={initial} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} marks={marks} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
       {id && initial && (
         <button type="button" className="danger" onClick={onDelete}>
           Delete
