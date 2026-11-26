@@ -26,7 +26,7 @@ export function Cook() {
   return <CookSlides key={id} id={id} />;
 }
 
-function KeepOn({ wake }: { wake: ReturnType<typeof useWakeLock> }) {
+export function KeepOn({ wake }: { wake: ReturnType<typeof useWakeLock> }) {
   if (!wake.supported) return <p className="keep-on unsupported">Your browser can't keep the screen on</p>;
   return (
     <label className="keep-on">

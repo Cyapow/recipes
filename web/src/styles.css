@@ -541,5 +541,8 @@ body.cook-scroll-lock { overflow: hidden; }
 .meal-stage-actions, .meal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .meal-edit { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 12px; }
 .meal-stage > .meal-edit { margin-top: 0; }
+.meal-stage > input[type="checkbox"] { flex: none; width: 1.5rem; height: 1.5rem; margin: 0; }
+.meal-stage.done .meal-stage-text { text-decoration: line-through; opacity: 0.7; }
+.meal-served { font-weight: 700; }
 .meal-confirm { margin-top: 12px; }
 .meal-confirm p { margin: 0 0 10px; }

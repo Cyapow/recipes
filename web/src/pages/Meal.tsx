@@ -5,7 +5,9 @@ import {
   type MealIngredientLine, type MealWithIngredients, type StageWithWhen,
 } from '../api';
 import { BackIcon } from '../components/Icons';
+import { useWakeLock } from '../hooks/useWakeLock';
 import { describeAiError } from '../lib/aiError';
+import { KeepOn } from './Cook';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -157,34 +159,20 @@ function AddStage({ disabled, onAdd }: { disabled: boolean; onAdd: (offset: numb
   );
 }
 
-export function Meal() {
-  const { id = '' } = useParams();
-  const [meal, setMeal] = useState<MealWithIngredients | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMeal: (m: MealWithIngredients) => void; onFollow: () => void }) {
+  const id = meal.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** Set when drafting hit an existing schedule: what would be lost, awaiting a yes. */
   const [confirm, setConfirm] = useState<{ stages: number; done: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
-  useEffect(() => {
-    let current = true;
-    setMeal(null);
-    setLoadError(null);
-    setConfirm(null);
-    setEditing(null);
-    getMeal(id)
-      .then((m) => current && setMeal(m))
-      .catch(() => current && setLoadError('Could not load this meal'));
-    return () => { current = false; };
-  }, [id]);
-
   async function draft(replace: boolean) {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      setMeal(await scheduleMeal(id, replace));
+      onMeal(await scheduleMeal(id, replace));
       setConfirm(null);
     } catch (err) {
       const body = err instanceof ApiError ? (err.body as { code?: string; stages?: number; done?: number } | undefined) : undefined;
@@ -202,7 +190,7 @@ export function Meal() {
     setBusy(true);
     setError(null);
     try {
-      setMeal(await updateMeal(id, { stages: stageInputs(stages) }));
+      onMeal(await updateMeal(id, { stages: stageInputs(stages) }));
       setEditing(null);
       return true;
     } catch {
@@ -212,9 +200,6 @@ export function Meal() {
       setBusy(false);
     }
   }
-
-  if (loadError) return <main className="page"><p className="field-error" role="alert">{loadError}</p></main>;
-  if (!meal) return <main className="page"><p className="sub" role="status">Loading…</p></main>;
 
   const titles = new Map(meal.recipes.map((r) => [r.recipeId, r.recipeTitle]));
   const liveRecipeIds = meal.recipes.flatMap((r) => (r.recipeId ? [r.recipeId] : []));
@@ -232,6 +217,7 @@ export function Meal() {
       <header className="cook-bar">
         <Link className="btn round-btn" to="/meals" aria-label="Back to meals"><BackIcon /></Link>
         {liveRecipeIds.length > 0 && <Link className="btn" to={plannerHref}>Plan the shopping</Link>}
+        {meal.stages.length > 0 && <button type="button" className="btn" onClick={onFollow}>Follow on the day</button>}
       </header>
       <h1>{meal.title}</h1>
       <p className="sub">Serving {meal.serveText}</p>
@@ -287,4 +273,111 @@ export function Meal() {
       </section>
     </main>
   );
+}
+
+/** How often the live view looks at the clock again; nothing is re-fetched. */
+const CLOCK_MS = 30_000;
+
+function LiveView({ meal, onMeal, onBack }: { meal: MealWithIngredients; onMeal: (m: MealWithIngredients) => void; onBack: () => void }) {
+  const wake = useWakeLock();
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), CLOCK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function tick(stage: StageWithWhen) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const doneAt = stage.doneAt === null ? new Date().toISOString() : null;
+    try {
+      onMeal(await updateMeal(meal.id, { stages: stageInputs(meal.stages.map((s) => (s === stage ? { ...s, doneAt } : s))) }));
+    } catch {
+      setError('Could not save your changes');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const titles = new Map(meal.recipes.map((r) => [r.recipeId, r.recipeTitle]));
+  // The only thing read from a stage's `at` is whether it has passed; everything shown comes from the server.
+  const isDue = (s: StageWithWhen) => Date.parse(s.at) <= now;
+  const sections = [
+    { name: 'Due now', stages: meal.stages.filter((s) => s.doneAt === null && isDue(s)) },
+    { name: 'Next', stages: meal.stages.filter((s) => s.doneAt === null && !isDue(s)) },
+    { name: 'Done', stages: meal.stages.filter((s) => s.doneAt !== null) },
+  ];
+  const allDone = meal.stages.length > 0 && sections[2].stages.length === meal.stages.length;
+
+  return (
+    <main className="page meal">
+      <header className="cook-bar">
+        <button type="button" className="btn" onClick={onBack}>Back to the plan</button>
+        <KeepOn wake={wake} />
+      </header>
+      <h1>{meal.title}</h1>
+      <p className="sub">Serving {meal.serveText}</p>
+      {error && <p className="field-error" role="alert">{error}</p>}
+      {allDone && <p className="meal-served" role="status">Everything is done. The meal is served.</p>}
+
+      {sections.filter((sec) => sec.stages.length > 0).map((sec) => (
+        <section key={sec.name} aria-label={sec.name}>
+          <h2>{sec.name}</h2>
+          <ul className="rows meal-stages">
+            {sec.stages.map((s) => {
+              const title = s.recipeId ? titles.get(s.recipeId) ?? null : null;
+              return (
+                <li key={s.id} className={`meal-stage${s.doneAt !== null ? ' done' : ''}`}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Done: ${s.text}`}
+                    checked={s.doneAt !== null}
+                    disabled={busy}
+                    onChange={() => void tick(s)}
+                  />
+                  <span className="meal-time">{s.clock}</span>
+                  <span className="meal-stage-body">
+                    <span className="meal-stage-text">{s.text}</span>
+                    <span className="sub">
+                      {s.durationMinutes !== null && durationText(s.durationMinutes, s.estimated)}
+                      {s.durationMinutes !== null && title && ' · '}
+                      {title}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </main>
+  );
+}
+
+export function Meal() {
+  const { id = '' } = useParams();
+  const [meal, setMeal] = useState<MealWithIngredients | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [following, setFollowing] = useState(false);
+
+  useEffect(() => {
+    let current = true;
+    setMeal(null);
+    setLoadError(null);
+    setFollowing(false);
+    getMeal(id)
+      .then((m) => current && setMeal(m))
+      .catch(() => current && setLoadError('Could not load this meal'));
+    return () => { current = false; };
+  }, [id]);
+
+  if (loadError) return <main className="page"><p className="field-error" role="alert">{loadError}</p></main>;
+  if (!meal) return <main className="page"><p className="sub" role="status">Loading…</p></main>;
+  return following
+    ? <LiveView meal={meal} onMeal={setMeal} onBack={() => setFollowing(false)} />
+    : <PlanView meal={meal} onMeal={setMeal} onFollow={() => setFollowing(true)} />;
 }
