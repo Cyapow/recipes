@@ -26,6 +26,7 @@ What changed:
 - Favourites are part of the backup too, and the backup fingerprint now includes them, so the first nightly backup after this deploy uploads once even if no recipe changed and nobody has starred anything yet. Like the allowlist change above, that and your post-upgrade "Back up now" check create NEWER snapshots, so a rollback must still name the pre-upgrade file explicitly.
 - Migration `009_favourites.sql` takes the database to schema version 9 (each person's starred recipes). It runs on first start, on top of schema version 8. Once it has run, a snapshot taken by the new build cannot be restored into an older build; `server/scripts/restore.ts` refuses a snapshot with a newer schema version.
 - **Describe your edits.** The recipe editor has a box at the top: type an instruction such as "let it cool for 20 minutes before continuing" and the form comes back revised, with new and reworded steps marked. Nothing is saved until you press Save. It adds one route, `POST /api/ai/revise`, and it needs an AI key set in `.env`: without one the server answers 503 and the editor says so in a plain sentence. There is no migration, no schema change and no new environment variable, so the rollback steps below are unchanged. Saving a revised recipe is an ordinary save, so it changes the backup fingerprint exactly as a manual edit does.
+- **Meals.** Pick the recipes that make up a meal (a starter, a main, two sides), say when you want to eat, and get one merged ingredient list plus a schedule worked back from the serving time, which you read days ahead and follow on the day (the calendar button in the library opens Meals). Creating, reading, editing and ticking a meal all work without an AI key. Drafting the schedule needs a working AI key: without one the server answers 503 and the page says so in a plain sentence. It adds six routes under `/api/meals`. Migration `010_meals.sql` takes the database to schema version 10 (the meal, its recipes and its schedule steps). It runs on first start, on top of schema version 9. Once it has run, a snapshot taken by the new build cannot be restored into an older build. There is no new environment variable. Meals are part of the backup and the backup fingerprint, so a change to a meal makes that night's backup upload, and they ride the SQLite snapshot, so a restore brings them back.
 
 After deploying:
 
@@ -34,12 +35,12 @@ After deploying:
 
 Rolling back:
 
-- Rebuilding the old commit on the data that is now on Hetzner is NOT enough. That database has been migrated to schema version 9, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
+- Rebuilding the old commit on the data that is now on Hetzner is NOT enough. That database has been migrated to schema version 10, and `server/scripts/restore.ts` refuses a snapshot from a newer app version, so any snapshot taken after this deploy cannot be restored into the old build. The old build also has no login at all.
 - The old build must never sit behind the public nginx vhost: it would be a site with no login. Take the Hetzner container down first, and roll back on the LAN box, where it is LAN-only again.
 - Recipes added after the upgrade are lost either way.
 - The shortest rollback: the LAN `recipes_recipes_data` volume was stopped before the copy, mounted read-only for it, and never migrated, so it is still the pre-upgrade database. Check out the old commit on the LAN box and start it on that volume (steps A below). No download and no restore.
 - If that volume is gone, check out the old commit AND restore the pre-upgrade snapshot you noted and downloaded before upgrading (steps B below).
-- In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-9 one that the old build cannot take.
+- In the snapshot path, NEVER use the restore command's default. It restores the NEWEST snapshot, which after this deploy is a version-10 one that the old build cannot take.
 
 The quick rollback depends on the existing LAN install: the app's checkout in `/opt/recipes`, its `.env`, the `recipes-app` container and the `recipes_recipes_data` volume. That install was set up before this release and this release does not touch it: step 4 of the first-deploy sequence only stops the container and copies the volume out read-only. Leave all of it in place, untouched, until Hetzner has proven itself (see step 10). Deleting or rebuilding it turns a quick rollback into a restore from Drive.
 
@@ -174,7 +175,7 @@ docker port recipes-app
 ss -ltn | grep ':3006 '
 ```
 
-The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 9 (`008_auth.sql`, then `009_favourites.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
+The log must not say `Refusing to start`, and `docker port` and `ss` must both show `127.0.0.1:3006`, never `0.0.0.0:3006`. The first start migrates the copied database to schema version 10 (`008_auth.sql`, then `009_favourites.sql`, then `010_meals.sql`), so this is also the point of no return for that copy; the LAN volume is untouched.
 
 Check the photo files made it. This must match the count you noted on the LAN box (the recipes themselves are checked through the app at step 9):
 
@@ -218,6 +219,12 @@ DELETE /api/recipes/1
 PUT /api/recipes/1/favourite
 DELETE /api/recipes/1/favourite
 GET /api/tags
+GET /api/meals
+POST /api/meals
+GET /api/meals/1
+PUT /api/meals/1
+DELETE /api/meals/1
+POST /api/meals/1/schedule
 GET /api/shopping
 POST /api/shopping/add
 DELETE /api/shopping/1
@@ -292,10 +299,11 @@ From a phone off the home wifi, or any machine other than the LAN box: open `htt
 3. Edit a recipe: change a price or tag, save, reload, and confirm it stuck. Then change it back.
 4. From photos: add one or two photos of a recipe card from a phone. Confirm a draft appears with a brand, tags and a cropped dish photo, then discard it. This needs a working AI key on the new box.
 5. Describe your edits: open a recipe with a few steps, type "let it cool for 20 minutes before serving" in the box at the top of the editor, and confirm the form comes back with a new step marked New, a summary naming it, and an Undo that puts it back. Leave without saving. This needs a working AI key on the new box.
-6. Shopping list: add a recipe's ingredients and confirm they appear.
-7. Planner: confirm your shops, ingredient packs and budget came across, plan a couple of recipes, and add the result to the shopping list.
-8. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
-9. Settings shows Drive still connected. Press "Back up now" and confirm success.
+6. Meals: make a meal from a starter and a main, say when you want to eat, and confirm one merged ingredient list appears. Tick a step, reload, and confirm the tick stuck; then delete the test meal. Drafting a schedule ("Draft a schedule") needs a working AI key on the new box; everything else about a meal works without one.
+7. Shopping list: add a recipe's ingredients and confirm they appear.
+8. Planner: confirm your shops, ingredient packs and budget came across, plan a couple of recipes, and add the result to the shopping list.
+9. Settings > Who can get in lists your address; add anyone else who should have access. To test removal, add a second address, sign in as that person on another device, remove them, and confirm that device is signed out at its next request.
+10. Settings shows Drive still connected. Press "Back up now" and confirm success.
 
 If the Google button never appears (a heading and nothing under it), the script or the client is being refused: check *Authorised JavaScript origins* on the OAuth client includes `https://recipes.matchapman.dev` exactly (see `docs/setup-google.md`), and open the browser console on the sign-in page — Google reports the mismatch there. The screen offers a **Try again** button once the load fails outright.
 
