@@ -8,6 +8,7 @@ import { aiErrorMessage, ProviderError, type Provider, type ProviderErrorCode, t
 import { providerOrder } from './registry.js';
 import { applyRevision, AiRevisionParseSchema, buildReviseMessage, REVISE_SYSTEM_PROMPT, REVISE_TOOL, type AppliedRevision } from './revise.js';
 import type { RecipeInput } from '../recipes/schema.js';
+import { AiPlanParseSchema, applySchedule, buildPlanMessage, PLAN_SYSTEM_PROMPT, PLAN_TOOL, type AppliedSchedule, type PlanMealInput } from '../meals/schedule.js';
 
 export type { SdkLike };
 export type { ProviderErrorCode, ProviderName };
@@ -21,9 +22,14 @@ export type ExtractInput =
 export type ReviseInput = { recipe: RecipeInput; instruction: string };
 export type AiRevisionResult = AppliedRevision & { provider: ProviderName; model: string };
 
+/** `recipeIds` is positional with `recipes`: it is how a recipe index the model names becomes a real recipe. */
+export type PlanMealRequest = PlanMealInput & { recipeIds: string[] };
+export type AiPlanResult = AppliedSchedule & { provider: ProviderName; model: string };
+
 export interface AiClient {
   extractRecipe(input: ExtractInput): Promise<AiExtraction>;
   reviseRecipe(input: ReviseInput): Promise<AiRevisionResult>;
+  planMeal(input: PlanMealRequest): Promise<AiPlanResult>;
 }
 
 export class AiInvalidOutputError extends Error {
@@ -195,6 +201,28 @@ export function createAiClient(config: Config, deps: AiClientDeps = {}): AiClien
             const parsed = AiRevisionParseSchema.safeParse(raw);
             return parsed.success
               ? { ok: true, value: { ...applyRevision(parsed.data, input.recipe), provider: provider.name, model: provider.model } }
+              : { ok: false, error: parsed.error.message };
+          },
+        ),
+      ),
+    planMeal: (input) =>
+      withFallback((budget, provider) =>
+        converge<AiPlanResult>(
+          budget,
+          provider,
+          { system: PLAN_SYSTEM_PROMPT, tool: PLAN_TOOL },
+          { role: 'user', text: buildPlanMessage(input) },
+          (raw) => {
+            const parsed = AiPlanParseSchema.safeParse(raw);
+            return parsed.success
+              ? {
+                  ok: true,
+                  value: {
+                    ...applySchedule(parsed.data, input.recipes.map(({ recipe }, n) => ({ id: input.recipeIds[n]!, stepCount: recipe.steps.length }))),
+                    provider: provider.name,
+                    model: provider.model,
+                  },
+                }
               : { ok: false, error: parsed.error.message };
           },
         ),

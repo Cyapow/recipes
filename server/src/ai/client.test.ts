@@ -6,6 +6,7 @@ import { loadConfig } from '../config.js';
 import type { ProviderRequest } from './providers/types.js';
 import { buildUserMessage } from './draft.js';
 import { REVISE_SYSTEM_PROMPT } from './revise.js';
+import { PLAN_SYSTEM_PROMPT } from '../meals/schedule.js';
 import type { RecipeInput } from '../recipes/schema.js';
 
 const draft = {
@@ -419,6 +420,84 @@ describe('reviseRecipe', () => {
   it('throws AiRefusedError on a refusal without retrying', async () => {
     const a = fake('anthropic', { kind: 'refusal', raw: 'no' } as ProviderResult);
     await expect(build(cfg(), { anthropic: a, openai: fake('openai') }).reviseRecipe(ask)).rejects.toBeInstanceOf(AiRefusedError);
+    expect(a.complete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('planMeal', () => {
+  const lamb: RecipeInput = {
+    title: 'Roast lamb', description: null, origin: 'mine', brand: 'Mine', sourceName: null, sourceUrl: null,
+    servings: null, prepMinutes: null, cookMinutes: null,
+    ingredients: [{ group: null, quantity: null, unit: null, item: 'lamb shoulder', note: null }],
+    steps: [{ text: 'Roast for 3 hours', imageId: null, ingredients: [] }],
+    notes: null, tags: [], imageIds: [],
+  };
+  const gravy: RecipeInput = { ...lamb, title: 'Gravy', steps: [{ text: 'Simmer the juices', imageId: null, ingredients: [] }] };
+  const ask = {
+    title: 'Sunday lunch',
+    serveAt: '2026-12-06T13:00',
+    recipes: [{ course: 'main', recipe: lamb }, { course: 'side', recipe: gravy }],
+    recipeIds: ['r1', 'r2'],
+  };
+  const plan = {
+    stages: [{ recipeIndex: 0, stepIndices: [0], text: 'Put the lamb in', offsetMinutes: 180, durationMinutes: 180, estimated: false }],
+    watchOut: [],
+  };
+  const good: ProviderResult = { kind: 'draft', input: plan, raw: 'x' };
+  const bad: ProviderResult = { kind: 'draft', input: { nonsense: true }, raw: 'y' };
+
+  it('plans through the first provider and reports which one', async () => {
+    const out = await build(cfg(), { anthropic: fake('anthropic', good) }).planMeal(ask);
+    expect(out.provider).toBe('anthropic');
+    expect(out.model).toBe('anthropic-model');
+    expect(out.stages[0]!.recipeId).toBe('r1');
+    expect(out.stages[0]!.stepIndices).toEqual([0]);
+  });
+
+  it('sends the plan prompt and the plan tool, and the recipes reach the provider', async () => {
+    const f = fake('anthropic', good);
+    await build(cfg({ aiProvider: 'anthropic' }), { anthropic: f }).planMeal(ask);
+    const req = f.complete.mock.calls[0]![0] as ProviderRequest;
+    expect(req.system).toBe(PLAN_SYSTEM_PROMPT);
+    expect(req.tool.name).toBe('plan_meal');
+    expect(req.messages[0]).toMatchObject({ role: 'user' });
+    const text = (req.messages[0] as { text: string }).text;
+    expect(text).toContain('Roast lamb');
+    expect(text).toContain('Gravy');
+    expect(text).toContain('Serve at:');
+  });
+
+  it('turns a recipe index into the id at the same position', async () => {
+    const second = { stages: [{ ...plan.stages[0]!, recipeIndex: 1 }], watchOut: [] };
+    const out = await build(cfg(), { anthropic: fake('anthropic', { kind: 'draft', input: second, raw: 'x' }) }).planMeal(ask);
+    expect(out.stages[0]!.recipeId).toBe('r2');
+  });
+
+  it('falls back to the next provider on a provider failure', async () => {
+    const o = fake('openai', good);
+    const out = await build(cfg(), { anthropic: fake('anthropic', 'rate_limit'), openai: o }).planMeal(ask);
+    expect(out.provider).toBe('openai');
+    expect((o.complete.mock.calls[0]![0] as ProviderRequest).tool.name).toBe('plan_meal');
+  });
+
+  it("reports the first provider's code when every provider fails", async () => {
+    const err = await build(cfg(), { anthropic: fake('anthropic', 'no_credit'), openai: fake('openai', 'rate_limit'), gemini: fake('gemini', 'unavailable') })
+      .planMeal(ask).catch((e) => e);
+    expect(err).toBeInstanceOf(AiRequestError);
+    expect(err.code).toBe('no_credit');
+  });
+
+  it('retries once on invalid output, then throws AiInvalidOutputError', async () => {
+    const a = fake('anthropic', bad, bad);
+    const o = fake('openai');
+    await expect(build(cfg(), { anthropic: a, openai: o }).planMeal(ask)).rejects.toBeInstanceOf(AiInvalidOutputError);
+    expect(a.complete).toHaveBeenCalledTimes(2);
+    expect(o.complete).not.toHaveBeenCalled();
+  });
+
+  it('throws AiRefusedError on a refusal without retrying', async () => {
+    const a = fake('anthropic', { kind: 'refusal', raw: 'no' } as ProviderResult);
+    await expect(build(cfg(), { anthropic: a, openai: fake('openai') }).planMeal(ask)).rejects.toBeInstanceOf(AiRefusedError);
     expect(a.complete).toHaveBeenCalledTimes(1);
   });
 });
