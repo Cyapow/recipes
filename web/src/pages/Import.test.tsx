@@ -4,14 +4,17 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Import } from './Import';
+import { listDrafts } from '../lib/drafts';
 import type { ImportResult } from '../api';
 
-vi.mock('../api', async () => ({ ...(await vi.importActual<typeof import('../api')>('../api')), importRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
-import { ApiError, importRecipe, saveRecipe } from '../api';
+vi.mock('../api', async () => ({ ...(await vi.importActual<typeof import('../api')>('../api')), importRecipe: vi.fn(), reviseRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn() }));
+import { ApiError, importRecipe, reviseRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
+  localStorage.clear();
   vi.mocked(importRecipe).mockReset();
+  vi.mocked(reviseRecipe).mockReset();
   vi.mocked(saveRecipe).mockReset();
 });
 
@@ -34,6 +37,30 @@ function app() {
 }
 
 describe('Import', () => {
+  it('answers a question without fetching the page again', async () => {
+    const asked = { about: 'plain flour', question: 'How much plain flour?' };
+    const oven = { about: 'oven', question: 'What temperature is the oven?' };
+    vi.mocked(importRecipe).mockResolvedValue({ draft: { ...draft, gaps: [asked, oven] }, usedAi: true, usable: true });
+    const { gaps: _g, ...input } = draft;
+    vi.mocked(reviseRecipe).mockResolvedValue({ ...input, servings: 6, gaps: [], stepsFrom: [0] });
+    const user = userEvent.setup();
+    app();
+    await user.type(screen.getByLabelText(/recipe page address/i), 'https://www.bbcgoodfood.com/r');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+    await user.type(await screen.findByLabelText(asked.question), '100g');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    await waitFor(() => expect(reviseRecipe).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(reviseRecipe).mock.calls[0]![1]).toContain('Q: How much plain flour? A: 100g');
+    expect(importRecipe).toHaveBeenCalledTimes(1);
+    // The question answered is gone, the one left is still there, and the revision is on screen and in the draft.
+    await waitFor(() => expect(screen.queryByLabelText(asked.question)).toBeNull());
+    expect(screen.getByLabelText(oven.question)).toBeTruthy();
+    expect((screen.getByLabelText('Servings') as HTMLInputElement).value).toBe('6');
+    await waitFor(() => expect(listDrafts()[0]?.gaps).toEqual([oven]));
+    expect(listDrafts()[0]?.input?.servings).toBe(6);
+    expect(listDrafts()[0]?.url).toBe('https://www.bbcgoodfood.com/r');
+  });
+
   it('imports into the form and saves only on Save', async () => {
     vi.mocked(importRecipe).mockResolvedValue({ draft, usedAi: false, usable: true });
     vi.mocked(saveRecipe).mockResolvedValue({ ...draft, id: 'n1', createdAt: '', updatedAt: '', favouritedBy: [] });

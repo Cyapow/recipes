@@ -4,6 +4,7 @@ import { deleteRecipe, getRecipe, reviseRecipe, saveRecipe, type Gap, type Recip
 import { RecipeForm } from '../components/RecipeForm';
 import { ReviseBox } from '../components/ReviseBox';
 import { describeAiError } from '../lib/aiError';
+import { answerInstruction, mergeGaps, type Answer } from '../lib/gaps';
 import { summariseChanges } from '../lib/reviseSummary';
 import { stepMarks, type StepMarks } from '../lib/stepMarks';
 import { describeSaveError } from '../lib/saveError';
@@ -34,6 +35,7 @@ export function Editor() {
   const [summary, setSummary] = useState<string[] | null>(null);
   const [reviseBusy, setReviseBusy] = useState(false);
   const [reviseError, setReviseError] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
   const before = useRef<RecipeInput | null>(null);
   const beforeGaps = useRef<Gap[]>([]);
 
@@ -69,14 +71,11 @@ export function Editor() {
     };
   }, [id, draft.existing]);
 
-  async function onRevise(instruction: string) {
-    if (!initial || reviseBusy) return;
-    const current = formInput.current?.() ?? initial;
-    setReviseError(null);
-    if (!current.title.trim()) {
-      setReviseError('Give the recipe a title first, then describe what to change.');
-      return;
-    }
+  /**
+   * One revision applied to `current`, from a typed instruction or from answers to the AI's questions.
+   * `asked` names the questions that were answered; it throws so each caller can show the failure in its own place.
+   */
+  async function applyRevision(current: RecipeInput, instruction: string, asked?: Gap[]) {
     setReviseBusy(true);
     try {
       const { gaps: newGaps, stepsFrom, provider: _p, model: _m, ...next } = await reviseRecipe(current, instruction);
@@ -89,13 +88,42 @@ export function Editor() {
       // against what was sent while Undo restores what was last on screen. Deliberate: losing the typing is worse.
       before.current = formInput.current?.() ?? current;
       beforeGaps.current = gaps;
-      setGaps(newGaps);
+      // Answers say which questions they answered, so only those leave the list and the rest are carried across.
+      // A typed instruction says nothing about the list, so its gaps replace it, as they always have.
+      setGaps(asked ? mergeGaps(gaps, asked, newGaps) : newGaps);
       setInitial(next);
       setRevision((n) => n + 1);
-    } catch (e) {
-      setReviseError(describeAiError(e, 'Could not revise the recipe'));
     } finally {
       setReviseBusy(false);
+    }
+  }
+
+  async function onRevise(instruction: string) {
+    if (!initial || reviseBusy) return;
+    const current = formInput.current?.() ?? initial;
+    setReviseError(null);
+    // A revision remounts the form, so the panel's boxes start empty: an answer's failure no longer applies to them.
+    setAnswerError(null);
+    if (!current.title.trim()) {
+      setReviseError('Give the recipe a title first, then describe what to change.');
+      return;
+    }
+    try {
+      await applyRevision(current, instruction);
+    } catch (e) {
+      setReviseError(describeAiError(e, 'Could not revise the recipe'));
+    }
+  }
+
+  /** Rejects when the apply fails: that is what keeps the typed answers in the panel. */
+  async function onAnswer(answers: Answer[]) {
+    if (!initial || reviseBusy) return;
+    setAnswerError(null);
+    try {
+      await applyRevision(formInput.current?.() ?? initial, answerInstruction(answers), answers.map((a) => a.gap));
+    } catch (e) {
+      setAnswerError(describeAiError(e, 'Could not apply your answers'));
+      throw e;
     }
   }
 
@@ -146,7 +174,7 @@ export function Editor() {
       </header>
       {error && <p className="field-error" role="alert">{error}</p>}
       {initial && <ReviseBox busy={reviseBusy} error={reviseError} summary={summary} onApply={onRevise} onUndo={onUndo} />}
-      {initial && <RecipeForm facets={facets} key={`${id ?? 'new'}:${draft.existing?.id ?? ''}:${revision}`} initial={initial} gaps={gaps} marks={marks} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
+      {initial && <RecipeForm facets={facets} key={`${id ?? 'new'}:${draft.existing?.id ?? ''}:${revision}`} initial={initial} gaps={gaps} onAnswer={onAnswer} answering={reviseBusy} answerError={answerError} marks={marks} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => draft.save({ input })} />}
       {id && initial && (
         <button type="button" className="danger" onClick={onDelete}>
           Delete

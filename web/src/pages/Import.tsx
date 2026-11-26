@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, importRecipe, saveRecipe, type ImportResult, type RecipeInput } from '../api';
+import { ApiError, importRecipe, saveRecipe, type Gap, type ImportResult, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
 import { useFacets } from '../lib/useFacets';
+import { useGapAnswers } from '../lib/useGapAnswers';
 
 const hostOf = (u: string) => {
   try {
@@ -31,15 +32,38 @@ export function Import() {
   const kept = useDraft('import');
   const resumed = kept.existing;
   const [url, setUrl] = useState(resumed?.url ?? '');
-  const [result, setResult] = useState<{ n: number; value: ImportResult } | null>(
-    resumed?.input ? { n: 1, value: { draft: { ...resumed.input, gaps: resumed.gaps ?? [] }, usedAi: false, usable: true } as ImportResult } : null,
+  // The imported recipe seeds the form; the rest of the result says how the import went.
+  const [result, setResult] = useState<{ n: number; input: RecipeInput; meta: Omit<ImportResult, 'draft'> } | null>(
+    resumed?.input ? { n: 1, input: resumed.input, meta: { usedAi: false, usable: true } } : null,
   );
+  const [gaps, setGaps] = useState<Gap[]>(resumed?.gaps ?? []);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchFailed, setFetchFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+
+  // Answering: the form is reloaded (new key) with the revision. The answers go to /api/ai/revise, so the page is
+  // not fetched again. The draft is seconds old and unsaved, so no step marks, no summary and no Undo here.
+  const formInput = useRef<(() => RecipeInput) | null>(null);
+  const [revision, setRevision] = useState(0);
+  const { answering, answerError, onAnswer } = useGapAnswers({
+    gaps,
+    setGaps,
+    // The panel is only on screen while there is a result, so there is always one to fall back on.
+    current: () => formInput.current?.() ?? result!.input,
+    onRevised: (input) => {
+      setResult((r) => (r ? { ...r, input } : r));
+      setRevision((n) => n + 1);
+    },
+  });
+
+  // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
+  // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-answer contents.
+  useEffect(() => {
+    if (revision > 0 && result) kept.save({ url, input: result.input, gaps });
+  }, [revision]);
 
   async function run() {
     if (busyRef.current || !url.trim()) return;
@@ -48,14 +72,18 @@ export function Import() {
     setError(null);
     setFetchFailed(false);
     try {
-      const value = await importRecipe(url.trim());
+      const { draft: imported, ...meta } = await importRecipe(url.trim());
+      const { gaps: g, ...input } = imported;
       setFetchFailed(false);
-      kept.save({ url: url.trim(), input: value.draft, gaps: value.draft.gaps });
-      setResult((r) => ({ n: (r?.n ?? 0) + 1, value }));
+      kept.save({ url: url.trim(), input, gaps: g });
+      setGaps(g);
+      setResult((r) => ({ n: (r?.n ?? 0) + 1, input, meta }));
     } catch (e) {
       if (e instanceof ApiError && e.status === 502) {
+        const { gaps: g, ...input } = emptyDraft(url.trim());
         setFetchFailed(true);
-        setResult((r) => ({ n: (r?.n ?? 0) + 1, value: { draft: emptyDraft(url.trim()), usedAi: false, usable: false } }));
+        setGaps(g);
+        setResult((r) => ({ n: (r?.n ?? 0) + 1, input, meta: { usedAi: false, usable: false } }));
         return;
       }
       setFetchFailed(false);
@@ -81,8 +109,6 @@ export function Import() {
       setSaving(false);
     }
   }
-
-  const { gaps, ...initial } = result?.value.draft ?? ({} as ImportResult['draft']);
 
   return (
     <main className="page">
@@ -118,11 +144,11 @@ export function Import() {
       </form>
       {error && <p className="field-error" role="alert">{error}</p>}
       {fetchFailed && <p className="field-error" role="alert">Couldn't fetch that page. You can still type the recipe in below.</p>}
-      {result?.value.aiError && <p className="field-error" role="alert">{result.value.aiError.error}</p>}
-      {result?.value.usable && draftedBy(result.value.provider) && <p className="hint">{draftedBy(result.value.provider)}</p>}
-      {result && !fetchFailed && !result.value.usable && !result.value.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
+      {result?.meta.aiError && <p className="field-error" role="alert">{result.meta.aiError.error}</p>}
+      {result?.meta.usable && draftedBy(result.meta.provider) && <p className="hint">{draftedBy(result.meta.provider)}</p>}
+      {result && !fetchFailed && !result.meta.usable && !result.meta.aiError && <p className="field-error" role="alert">Couldn't find a recipe on that page</p>}
       {result && (
-        <RecipeForm facets={facets} key={result.n} initial={initial as RecipeInput} gaps={gaps} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
+        <RecipeForm facets={facets} key={`${result.n}:${revision}`} initial={result.input} gaps={gaps} onAnswer={onAnswer} answering={answering} answerError={answerError} inputRef={formInput} onSave={onSave} saving={saving} onChange={(input) => kept.save({ url, input })} />
       )}
     </main>
   );

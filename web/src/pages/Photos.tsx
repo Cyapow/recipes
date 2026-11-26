@@ -1,12 +1,13 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, photosRecipe, saveRecipe, uploadImage, type AiDraft, type PhotosDraft, type RecipeInput } from '../api';
+import { ApiError, photosRecipe, saveRecipe, uploadImage, type AiProviderName, type Gap, type PhotosDraft, type RecipeInput } from '../api';
 import { RecipeForm } from '../components/RecipeForm';
 import { draftedBy } from '../lib/aiProvider';
 import { describeSaveError } from '../lib/saveError';
 import { useDraft } from '../lib/drafts';
 import { shrinkImage } from '../lib/shrinkImage';
 import { useFacets } from '../lib/useFacets';
+import { useGapAnswers } from '../lib/useGapAnswers';
 
 const MAX_PHOTOS = 6;
 
@@ -19,9 +20,10 @@ export function Photos() {
   const resumed = kept.existing;
   const [photoIds, setPhotoIds] = useState<string[]>(resumed?.photoIds ?? []);
   const [dishCrop, setDishCrop] = useState<DishCrop>(resumed?.dishCrop ?? null);
-  const [draft, setDraft] = useState<{ n: number; value: AiDraft | PhotosDraft } | null>(
-    resumed?.input ? { n: 1, value: { ...resumed.input, gaps: resumed.gaps ?? [] } as AiDraft } : null,
+  const [draft, setDraft] = useState<{ n: number; input: RecipeInput; provider?: AiProviderName } | null>(
+    resumed?.input ? { n: 1, input: resumed.input } : null,
   );
+  const [gaps, setGaps] = useState<Gap[]>(resumed?.gaps ?? []);
   const [pending, setPending] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(0);
@@ -31,6 +33,27 @@ export function Photos() {
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const full = photoIds.length >= MAX_PHOTOS;
+
+  // Answering: the form is reloaded (new key) with the revision. The answers go to /api/ai/revise, so the card
+  // photos are not read again. The draft is seconds old and unsaved, so no step marks, no summary and no Undo here.
+  const formInput = useRef<(() => RecipeInput) | null>(null);
+  const [revision, setRevision] = useState(0);
+  const { answering, answerError, onAnswer } = useGapAnswers({
+    gaps,
+    setGaps,
+    // The panel is only on screen while there is a draft, so there is always one to fall back on.
+    current: () => formInput.current?.() ?? draft!.input,
+    onRevised: (input) => {
+      setDraft((d) => (d ? { ...d, input } : d));
+      setRevision((n) => n + 1);
+    },
+  });
+
+  // A remounted form reports nothing until the person edits it, so the revision is written to the device draft here.
+  // This runs after the old form's unmount flush, which would otherwise overwrite it with the pre-answer contents.
+  useEffect(() => {
+    if (revision > 0 && draft) kept.save({ photoIds, input: draft.input, gaps });
+  }, [revision]);
 
   function setIds(next: (ids: string[]) => string[]) {
     setPhotoIds((cur) => {
@@ -76,11 +99,11 @@ export function Photos() {
     setBusy(true);
     setError(null);
     try {
-      const value = await photosRecipe(photoIds);
-      const { gaps: g, provider: _p, model: _m, dishCrop: crop, ...input } = value;
+      const { gaps: g, provider, model: _m, dishCrop: crop, ...input } = await photosRecipe(photoIds);
       kept.save({ photoIds, input: input as RecipeInput, gaps: g, dishCrop: crop });
       setDishCrop(crop);
-      setDraft((d) => ({ n: (d?.n ?? 0) + 1, value }));
+      setGaps(g);
+      setDraft((d) => ({ n: (d?.n ?? 0) + 1, input: input as RecipeInput, provider }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
       const code = e instanceof ApiError ? (e.body as { code?: string } | undefined)?.code : undefined;
@@ -111,8 +134,6 @@ export function Photos() {
       setSaving(false);
     }
   }
-
-  const { gaps, provider, model: _model, dishCrop: _crop, ...initial } = (draft?.value ?? {}) as Partial<PhotosDraft>;
 
   return (
     <main className="page">
@@ -147,13 +168,17 @@ export function Photos() {
         {busy ? (<><span className="spinner" aria-hidden="true" /> Creating…</>) : 'Create draft'}
       </button>
       {error && <p className="field-error" role="alert">{error}</p>}
-      {draft && draftedBy(provider) && <p className="hint">{draftedBy(provider)}</p>}
+      {draft && draftedBy(draft.provider) && <p className="hint">{draftedBy(draft.provider)}</p>}
       {draft && (
         <RecipeForm
           facets={facets}
-          key={draft.n}
-          initial={initial as RecipeInput}
+          key={`${draft.n}:${revision}`}
+          initial={draft.input}
           gaps={gaps}
+          onAnswer={onAnswer}
+          answering={answering}
+          answerError={answerError}
+          inputRef={formInput}
           dishCrop={dishCrop}
           onDishCropChange={(c) => kept.save({ dishCrop: c })}
           onSave={onSave}

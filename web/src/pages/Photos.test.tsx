@@ -9,7 +9,7 @@ import type { PhotosDraft } from '../api';
 
 vi.mock('../api', async () => ({
   ...(await vi.importActual<typeof import('../api')>('../api')),
-  photosRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn(), cropImage: vi.fn(),
+  photosRecipe: vi.fn(), reviseRecipe: vi.fn(), saveRecipe: vi.fn(), uploadImage: vi.fn(), cropImage: vi.fn(),
 }));
 vi.mock('../lib/shrinkImage', () => ({ shrinkImage: async (f: File) => f }));
 vi.mock('react-easy-crop', () => ({
@@ -17,12 +17,13 @@ vi.mock('react-easy-crop', () => ({
     <button type="button" onClick={() => p.onCropComplete({ x: 10, y: 20, width: 50, height: 40 }, {})}>move crop</button>
   ),
 }));
-import { ApiError, cropImage, photosRecipe, saveRecipe, uploadImage } from '../api';
+import { ApiError, cropImage, photosRecipe, reviseRecipe, saveRecipe, uploadImage } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(photosRecipe).mockReset();
+  vi.mocked(reviseRecipe).mockReset();
   vi.mocked(saveRecipe).mockReset();
   vi.mocked(uploadImage).mockReset();
   vi.mocked(cropImage).mockReset();
@@ -143,6 +144,29 @@ describe('Photos', () => {
     expect(photosRecipe).toHaveBeenCalledWith(['front.jpg', 'back.jpg']);
     expect(saveRecipe).not.toHaveBeenCalled();
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Chicken tray bake');
+  });
+
+  it('answers a question without reading the photos again', async () => {
+    const asked = { about: 'quantity for chicken', question: 'How much chicken?' };
+    vi.mocked(photosRecipe).mockResolvedValue({ ...draft, gaps: [asked, { about: 'oven', question: 'What temperature is the oven?' }] });
+    const { gaps: _g, dishCrop: _c, ...input } = draft;
+    vi.mocked(reviseRecipe).mockResolvedValue({ ...input, servings: 4, gaps: [], stepsFrom: [0] });
+    const user = userEvent.setup();
+    app();
+    await pickTwo(user);
+    await user.click(screen.getByRole('button', { name: /create draft/i }));
+    await user.type(await screen.findByLabelText('How much chicken?'), '2 breasts');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    await waitFor(() => expect(reviseRecipe).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(reviseRecipe).mock.calls[0]![1]).toContain('Q: How much chicken? A: 2 breasts');
+    expect(photosRecipe).toHaveBeenCalledTimes(1);
+    // The question answered is gone, the one left is still there, and the revision is on screen and in the draft.
+    await waitFor(() => expect(screen.queryByLabelText('How much chicken?')).toBeNull());
+    expect(screen.getByLabelText('What temperature is the oven?')).toBeTruthy();
+    expect((screen.getByLabelText('Servings') as HTMLInputElement).value).toBe('4');
+    await waitFor(() => expect(listDrafts()[0]?.gaps).toEqual([{ about: 'oven', question: 'What temperature is the oven?' }]));
+    expect(listDrafts()[0]?.input?.servings).toBe(4);
+    expect(listDrafts()[0]?.photoIds).toEqual(['front.jpg', 'back.jpg']);
   });
 
   it('shows the API message for a coded failure', async () => {

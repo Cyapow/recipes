@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Editor } from './Editor';
@@ -11,7 +11,7 @@ vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
   getRecipe: vi.fn(), saveRecipe: vi.fn(), deleteRecipe: vi.fn(), getFacets: vi.fn(), reviseRecipe: vi.fn(),
 }));
-import { getFacets, getRecipe, reviseRecipe, saveRecipe } from '../api';
+import { ApiError, getFacets, getRecipe, reviseRecipe, saveRecipe } from '../api';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -22,6 +22,8 @@ beforeEach(() => {
   vi.mocked(getFacets).mockReset().mockResolvedValue({ brands: [], tags: [], people: [] });
 });
 
+const wine = { about: 'red wine', question: 'How much red wine did you add?' };
+const oven = { about: 'oven', question: 'What temperature is the oven?' };
 const step = (text: string) => ({ text, imageId: null, ingredients: [] as number[] });
 const rec = (): Recipe => ({
   id: 'r1', title: 'Fudge', favouritedBy: [], createdAt: '', updatedAt: '', description: null, origin: 'mine', brand: 'Mine',
@@ -159,6 +161,65 @@ describe('Editor revise', () => {
     await apply(user, 'cool it');
     expect(await screen.findByText('How long does it set for?')).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Check these' })).toBeTruthy();
+  });
+
+  it('replaces the gap list on a free-text revise', async () => {
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine, oven] }))
+      .mockResolvedValueOnce(revised({ gaps: [oven] }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    expect(await screen.findByLabelText(wine.question)).toBeTruthy();
+    await apply(user, 'and some wine');
+    await waitFor(() => expect(screen.queryByLabelText(wine.question)).toBeNull());
+    expect(screen.getByLabelText(oven.question)).toBeTruthy();
+  });
+
+  it('merges the gap list when answering', async () => {
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine, oven] }))
+      .mockResolvedValueOnce(revised({ gaps: [] }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    await waitFor(() => expect(screen.queryByLabelText(wine.question)).toBeNull());
+    // Only the question that was answered leaves the list.
+    expect(screen.getByLabelText(oven.question)).toBeTruthy();
+    expect(vi.mocked(reviseRecipe).mock.calls[1]![1]).toContain('Q: How much red wine did you add? A: about 150ml');
+  });
+
+  it('answering keeps the step marks, the summary and Undo', async () => {
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine], steps: [step('Boil the sugar'), step('Pour it out')], stepsFrom: [0, 1] }))
+      .mockResolvedValueOnce(revised({ gaps: [] }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    expect(await screen.findByRole('textbox', { name: 'Step 2 New' })).toBeTruthy();
+    expect(screen.getByText('Step 2 added')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.queryByText('Step 2 added')).toBeNull();
+    expect(await screen.findByLabelText(wine.question)).toBeTruthy();
+  });
+
+  it('shows the error in the panel and keeps the typed answer when answering fails', async () => {
+    const msg = 'The AI is busy. Try again in a minute.';
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine] }))
+      .mockRejectedValueOnce(new ApiError(msg, 502, { error: msg, code: 'unavailable' }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    const panel = screen.getByRole('region', { name: 'Check these' });
+    await waitFor(() => expect(within(panel).getByRole('alert').textContent).toBe(msg));
+    expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
   });
 
   it('says so when the server has no AI configured', async () => {
