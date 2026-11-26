@@ -70,6 +70,14 @@ describe('Planner', () => {
     expect(getPlan).toHaveBeenCalledWith(['soup']);
   });
 
+  it('ticks nothing, and asks for no plan, when every recipe in the URL has gone', async () => {
+    render(<MemoryRouter initialEntries={['/planner?recipe=gone']}><Planner /></MemoryRouter>);
+    await screen.findByLabelText('Carrot soup');
+    await userEvent.click(screen.getByLabelText('Stew'));
+    expect(getPlan).toHaveBeenCalledTimes(1);
+    expect(getPlan).toHaveBeenCalledWith(['stew']);
+  });
+
   it('warns when over budget', async () => {
     vi.mocked(getPlan).mockResolvedValue(plan({ budgetPence: 50 }));
     view();

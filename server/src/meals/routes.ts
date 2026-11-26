@@ -61,6 +61,7 @@ export function registerMealRoutes(
   /** The meal as the screen reads it: the server alone decides every clock time and day grouping. */
   const present = (meal: Meal) => ({
     ...meal,
+    serveText: describeServeAt(meal.serveAt),
     stages: meal.stages.map((s) => ({ ...s, ...stageWhen(meal.serveAt, s.offsetMinutes) })),
     ingredients: mergeMealIngredients(liveRecipes(meal).map(({ recipe }) => ({ title: recipe.title, ingredients: recipe.ingredients }))),
   });

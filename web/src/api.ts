@@ -13,7 +13,7 @@ export type { Box1000, Tag };
 
 export type { Meal, MealIngredientLine, MealPatch, MealStage, MealSummary, NewMeal };
 export type StageWithWhen = MealStage & { at: string; dayGroup: string; clock: string };
-export type MealWithIngredients = Omit<Meal, 'stages'> & { stages: StageWithWhen[]; ingredients: MealIngredientLine[] };
+export type MealWithIngredients = Omit<Meal, 'stages'> & { serveText: string; stages: StageWithWhen[]; ingredients: MealIngredientLine[] };
 
 export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[]; favouritedBy?: string[] };
 

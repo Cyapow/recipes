@@ -77,6 +77,7 @@ describe('meal routes', () => {
     const id = await created(app);
     createMealsRepo(db).update(id, { stages: plan.stages });
     const got = (await app.inject({ method: 'GET', url: `/api/meals/${id}` })).json();
+    expect(got.serveText).toBe('Sunday 29 November 2026, 13:00');
     expect(got.ingredients).toHaveLength(1);
     expect(got.ingredients[0]).toMatchObject({ item: 'lamb', unit: 'g', quantity: 1000 });
     expect(got.stages.map((s: { at: string; dayGroup: string }) => [s.at, s.dayGroup])).toEqual([

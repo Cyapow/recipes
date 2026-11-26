@@ -21,7 +21,8 @@ describe('stageWhen', () => {
     // Serve 00:30 BST on 29 June (23:30Z on the 28th); the stage 3 hours earlier is 21:30 BST on the 28th, 20:30Z.
     const w = stageWhen('2026-06-28T23:30:00.000Z', 180);
     expect([w.clock, w.dayGroup]).toEqual(['21:30', 'the day before']);
-    // 23:30 BST is 22:30Z, still the 28th in UTC but the hour differs; and a stage at 00:10 BST is the 28th in UTC.
+    // Serving is 00:30 BST (23:30Z the 28th). With no offset the stage is 00:30 BST, whose UTC reading is 23:30; 20 minutes
+    // earlier is 00:10 BST, still 23:10Z on the 28th. In winter the 29th's 00:30 serving gives 23:30 the day before.
     expect(stageWhen('2026-06-28T23:30:00.000Z', 0).clock).toBe('00:30');
     expect(stageWhen('2026-06-28T23:30:00.000Z', 20).clock).toBe('00:10');
     expect(stageWhen('2026-11-29T00:30:00.000Z', 60).clock).toBe('23:30');

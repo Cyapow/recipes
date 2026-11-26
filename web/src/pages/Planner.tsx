@@ -67,9 +67,9 @@ export function Planner() {
         // Ids from the URL may name recipes that have since gone, and the plan would refuse them.
         const known = new Set(list.map((r) => r.id));
         const start = fromUrl.current.filter((id) => known.has(id));
-        if (start.length === 0) return;
+        if (fromUrl.current.length === 0) return;
         setPicked(start);
-        refresh(start);
+        if (start.length > 0) refresh(start);
       })
       .catch(() => setError('Could not load recipes'));
     getBudget().then((b) => b !== null && setBudget((b / 100).toFixed(2))).catch(() => undefined);

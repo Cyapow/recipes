@@ -8,8 +8,6 @@ import { BackIcon } from '../components/Icons';
 import { describeAiError } from '../lib/aiError';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const serveText = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
 function durationText(minutes: number, estimated: boolean): string {
   const h = Math.floor(minutes / 60);
@@ -128,7 +126,7 @@ function StageRow({ stage, recipeTitle, editing, busy, onEdit, onSave, onCancel,
   );
 }
 
-function AddStage({ disabled, onAdd }: { disabled: boolean; onAdd: (offset: number, text: string) => void }) {
+function AddStage({ disabled, onAdd }: { disabled: boolean; onAdd: (offset: number, text: string) => Promise<boolean> }) {
   const [text, setText] = useState('');
   const [offset, setOffset] = useState('0');
   const minutes = Number(offset);
@@ -139,8 +137,8 @@ function AddStage({ disabled, onAdd }: { disabled: boolean; onAdd: (offset: numb
       onSubmit={(e) => {
         e.preventDefault();
         if (!valid) return;
-        onAdd(minutes, text.trim());
-        setText('');
+        // The text stays until the save is known to have worked, so a failure loses nothing.
+        void onAdd(minutes, text.trim()).then((saved) => saved && setText(''));
       }}
     >
       <h3 className="planner-sub">Add a step of your own</h3>
@@ -170,7 +168,15 @@ export function Meal() {
   const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
-    getMeal(id).then(setMeal).catch(() => setLoadError('Could not load this meal'));
+    let current = true;
+    setMeal(null);
+    setLoadError(null);
+    setConfirm(null);
+    setEditing(null);
+    getMeal(id)
+      .then((m) => current && setMeal(m))
+      .catch(() => current && setLoadError('Could not load this meal'));
+    return () => { current = false; };
   }, [id]);
 
   async function draft(replace: boolean) {
@@ -192,14 +198,16 @@ export function Meal() {
     }
   }
 
-  async function saveStages(stages: StageWithWhen[]) {
+  async function saveStages(stages: StageWithWhen[]): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
       setMeal(await updateMeal(id, { stages: stageInputs(stages) }));
       setEditing(null);
+      return true;
     } catch {
       setError('Could not save your changes');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -226,7 +234,7 @@ export function Meal() {
         {liveRecipeIds.length > 0 && <Link className="btn" to={plannerHref}>Plan the shopping</Link>}
       </header>
       <h1>{meal.title}</h1>
-      <p className="sub">Serving {serveText(meal.serveAt)}</p>
+      <p className="sub">Serving {meal.serveText}</p>
       {error && <p className="field-error" role="alert">{error}</p>}
 
       <Ingredients lines={meal.ingredients} />
@@ -257,16 +265,16 @@ export function Meal() {
         ))}
 
         {confirm ? (
-          <div className="gaps meal-confirm" role="alert">
+          <section className="gaps meal-confirm" aria-label="Replace the schedule?" aria-live="polite">
             <p>
               Drafting again will replace {plural(confirm.stages, 'step', 'steps')}
               {confirm.done > 0 ? `, ${confirm.done} of them ticked off` : ''}, along with any changes you have made.
             </p>
             <div className="meal-actions">
               <button type="button" className="primary" disabled={busy} onClick={() => void draft(true)}>Replace the schedule</button>
-              <button type="button" onClick={() => setConfirm(null)}>Keep it</button>
+              <button type="button" disabled={busy} onClick={() => setConfirm(null)}>Keep it</button>
             </div>
-          </div>
+          </section>
         ) : (
           <div className="shopping-actions">
             <button type="button" className="primary share-btn" disabled={busy} onClick={() => void draft(false)}>

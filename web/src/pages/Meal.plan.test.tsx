@@ -17,7 +17,7 @@ const stage = (over: object = {}) => ({
   stepIndices: [0], doneAt: null, position: 0, at: '2026-12-05T18:30:00.000Z', clock: '18:30', dayGroup: 'the day before', ...over,
 });
 const meal = (over: object = {}) => ({
-  id: 'm1', title: 'Sunday lunch', serveAt: '2026-12-06T13:30:00.000Z', watchOut: [], scheduleStale: false,
+  id: 'm1', title: 'Sunday lunch', serveAt: '2026-12-06T13:30:00.000Z', serveText: 'Sunday 6 December 2026, 13:30', watchOut: [], scheduleStale: false,
   scheduledAt: '2026-12-01T10:00:00.000Z', createdAt: '', updatedAt: '',
   recipes: [
     { id: 'mr1', recipeId: 'r1', recipeTitle: 'Roast chicken', course: 'main', position: 0 },
@@ -91,6 +91,23 @@ describe('Meal plan', () => {
     expect(screen.getByRole('heading', { level: 3, name: 'the day before' })).toBeTruthy();
   });
 
+  it('shows the server serving time rather than one formatted in the browser', async () => {
+    // 23:30Z on 5 Dec reads as 23:30 in a London browser; the server string is what is shown.
+    vi.mocked(getMeal).mockResolvedValue(meal({ serveAt: '2026-12-05T23:30:00.000Z', serveText: 'Sunday 6 December 2026, 00:30' }));
+    view();
+    expect((await screen.findByText(/Serving/)).textContent).toBe('Serving Sunday 6 December 2026, 00:30');
+  });
+
+  it('keeps what you typed for a new step when the save fails', async () => {
+    vi.mocked(updateMeal).mockRejectedValue(new Error('down'));
+    view();
+    const input = await screen.findByLabelText('New step');
+    await userEvent.type(input, 'Lay the table');
+    await userEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not save your changes');
+    expect((input as HTMLInputElement).value).toBe('Lay the table');
+  });
+
   it('marks an estimated stage as an estimate rather than a stated time', async () => {
     view();
     expect(await screen.findByText(/about 40 min/)).toBeTruthy();
@@ -147,8 +164,11 @@ describe('Meal plan', () => {
       .mockResolvedValueOnce(meal({ stages: [stage({ text: 'A fresh draft' })] }));
     view();
     await userEvent.click(await screen.findByRole('button', { name: 'Draft the schedule again' }));
-    const ask = await screen.findByText(/replace 3 steps, 2 of them ticked off/);
-    expect(ask).toBeTruthy();
+    const ask = await screen.findByRole('region', { name: 'Replace the schedule?' });
+    expect(ask.textContent).toContain('replace 3 steps, 2 of them ticked off');
+    // A question, not a failure: no error is shown and nothing is announced as an alert.
+    expect(screen.queryByText(/Could not draft/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(vi.mocked(scheduleMeal)).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole('button', { name: 'Replace the schedule' }));
     await waitFor(() => expect(vi.mocked(scheduleMeal)).toHaveBeenLastCalledWith('m1', true));
