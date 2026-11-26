@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GapsPanel } from './GapsPanel';
 import { MAX_ANSWER_CHARS, MAX_ANSWERS } from '../lib/gaps';
@@ -104,6 +104,8 @@ describe('GapsPanel', () => {
     await userEvent.click(screen.getByRole('button'));
     expect(onAnswer).toHaveBeenCalledTimes(1);
     rerender(<GapsPanel gaps={[wine, oven]} onAnswer={onAnswer} error="Could not apply" />);
+    // Let the rejection settle before asserting, so a late clear would be caught.
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('150ml');
     expect((screen.getByLabelText(oven.question) as HTMLInputElement).value).toBe('18');
     expect(screen.getByRole('alert').textContent).toBe('Could not apply');
@@ -113,6 +115,8 @@ describe('GapsPanel', () => {
     const onAnswer = vi.fn().mockResolvedValue(undefined);
     render(<GapsPanel gaps={[wine, oven]} onAnswer={onAnswer} />);
     await userEvent.type(screen.getByLabelText(wine.question), '150ml');
+    // Whitespace is not an answer, so it is not sent and must survive the resolve.
+    await userEvent.type(screen.getByLabelText(oven.question), '  ');
     await userEvent.click(screen.getByRole('button'));
     await waitFor(() => expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe(''));
   });
@@ -135,5 +139,22 @@ describe('GapsPanel', () => {
     expect(button.disabled).toBe(true);
     expect(button.textContent).toMatch(/Answering…/);
     expect(container.querySelector('.spinner')).toBeTruthy();
+  });
+
+  it('sends once however often the button is clicked while the apply is in flight', async () => {
+    let settle!: () => void;
+    const onAnswer = vi.fn(() => new Promise<void>((r) => { settle = r; }));
+    render(<GapsPanel gaps={[wine, oven]} onAnswer={onAnswer} />);
+    await userEvent.type(screen.getByLabelText(wine.question), '150ml');
+    const button = screen.getByRole('button') as HTMLButtonElement;
+    await userEvent.click(button);
+    await userEvent.click(button);
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    // Button and boxes disable together while in flight.
+    expect(button.disabled).toBe(true);
+    expect((screen.getByLabelText(wine.question) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(oven.question) as HTMLInputElement).disabled).toBe(true);
+    await act(async () => { settle(); });
+    expect((screen.getByLabelText(oven.question) as HTMLInputElement).disabled).toBe(false);
   });
 });

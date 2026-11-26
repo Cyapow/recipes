@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Gap } from '../../../server/src/recipes/schema';
 import { MAX_ANSWERS, MAX_ANSWER_CHARS, type Answer } from '../lib/gaps';
 
 export type GapsPanelProps = {
   gaps: Gap[];
-  /** Without it the panel is a read-only list. Resolving clears the boxes that were sent; rejecting leaves every box as typed. */
+  /**
+   * Without it the panel is a read-only list. Resolving clears the boxes that were sent; rejecting leaves every box as typed.
+   * The panel swallows a rejection, so the parent must surface the failure to the person (via `error`).
+   */
   onAnswer?: (answers: Answer[]) => Promise<unknown>;
   applying?: boolean;
   error?: string | null;
@@ -12,6 +15,8 @@ export type GapsPanelProps = {
 
 export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: GapsPanelProps) {
   // Typed text, keyed by `about`. Kept across a failed apply, and for the gaps left unanswered.
+  const [inFlight, setInFlight] = useState(false);
+  const sending = useRef(false);
   const [typed, setTyped] = useState<Record<string, string>>({});
 
   // The one list that is both sent and counted: non-blank answers to real questions, capped.
@@ -22,19 +27,25 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
     if (gap.question !== null && answer !== '') answers.push({ gap, answer });
   }
   const toSend = answers.slice(0, MAX_ANSWERS);
+  const busy = applying || inFlight;
   const full = toSend.length >= MAX_ANSWERS;
 
   if (gaps.length === 0) return null;
 
   const send = async () => {
-    if (!onAnswer) return;
+    if (!onAnswer || sending.current) return;
+    sending.current = true;
+    setInFlight(true);
     const about = toSend.map((a) => a.gap.about);
     try {
       await onAnswer(toSend);
+      setTyped((t) => Object.fromEntries(Object.entries(t).filter(([k]) => !about.includes(k))));
     } catch {
-      return; // the parent shows the error; every box keeps what was typed
+      // the parent shows the error; every box keeps what was typed
+    } finally {
+      sending.current = false;
+      setInFlight(false);
     }
-    setTyped((t) => Object.fromEntries(Object.entries(t).filter(([k]) => !about.includes(k))));
   };
 
   return (
@@ -49,7 +60,7 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
                 <input
                   value={typed[g.about] ?? ''}
                   maxLength={MAX_ANSWER_CHARS}
-                  disabled={applying || (full && (typed[g.about] ?? '').trim() === '')}
+                  disabled={busy || (full && (typed[g.about] ?? '').trim() === '')}
                   onChange={(e) => setTyped((t) => ({ ...t, [g.about]: e.target.value }))}
                 />
               </label>
@@ -60,8 +71,8 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
         )}
       </ul>
       {onAnswer && (
-        <button type="button" className="primary" onClick={() => void send()} disabled={applying || toSend.length === 0}>
-          {applying ? (
+        <button type="button" className="primary" onClick={() => void send()} disabled={busy || toSend.length === 0}>
+          {busy ? (
             <>
               <span className="spinner" aria-hidden="true" /> Answering…
             </>
