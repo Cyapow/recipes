@@ -86,7 +86,7 @@ export function Meals() {
       <form onSubmit={(e) => void submit(e)}>
         <label className="budget-field">
           Name
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Sunday lunch" />
+          <input maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Sunday lunch" />
         </label>
         <label className="budget-field">
           When do you want to eat?

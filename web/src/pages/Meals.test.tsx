@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// The conversion is only worth testing in a zone that has summer time; pin one so the file means the same everywhere.
+process.env.TZ = 'Europe/London';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -21,9 +23,9 @@ const view = () =>
       </Routes>
     </MemoryRouter>,
   );
-const fill = async () => {
+const fill = async (at = '2026-12-06T13:30') => {
   await userEvent.type(await screen.findByLabelText('Name'), 'Sunday lunch');
-  fireEvent.change(screen.getByLabelText('When do you want to eat?'), { target: { value: '2026-12-06T13:30' } });
+  fireEvent.change(screen.getByLabelText('When do you want to eat?'), { target: { value: at } });
 };
 const button = () => screen.getByRole('button', { name: 'Create meal' }) as HTMLButtonElement;
 
@@ -63,7 +65,16 @@ describe('Meals', () => {
     await userEvent.click(button());
     await screen.findByText('The meal page');
     expect(vi.mocked(createMeal)).toHaveBeenCalledWith({ title: 'Sunday lunch', serveAt: expect.any(String), recipes: [{ recipeId: 'r1', course: 'main' }] });
-    expect(vi.mocked(createMeal).mock.calls[0][0].serveAt).toBe(new Date(2026, 11, 6, 13, 30).toISOString());
+    expect(vi.mocked(createMeal).mock.calls[0][0].serveAt).toBe('2026-12-06T13:30:00.000Z');
+  });
+
+  it('reads the serving time as London wall-clock time, so a summer meal is an hour earlier in UTC', async () => {
+    view();
+    await fill('2026-07-12T13:30');
+    await userEvent.click(await screen.findByLabelText('Roast chicken'));
+    await userEvent.click(button());
+    await screen.findByText('The meal page');
+    expect(vi.mocked(createMeal).mock.calls[0][0].serveAt).toBe('2026-07-12T12:30:00.000Z');
   });
 
   it('sends the course chosen for a recipe', async () => {
