@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GapsPanel } from './GapsPanel';
 import { MAX_ANSWER_CHARS, MAX_ANSWERS } from '../lib/gaps';
@@ -119,6 +119,7 @@ describe('GapsPanel', () => {
     await userEvent.type(screen.getByLabelText(oven.question), '  ');
     await userEvent.click(screen.getByRole('button'));
     await waitFor(() => expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe(''));
+    expect((screen.getByLabelText(oven.question) as HTMLInputElement).value).toBe('  ');
   });
 
   it('drops answered questions and keeps what was typed in the rest', async () => {
@@ -156,5 +157,18 @@ describe('GapsPanel', () => {
     expect((screen.getByLabelText(oven.question) as HTMLInputElement).disabled).toBe(true);
     await act(async () => { settle(); });
     expect((screen.getByLabelText(oven.question) as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('sends once when two clicks land before the in-flight state has rendered', async () => {
+    const onAnswer = vi.fn(() => new Promise<void>(() => {}));
+    render(<GapsPanel gaps={[wine]} onAnswer={onAnswer} />);
+    await userEvent.type(screen.getByLabelText(wine.question), '150ml');
+    const button = screen.getByRole('button');
+    // No flush between the clicks, so only the ref guard can stop the second.
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    expect(onAnswer).toHaveBeenCalledTimes(1);
   });
 });
