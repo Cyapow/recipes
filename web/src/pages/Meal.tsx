@@ -1,16 +1,29 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ApiError, getMeal, scheduleMeal, updateMeal,
-  type MealIngredientLine, type MealWithIngredients, type StageWithWhen,
+  ApiError, deleteMeal, getMeal, listRecipes, scheduleMeal, updateMeal,
+  type MealIngredientLine, type MealPatch, type MealWithIngredients, type RecipeSummary, type StageWithWhen,
 } from '../api';
 import { BackIcon } from '../components/Icons';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { describeAiError } from '../lib/aiError';
 import { KeepOn } from '../components/KeepOn';
+import { RecipeCourses } from '../components/RecipeCourses';
+import type { Course } from '../../../server/src/meals/courses';
 import { SERVING_DAY } from '../../../server/src/meals/when';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The serving time as this browser's wall clock, for the datetime-local field to start from. It is the exact inverse
+ * of the conversion on the way in (`new Date(value).toISOString()`), so a field left alone saves back the instant it
+ * was given. It is never the meal's serving time as read: that is the server's own `serveText`, shown above the form.
+ */
+function serveInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function durationText(minutes: number, estimated: boolean): string {
   const h = Math.floor(minutes / 60);
@@ -75,6 +88,103 @@ function Notes({ meal }: { meal: MealWithIngredients }) {
   );
 }
 
+/**
+ * What anything destructive asks first, in the amber treatment the replace question uses: a question on the page,
+ * never an alert, and never a change that has already happened by the time it is read.
+ */
+function Ask({ label, question, yes, no, busy, onYes, onNo }: {
+  label: string;
+  question: ReactNode;
+  yes: string;
+  no: string;
+  busy: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  return (
+    <section className="gaps meal-confirm" aria-label={label} aria-live="polite">
+      <p>{question}</p>
+      <div className="meal-actions">
+        <button type="button" className="primary" disabled={busy} onClick={onYes}>{yes}</button>
+        <button type="button" disabled={busy} onClick={onNo}>{no}</button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The meal itself: its name, when it is being served, and which recipes make it up. Changing the serving time
+ * retimes every stage, and changing the recipe set marks the schedule as having fallen behind them — both decided by
+ * the server, which is why this sends the whole lot in one PUT and renders whatever comes back.
+ */
+function MealEditor({ meal, busy, onSave, onCancel }: {
+  meal: MealWithIngredients;
+  busy: boolean;
+  onSave: (patch: MealPatch) => void;
+  onCancel: () => void;
+}) {
+  const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [title, setTitle] = useState(meal.title);
+  const [serveAt, setServeAt] = useState(() => serveInput(meal.serveAt));
+  // A recipe that has been deleted cannot be picked again; the server keeps its entry and its title either way.
+  const [courses, setCourses] = useState<Record<string, Course>>(() =>
+    Object.fromEntries(meal.recipes.flatMap((r) => (r.recipeId ? [[r.recipeId, r.course] as const] : []))),
+  );
+
+  useEffect(() => {
+    let live = true;
+    listRecipes()
+      .then((rs) => live && setRecipes(rs))
+      .catch(() => live && setLoadError('Could not load your recipes'));
+    return () => { live = false; };
+  }, []);
+
+  const picked = Object.keys(courses);
+  const serveDate = serveAt ? new Date(serveAt) : null;
+  const valid = title.trim() !== '' && picked.length > 0 && serveDate !== null && !Number.isNaN(serveDate.getTime());
+
+  return (
+    <form
+      className="meal-edit"
+      aria-label="Change the meal"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!valid) return;
+        onSave({
+          title: title.trim(),
+          // A datetime-local value is wall-clock time with no zone; the Date constructor reads it as local time.
+          serveAt: new Date(serveAt).toISOString(),
+          recipes: picked.map((recipeId) => ({ recipeId, course: courses[recipeId]! })),
+        });
+      }}
+    >
+      {loadError && <p className="field-error" role="alert">{loadError}</p>}
+      <label className="budget-field">
+        Name of the meal
+        <input maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <label className="budget-field">
+        When do you want to eat?
+        <input type="datetime-local" value={serveAt} onChange={(e) => setServeAt(e.target.value)} />
+      </label>
+      <h3 className="planner-sub">Recipes in this meal</h3>
+      <RecipeCourses
+        recipes={recipes}
+        courses={courses}
+        onToggle={(id) =>
+          setCourses((c) => (id in c ? Object.fromEntries(Object.entries(c).filter(([k]) => k !== id)) : { ...c, [id]: 'main' }))
+        }
+        onCourse={(id, course) => setCourses((c) => ({ ...c, [id]: course }))}
+      />
+      <div className="meal-actions">
+        <button type="submit" className="primary" disabled={busy || !valid}>Save the meal</button>
+        <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 function StageEditor({ stage, onSave, onCancel }: { stage: StageWithWhen; onSave: (offset: number, text: string) => void; onCancel: () => void }) {
   const [offset, setOffset] = useState(String(stage.offsetMinutes));
   const [text, setText] = useState(stage.text);
@@ -98,20 +208,39 @@ function StageEditor({ stage, onSave, onCancel }: { stage: StageWithWhen; onSave
   );
 }
 
-function StageRow({ stage, recipeTitle, editing, busy, onEdit, onSave, onCancel, onDrop }: {
+function StageRow({ stage, recipeTitle, editing, asking, busy, onEdit, onSave, onCancel, onAskDrop, onDrop }: {
   stage: StageWithWhen;
   recipeTitle: string | null;
   editing: boolean;
+  asking: boolean;
   busy: boolean;
   onEdit: () => void;
   onSave: (offset: number, text: string) => void;
   onCancel: () => void;
+  onAskDrop: () => void;
   onDrop: () => void;
 }) {
-  if (editing) return <li className="meal-stage"><StageEditor stage={stage} onSave={onSave} onCancel={onCancel} /></li>;
+  // A ticked stage reads as done here too, the way it does in the live view: a reload mid-cook lands on the plan.
+  const className = `meal-stage${stage.doneAt !== null ? ' done' : ''}`;
+  if (editing) return <li className={className}><StageEditor stage={stage} onSave={onSave} onCancel={onCancel} /></li>;
+  if (asking) {
+    return (
+      <li className={className}>
+        <Ask
+          label="Drop this step?"
+          question={<>Dropping “{stage.text}” takes it out of the schedule. Drafting again is the only way to get it back.</>}
+          yes="Drop the step"
+          no="Keep it"
+          busy={busy}
+          onYes={onDrop}
+          onNo={onCancel}
+        />
+      </li>
+    );
+  }
   const link = stage.recipeId !== null && recipeTitle !== null;
   return (
-    <li className="meal-stage">
+    <li className={className}>
       <span className="meal-time">{stage.clock}</span>
       <span className="meal-stage-body">
         <span className="meal-stage-text">{stage.text}</span>
@@ -123,7 +252,7 @@ function StageRow({ stage, recipeTitle, editing, busy, onEdit, onSave, onCancel,
       </span>
       <span className="meal-stage-actions">
         <button type="button" disabled={busy} onClick={onEdit} aria-label={`Change ${stage.text}`}>Change</button>
-        <button type="button" disabled={busy} onClick={onDrop} aria-label={`Drop ${stage.text}`}>Drop</button>
+        <button type="button" disabled={busy} onClick={onAskDrop} aria-label={`Drop ${stage.text}`}>Drop</button>
       </span>
     </li>
   );
@@ -160,13 +289,20 @@ function AddStage({ disabled, onAdd }: { disabled: boolean; onAdd: (offset: numb
   );
 }
 
+/** A question the page is waiting on an answer to. Only one is ever open. */
+type Question =
+  | { kind: 'replace'; stages: number; done: number }
+  | { kind: 'drop'; stageId: string }
+  | { kind: 'delete' };
+
 function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMeal: (m: MealWithIngredients) => void; onFollow: () => void }) {
   const id = meal.id;
+  const nav = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /** Set when drafting hit an existing schedule: what would be lost, awaiting a yes. */
-  const [confirm, setConfirm] = useState<{ stages: number; done: number } | null>(null);
+  const [ask, setAsk] = useState<Question | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
 
   async function draft(replace: boolean) {
     if (busy) return;
@@ -174,11 +310,11 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
     setError(null);
     try {
       onMeal(await scheduleMeal(id, replace));
-      setConfirm(null);
+      setAsk(null);
     } catch (err) {
       const body = err instanceof ApiError ? (err.body as { code?: string; stages?: number; done?: number } | undefined) : undefined;
       if (err instanceof ApiError && err.status === 409 && body?.code === 'has_stages') {
-        setConfirm({ stages: body.stages ?? 0, done: body.done ?? 0 });
+        setAsk({ kind: 'replace', stages: body.stages ?? 0, done: body.done ?? 0 });
       } else {
         setError(describeAiError(err, 'Could not draft the schedule'));
       }
@@ -187,17 +323,39 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
     }
   }
 
-  async function saveStages(stages: StageWithWhen[]): Promise<boolean> {
+  /** Every edit is the one PUT, and the meal on screen is whatever the server sends back. */
+  async function save(patch: MealPatch): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
-      onMeal(await updateMeal(id, { stages: stageInputs(stages) }));
-      setEditing(null);
+      onMeal(await updateMeal(id, patch));
       return true;
     } catch {
       setError('Could not save your changes');
       return false;
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveStages(stages: StageWithWhen[]): Promise<boolean> {
+    const saved = await save({ stages: stageInputs(stages) });
+    if (saved) {
+      setEditing(null);
+      setAsk(null);
+    }
+    return saved;
+  }
+
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteMeal(id);
+      nav('/meals');
+    } catch {
+      setError('Could not delete this meal');
       setBusy(false);
     }
   }
@@ -217,12 +375,24 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
     <main className="page meal">
       <header className="cook-bar">
         <Link className="btn round-btn" to="/meals" aria-label="Back to meals"><BackIcon /></Link>
+        <button type="button" className="btn" disabled={busy} onClick={() => setChanging((c) => !c)}>
+          {changing ? 'Stop changing the meal' : 'Change the meal'}
+        </button>
         {liveRecipeIds.length > 0 && <Link className="btn" to={plannerHref}>Plan the shopping</Link>}
         {meal.stages.length > 0 && <button type="button" className="btn" onClick={onFollow}>Follow on the day</button>}
       </header>
       <h1>{meal.title}</h1>
       <p className="sub">Serving {meal.serveText}</p>
       {error && <p className="field-error" role="alert">{error}</p>}
+
+      {changing && (
+        <MealEditor
+          meal={meal}
+          busy={busy}
+          onCancel={() => setChanging(false)}
+          onSave={(patch) => void save(patch).then((saved) => saved && setChanging(false))}
+        />
+      )}
 
       <Ingredients lines={meal.ingredients} />
       <Notes meal={meal} />
@@ -240,10 +410,12 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
                   stage={s}
                   recipeTitle={s.recipeId ? titles.get(s.recipeId) ?? null : null}
                   editing={editing === s.id}
+                  asking={ask?.kind === 'drop' && ask.stageId === s.id}
                   busy={busy}
                   onEdit={() => setEditing(s.id)}
                   onSave={(offset, text) => void retime(s, offset, text)}
-                  onCancel={() => setEditing(null)}
+                  onCancel={() => { setEditing(null); setAsk(null); }}
+                  onAskDrop={() => setAsk({ kind: 'drop', stageId: s.id })}
                   onDrop={() => void saveStages(meal.stages.filter((x) => x !== s))}
                 />
               ))}
@@ -251,17 +423,21 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
           </div>
         ))}
 
-        {confirm ? (
-          <section className="gaps meal-confirm" aria-label="Replace the schedule?" aria-live="polite">
-            <p>
-              Drafting again will replace {plural(confirm.stages, 'step', 'steps')}
-              {confirm.done > 0 ? `, ${confirm.done} of them ticked off` : ''}, along with any changes you have made.
-            </p>
-            <div className="meal-actions">
-              <button type="button" className="primary" disabled={busy} onClick={() => void draft(true)}>Replace the schedule</button>
-              <button type="button" disabled={busy} onClick={() => setConfirm(null)}>Keep it</button>
-            </div>
-          </section>
+        {ask?.kind === 'replace' ? (
+          <Ask
+            label="Replace the schedule?"
+            question={
+              <>
+                Drafting again will replace {plural(ask.stages, 'step', 'steps')}
+                {ask.done > 0 ? `, ${ask.done} of them ticked off` : ''}, along with any changes you have made.
+              </>
+            }
+            yes="Replace the schedule"
+            no="Keep it"
+            busy={busy}
+            onYes={() => void draft(true)}
+            onNo={() => setAsk(null)}
+          />
         ) : (
           <div className="shopping-actions">
             <button type="button" className="primary share-btn" disabled={busy} onClick={() => void draft(false)}>
@@ -270,8 +446,30 @@ function PlanView({ meal, onMeal, onFollow }: { meal: MealWithIngredients; onMea
           </div>
         )}
 
-        {meal.stages.length > 0 && <AddStage disabled={busy} onAdd={addStage} />}
+        {/* Never gated on there being a schedule already: a meal with no AI key is still one you can plan by hand. */}
+        <AddStage disabled={busy} onAdd={addStage} />
       </section>
+
+      {ask?.kind === 'delete' ? (
+        <Ask
+          label="Delete this meal?"
+          question={
+            <>
+              Deleting “{meal.title}” takes its schedule and any ticks with it, and cannot be undone. The recipes
+              themselves are not touched.
+            </>
+          }
+          yes="Delete the meal"
+          no="Keep it"
+          busy={busy}
+          onYes={() => void remove()}
+          onNo={() => setAsk(null)}
+        />
+      ) : (
+        <button type="button" className="danger" disabled={busy} onClick={() => setAsk({ kind: 'delete' })}>
+          Delete this meal
+        </button>
+      )}
     </main>
   );
 }
@@ -347,7 +545,7 @@ function LiveView({ meal, onMeal, onBack }: { meal: MealWithIngredients; onMeal:
                     onChange={() => void tick(s)}
                   />
                   <span className="meal-time">
-                    {s.dayGroup !== SERVING_DAY && <span className="sub meal-day-label">{s.dayGroup} </span>}
+                    {s.dayGroup !== SERVING_DAY && <span className="sub meal-day-label">{s.dayGroup}</span>}
                     {s.clock}
                   </span>
                   <span className="meal-stage-body">

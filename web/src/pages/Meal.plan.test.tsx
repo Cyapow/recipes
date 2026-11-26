@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 process.env.TZ = 'Europe/London';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Meal } from './Meal';
 
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
-  getMeal: vi.fn(), scheduleMeal: vi.fn(), updateMeal: vi.fn(),
+  getMeal: vi.fn(), scheduleMeal: vi.fn(), updateMeal: vi.fn(), deleteMeal: vi.fn(), listRecipes: vi.fn(),
 }));
-import { ApiError, getMeal, scheduleMeal, updateMeal } from '../api';
+import { ApiError, deleteMeal, getMeal, listRecipes, scheduleMeal, updateMeal } from '../api';
+
+const recipe = (id: string, title: string) => ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
 
 const stage = (over: object = {}) => ({
   id: 's1', recipeId: 'r1', offsetMinutes: 180, durationMinutes: 30, estimated: false, text: 'Brine the chicken',
@@ -45,6 +47,7 @@ const view = () =>
     <MemoryRouter initialEntries={['/meals/m1']}>
       <Routes>
         <Route path="/meals/:id" element={<Meal />} />
+        <Route path="/meals" element={<p>The meals list</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -53,6 +56,8 @@ beforeEach(() => {
   vi.mocked(getMeal).mockReset().mockResolvedValue(meal());
   vi.mocked(scheduleMeal).mockReset().mockResolvedValue(meal());
   vi.mocked(updateMeal).mockReset().mockResolvedValue(meal());
+  vi.mocked(deleteMeal).mockReset().mockResolvedValue(undefined);
+  vi.mocked(listRecipes).mockReset().mockResolvedValue([recipe('r1', 'Roast chicken'), recipe('r2', 'Gravy'), recipe('r3', 'Trifle')]);
 });
 afterEach(cleanup);
 
@@ -210,9 +215,107 @@ describe('Meal plan', () => {
     );
 
     await userEvent.click(await screen.findByRole('button', { name: 'Drop Carve' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Drop the step' }));
     await waitFor(() => expect(vi.mocked(updateMeal)).toHaveBeenCalledTimes(2));
     const sent = vi.mocked(updateMeal).mock.calls[1]![1].stages!;
     expect(sent.map((s) => s.text)).toEqual(['Brine the chicken', 'Make the gravy']);
     expect(sent[0]).not.toHaveProperty('at');
+  });
+
+  it('asks before dropping a step of your own and leaves it alone if you say no', async () => {
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Drop Carve' }));
+    const ask = await screen.findByRole('region', { name: 'Drop this step?' });
+    expect(ask.textContent).toContain('Carve');
+    expect(vi.mocked(updateMeal)).not.toHaveBeenCalled();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Keep it' }));
+    expect(vi.mocked(updateMeal)).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Drop Carve' })).toBeTruthy();
+  });
+
+  it('shows a ticked step as done in the plan, not only in the live view', async () => {
+    vi.mocked(getMeal).mockResolvedValue(
+      meal({ stages: [stage({ doneAt: '2026-12-05T18:45:00.000Z' }), stage({ id: 's2', text: 'Carve', doneAt: null })] }),
+    );
+    view();
+    expect((await screen.findByText('Brine the chicken')).closest('li')!.className).toBe('meal-stage done');
+    expect(screen.getByText('Carve').closest('li')!.className).toBe('meal-stage');
+  });
+
+  it('offers the hand-written step form when there is no schedule at all, so one can be built without the AI', async () => {
+    vi.mocked(getMeal).mockResolvedValue(meal({ stages: [] }));
+    view();
+    await userEvent.type(await screen.findByLabelText('New step'), 'Peel the potatoes');
+    await userEvent.clear(screen.getByLabelText('Minutes before serving (new step)'));
+    await userEvent.type(screen.getByLabelText('Minutes before serving (new step)'), '90');
+    await userEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    await waitFor(() => expect(vi.mocked(updateMeal)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateMeal).mock.calls[0]![1].stages).toEqual([
+      { recipeId: null, offsetMinutes: 90, durationMinutes: null, estimated: false, text: 'Peel the potatoes', stepIndices: [], doneAt: null },
+    ]);
+  });
+
+  it('changes the name, the serving time and the recipe set in one save', async () => {
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    const name = await screen.findByLabelText('Name of the meal');
+    expect((name as HTMLInputElement).value).toBe('Sunday lunch');
+    // The field starts from the instant it was given, so saving it untouched saves the same instant back.
+    expect((screen.getByLabelText('When do you want to eat?') as HTMLInputElement).value).toBe('2026-12-06T13:30');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Christmas lunch');
+    fireEvent.change(screen.getByLabelText('When do you want to eat?'), { target: { value: '2026-12-06T15:00' } });
+    await userEvent.click(await screen.findByLabelText('Trifle'));
+    await userEvent.selectOptions(await screen.findByLabelText('Course for Trifle'), 'dessert');
+    await userEvent.click(screen.getByRole('button', { name: 'Save the meal' }));
+    await waitFor(() => expect(vi.mocked(updateMeal)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(updateMeal).mock.calls[0]![1]).toEqual({
+      title: 'Christmas lunch',
+      serveAt: '2026-12-06T15:00:00.000Z',
+      recipes: [{ recipeId: 'r1', course: 'main' }, { recipeId: 'r2', course: 'side' }, { recipeId: 'r3', course: 'dessert' }],
+    });
+    // The form closes on a save that worked, and what the server sent back is what is on screen.
+    await waitFor(() => expect(screen.queryByLabelText('Name of the meal')).toBeNull());
+  });
+
+  it('says the schedule has fallen behind the recipes once the recipe set has changed', async () => {
+    vi.mocked(updateMeal).mockResolvedValue(meal({ scheduleStale: true }));
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    await userEvent.click(await screen.findByLabelText('Trifle'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save the meal' }));
+    expect((await screen.findByRole('region', { name: 'Check these' })).textContent).toContain('fallen behind');
+  });
+
+  it('will not save a meal with no recipes left in it', async () => {
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Change the meal' }));
+    await userEvent.click(await screen.findByLabelText('Roast chicken'));
+    await userEvent.click(screen.getByLabelText('Gravy'));
+    expect((screen.getByRole('button', { name: 'Save the meal' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(vi.mocked(updateMeal)).not.toHaveBeenCalled();
+  });
+
+  it('asks before deleting the meal, then deletes it and goes back to the list', async () => {
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete this meal' }));
+    const ask = await screen.findByRole('region', { name: 'Delete this meal?' });
+    expect(ask.textContent).toContain('cannot be undone');
+    expect(vi.mocked(deleteMeal)).not.toHaveBeenCalled();
+    await userEvent.click(within(ask).getByRole('button', { name: 'Keep it' }));
+    expect(vi.mocked(deleteMeal)).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this meal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete the meal' }));
+    await waitFor(() => expect(vi.mocked(deleteMeal)).toHaveBeenCalledWith('m1'));
+    expect(await screen.findByText('The meals list')).toBeTruthy();
+  });
+
+  it('says so when the meal could not be deleted, and stays on the page', async () => {
+    vi.mocked(deleteMeal).mockRejectedValue(new Error('down'));
+    view();
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete this meal' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete the meal' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not delete this meal');
+    expect(screen.queryByText('The meals list')).toBeNull();
   });
 });

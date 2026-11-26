@@ -537,6 +537,8 @@ body.cook-scroll-lock { overflow: hidden; }
 .meal-uses { list-style: none; margin: 2px 0 0; padding: 0; }
 .meal-stage { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .meal-time { flex: none; min-width: 3.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* A stage on another day says so above its clock, rather than running into it on one line. */
+.meal-day-label { display: block; font-weight: 400; white-space: nowrap; }
 .meal-stage-body { flex: 1; min-width: 12rem; display: flex; flex-direction: column; gap: 2px; }
 .meal-stage-actions, .meal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .meal-edit { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 12px; }
