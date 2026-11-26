@@ -183,7 +183,16 @@ describe('applyRevision', () => {
       revision({ steps: [{ text: 'Let it cool', ingredients: [], from: null }], gaps: [{ about: 'how long to cool', question: null }] }),
       photoRecipe,
     );
-    expect(out.gaps).toEqual([{ about: 'how long to cool', question: null }]);
+    expect(out.gaps).toContainEqual({ about: 'how long to cool', question: null });
     expect(out.stepsFrom).toHaveLength(out.input.steps.length);
+  });
+
+  it('reports an ingredient the revised method never uses', () => {
+    const out = applyRevision(revision({ steps: [{ text: 'Add the red wine', ingredients: [1], from: 1 }] }), photoRecipe);
+    expect(out.gaps).toContainEqual({ about: 'beef mince is not used in any step', question: 'Which step uses the beef mince?' });
+  });
+  it('caps the gaps it returns at eight', () => {
+    const gaps = Array.from({ length: 12 }, (_, i) => ({ about: `gap ${i}`, question: null }));
+    expect(applyRevision(revision({ gaps }), photoRecipe).gaps).toHaveLength(8);
   });
 });

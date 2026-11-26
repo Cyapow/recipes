@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
 import { canonicalBrand, normaliseTags } from '../recipes/categories.js';
+import { normaliseGaps, unusedIngredientGaps } from './gaps.js';
 import type { ProviderTool } from './providers/types.js';
 import { GapSchema, RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
@@ -55,16 +56,20 @@ function repairAmount(i: Ingredient): Ingredient {
 }
 
 export function toRecipeDraft(ai: AiDraft): RecipeDraft & { dishPhoto: DishBox | null } {
+  const steps = normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({
+    ...s,
+    imageId: null,
+    ingredients: s.ingredients.filter((i) => mentionsAnySignificantWord(s.text, ai.ingredients[i]!)),
+  }));
+  const ingredients = ai.ingredients.map(repairAmount);
   return {
     ...ai,
     brand: canonicalBrand(ai.brand),
     tags: normaliseTags(ai.tags),
-    ingredients: ai.ingredients.map(repairAmount),
-    steps: normaliseSteps(ai.steps, ai.ingredients.length).map((s) => ({
-      ...s,
-      imageId: null,
-      ingredients: s.ingredients.filter((i) => mentionsAnySignificantWord(s.text, ai.ingredients[i]!)),
-    })),
+    ingredients,
+    steps,
+    // After the links are final: an ingredient no step links is only visible as a set difference.
+    gaps: normaliseGaps([...ai.gaps, ...unusedIngredientGaps({ ingredients, steps }, ai.gaps)]),
   };
 }
 

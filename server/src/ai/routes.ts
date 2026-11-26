@@ -4,11 +4,12 @@ import { AiInvalidOutputError, AiRefusedError, AiRequestError, type AiClient } f
 import { sourceFromText, type SourceDeps } from '../import/describedSource.js';
 import { aiStatus } from './registry.js';
 import { IMAGE_ID_RE, normaliseBox, type ImageStore } from '../images/store.js';
+import { MAX_GAPS, normaliseGaps } from './gaps.js';
 import { originForBrand } from '../recipes/categories.js';
 import { RecipeInputSchema } from '../recipes/schema.js';
 
 export const MAX_DESCRIBE_CHARS = 20_000;
-export const MAX_REVISE_CHARS = 2_000;
+export const MAX_REVISE_CHARS = 4_000;
 /**
  * The recipe sent to be revised, measured as JSON so every field is bounded at once. Same order as
  * MAX_DESCRIBE_CHARS, which bounds a whole described recipe as text; a long real recipe is 1-3 kB. Without it the
@@ -83,9 +84,12 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         })
         : null;
       const brand = rest.brand;
+      const gaps = normaliseGaps(rest.gaps);
+      // The brand gap is always kept: if the list is full it takes the last place, so the total stays at eight.
+      const needsBrand = brand === null && !gaps.some((g) => g.about.trim().toLowerCase() === 'brand');
       return {
         ...rest,
-        gaps: brand === null && !rest.gaps.some((g) => g.about.trim().toLowerCase() === 'brand') ? [...rest.gaps, { about: 'brand', question: null }] : rest.gaps,
+        gaps: needsBrand ? [...gaps.slice(0, MAX_GAPS - 1), { about: 'brand', question: 'Whose recipe card is this?' }] : gaps,
         origin: originForBrand(brand),
         brand,
         sourceName: brand,

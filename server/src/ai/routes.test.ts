@@ -223,7 +223,16 @@ describe('POST /api/ai/photos', () => {
     expect(body.origin).toBe('other');
     expect(body.brand).toBeNull();
     expect(body.sourceName).toBeNull();
-    expect(body.gaps).toEqual([{ about: 'servings', question: null }, { about: 'brand', question: null }]);
+    expect(body.gaps).toEqual([{ about: 'servings', question: null }, { about: 'brand', question: 'Whose recipe card is this?' }]);
+  });
+
+  it('gives the brand gap a question and keeps the total at eight', async () => {
+    const gaps = Array.from({ length: 8 }, (_, i) => ({ about: `gap ${i}`, question: null }));
+    const { app, ids } = await setup({ extractRecipe: vi.fn().mockResolvedValue(photoDraft({ brand: null, gaps })) });
+    const body = (await photos(app, { imageIds: ids })).json();
+    expect(body.gaps).toHaveLength(8);
+    expect(body.gaps.at(-1)).toEqual({ about: 'brand', question: 'Whose recipe card is this?' });
+    expect(body.gaps[0]).toEqual({ about: 'gap 0', question: null });
   });
 
   it('does not repeat a brand gap the AI already listed', async () => {
@@ -286,6 +295,14 @@ describe('POST /api/ai/revise', () => {
     const res = await revise(make(fake(reviseRecipe)), { recipe, instruction });
     expect(res.statusCode).toBe(400);
     expect(reviseRecipe).not.toHaveBeenCalled();
+  });
+
+  it('allows a 4000-character instruction and refuses 4001', async () => {
+    expect(MAX_REVISE_CHARS).toBe(4_000);
+    const reviseRecipe = vi.fn().mockResolvedValue({ input: recipe, stepsFrom: [], gaps: [], provider: 'openai', model: 'gpt-x' });
+    const app = make(fake(reviseRecipe));
+    expect((await revise(app, { recipe, instruction: 'x'.repeat(4_000) })).statusCode).toBe(200);
+    expect((await revise(app, { recipe, instruction: 'x'.repeat(4_001) })).statusCode).toBe(413);
   });
 
   it('413s on an instruction over the limit without calling the AI', async () => {

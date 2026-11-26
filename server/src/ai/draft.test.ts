@@ -460,3 +460,23 @@ describe('toRecipeDraft repairs a stranded unit', () => {
     expect(out.ingredients).toEqual([ing(1, 'lb', 'ground beef'), ing(null, null, 'salt')]);
   });
 });
+
+describe('toRecipeDraft gaps the code adds and limits', () => {
+  const wine = { group: null, quantity: 150, unit: 'ml', item: 'red wine', note: null };
+  it('reports an ingredient the method never uses', () => {
+    const out = toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps: [], ingredients: [wine], steps: [{ text: 'Brown the mince', ingredients: [] }] }));
+    expect(out.gaps).toContainEqual({ about: 'red wine is not used in any step', question: 'Which step uses the red wine?' });
+  });
+  it('says nothing once a step names the ingredient', () => {
+    const out = toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps: [], ingredients: [wine], steps: [{ text: 'Add the red wine', ingredients: [0] }] }));
+    expect(out.gaps).toEqual([]);
+  });
+  it('caps the gaps it returns at eight', () => {
+    const gaps = Array.from({ length: 12 }, (_, i) => ({ about: `gap ${i}`, question: null }));
+    expect(toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps })).gaps).toHaveLength(8);
+  });
+  it('nulls an over-long question', () => {
+    const out = toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps: [{ about: 'servings', question: 'x'.repeat(141) }] }));
+    expect(out.gaps[0]).toEqual({ about: 'servings', question: null });
+  });
+});
