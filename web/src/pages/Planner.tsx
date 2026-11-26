@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   addPlanToShopping, getBudget, getPlan, listRecipes, saveBudget,
   type BasketItem, type Plan, type RecipeSummary,
@@ -40,7 +40,10 @@ function BasketRow({ i }: { i: BasketItem }) {
 
 export function Planner() {
   const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [params] = useSearchParams();
+  // A meal hands its recipes over as repeated ?recipe=<id>; they start ticked.
+  const fromUrl = useRef([...new Set(params.getAll('recipe'))]);
+  const [picked, setPicked] = useState<string[]>(fromUrl.current);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [budget, setBudget] = useState('');
   const [budgetError, setBudgetError] = useState<string | null>(null);
@@ -49,11 +52,6 @@ export function Planner() {
   const [adding, setAdding] = useState(false);
   const seq = useRef(0);
 
-  useEffect(() => {
-    listRecipes().then(setRecipes).catch(() => setError('Could not load recipes'));
-    getBudget().then((b) => b !== null && setBudget((b / 100).toFixed(2))).catch(() => undefined);
-  }, []);
-
   const refresh = useCallback((ids: string[]) => {
     const mine = ++seq.current;
     if (ids.length === 0) return setPlan(null);
@@ -61,6 +59,21 @@ export function Planner() {
       .then((p) => mine === seq.current && (setPlan(p), setError(null)))
       .catch(() => mine === seq.current && setError('Could not work out the plan'));
   }, []);
+
+  useEffect(() => {
+    listRecipes()
+      .then((list) => {
+        setRecipes(list);
+        // Ids from the URL may name recipes that have since gone, and the plan would refuse them.
+        const known = new Set(list.map((r) => r.id));
+        const start = fromUrl.current.filter((id) => known.has(id));
+        if (start.length === 0) return;
+        setPicked(start);
+        refresh(start);
+      })
+      .catch(() => setError('Could not load recipes'));
+    getBudget().then((b) => b !== null && setBudget((b / 100).toFixed(2))).catch(() => undefined);
+  }, [refresh]);
 
   function toggle(id: string) {
     const next = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];

@@ -61,6 +61,15 @@ describe('Planner', () => {
     expect(screen.getByText(/Needs 1 extra thing: Beef mince/)).toBeTruthy();
   });
 
+  it('starts with the recipes named in the URL already ticked', async () => {
+    render(<MemoryRouter initialEntries={['/planner?recipe=soup&recipe=gone']}><Planner /></MemoryRouter>);
+    await waitFor(() => expect((screen.getByLabelText('Carrot soup') as HTMLInputElement).checked).toBe(true));
+    expect((screen.getByLabelText('Stew') as HTMLInputElement).checked).toBe(false);
+    await screen.findByText('Estimated cost');
+    expect(getPlan).toHaveBeenCalledTimes(1);
+    expect(getPlan).toHaveBeenCalledWith(['soup']);
+  });
+
   it('warns when over budget', async () => {
     vi.mocked(getPlan).mockResolvedValue(plan({ budgetPence: 50 }));
     view();

@@ -529,3 +529,17 @@ body.cook-scroll-lock { overflow: hidden; }
 .revise-box > .primary { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
 .revise-summary { padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
 .revise-summary ul { margin: 0 0 10px; padding-left: 20px; line-height: 1.5; }
+
+/* Meal plan */
+.meal-ingredients, .meal-stages { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.meal-ingredients > li, .meal-stage { padding: 10px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.meal-ingredient { font-weight: 600; }
+.meal-uses { list-style: none; margin: 2px 0 0; padding: 0; }
+.meal-stage { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.meal-time { flex: none; min-width: 3.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.meal-stage-body { flex: 1; min-width: 12rem; display: flex; flex-direction: column; gap: 2px; }
+.meal-stage-actions, .meal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.meal-edit { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 12px; }
+.meal-stage > .meal-edit { margin-top: 0; }
+.meal-confirm { margin-top: 12px; }
+.meal-confirm p { margin: 0 0 10px; }

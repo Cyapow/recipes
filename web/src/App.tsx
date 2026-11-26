@@ -11,6 +11,7 @@ import { Settings } from './pages/Settings';
 import { Shopping } from './pages/Shopping';
 import { Planner } from './pages/Planner';
 import { Meals } from './pages/Meals';
+import { Meal } from './pages/Meal';
 import { Ingredients } from './pages/Ingredients';
 import { NotFound } from './pages/NotFound';
 import { AuthGate } from './components/AuthGate';
@@ -28,6 +29,7 @@ export function App() {
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/meals" element={<Meals />} />
+        <Route path="/meals/:id" element={<Meal />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/recipe/:id" element={<RecipeOverview />} />
         <Route path="/recipe/:id/cook" element={<Cook />} />
