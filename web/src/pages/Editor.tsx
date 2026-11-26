@@ -4,7 +4,7 @@ import { deleteRecipe, getRecipe, reviseRecipe, saveRecipe, type Gap, type Recip
 import { RecipeForm } from '../components/RecipeForm';
 import { ReviseBox } from '../components/ReviseBox';
 import { describeAiError } from '../lib/aiError';
-import { ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from '../lib/gaps';
+import { ANSWER_FAILED, ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from '../lib/gaps';
 import { summariseChanges } from '../lib/reviseSummary';
 import { stepMarks, type StepMarks } from '../lib/stepMarks';
 import { describeSaveError } from '../lib/saveError';
@@ -94,6 +94,8 @@ export function Editor() {
       // A typed instruction says nothing about the list, so its gaps replace it, as they always have.
       setGaps(asked ? mergeGaps(gaps, asked, newGaps) : newGaps);
       setInitial(next);
+      // The panel this message sat under is about to be remounted with empty boxes, so it no longer applies.
+      setAnswerError(null);
       setRevision((n) => n + 1);
     } finally {
       setReviseBusy(false);
@@ -138,7 +140,7 @@ export function Editor() {
     try {
       await applyRevision(current, answerInstruction(answers), answers.map((a) => a.gap));
     } catch (e) {
-      setAnswerError(describeAiError(e, 'Could not apply your answers'));
+      setAnswerError(describeAiError(e, ANSWER_FAILED));
       throw e;
     } finally {
       setAnswering(false);

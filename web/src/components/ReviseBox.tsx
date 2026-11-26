@@ -36,7 +36,9 @@ export function ReviseBox({ busy, error, summary, onApply, onUndo }: ReviseBoxPr
           ) : (
             <ul>{summary.map((line, i) => <li key={i}>{line}</li>)}</ul>
           )}
-          <button type="button" className="btn small" onClick={onUndo}>Undo</button>
+          {/* An undo mid-apply would be overwritten by the revision that is on its way back, and the Undo would
+              then vanish with nothing to show for it. */}
+          <button type="button" className="btn small" onClick={onUndo} disabled={busy}>Undo</button>
         </div>
       )}
     </section>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { reviseRecipe, type Gap, type RecipeInput } from '../api';
 import { describeAiError } from './aiError';
-import { ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from './gaps';
+import { ANSWER_FAILED, ANSWER_NEEDS_TITLE, answerInstruction, mergeGaps, type Answer } from './gaps';
 
 export type GapAnswersOptions = {
   /** The questions on screen. The ones that were not answered are carried across the revision. */
@@ -60,7 +60,7 @@ export function useGapAnswers({ gaps, setGaps, input, onRevised, save }: GapAnsw
       onRevised(next);
       setRevision((n) => n + 1);
     } catch (e) {
-      setAnswerError(describeAiError(e, 'Could not apply your answers'));
+      setAnswerError(describeAiError(e, ANSWER_FAILED));
       throw e;
     } finally {
       inFlight.current = false;

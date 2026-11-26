@@ -222,6 +222,25 @@ describe('Editor revise', () => {
     expect((screen.getByLabelText(wine.question) as HTMLInputElement).value).toBe('about 150ml');
   });
 
+  it('drops the answer error when the revision it was waiting for lands', async () => {
+    let settle!: (r: Revision) => void;
+    vi.mocked(reviseRecipe)
+      .mockResolvedValueOnce(revised({ gaps: [wine] }))
+      .mockImplementationOnce(() => new Promise<Revision>((r) => { settle = r; }));
+    const user = userEvent.setup();
+    app();
+    await apply(user, 'cool it');
+    await user.type(await screen.findByLabelText(wine.question), 'about 150ml');
+    // A typed revision is in flight, so the answer is refused and the panel says to wait for it.
+    await apply(user, 'and again');
+    await user.click(screen.getByRole('button', { name: 'Answer 1 question' }));
+    const panel = () => screen.getByRole('region', { name: 'Check these' });
+    await waitFor(() => expect(within(panel()).getByRole('alert').textContent).toMatch(/Wait for the revision/));
+    // It has now finished, so the message has nothing left to say and must not sit under a live panel.
+    await act(async () => { settle(revised({ gaps: [wine] })); });
+    await waitFor(() => expect(within(panel()).queryByRole('alert')).toBeNull());
+  });
+
   it('does not say Answering… while a typed instruction is in flight, and refuses an answer then', async () => {
     vi.mocked(reviseRecipe)
       .mockResolvedValueOnce(revised({ gaps: [wine] }))

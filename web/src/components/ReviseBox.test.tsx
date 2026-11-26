@@ -45,6 +45,15 @@ describe('ReviseBox', () => {
     await userEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(p.onUndo).toHaveBeenCalledTimes(1);
   });
+  it('does not undo while an apply is in flight', async () => {
+    // The revision on its way back would overwrite the restored contents and bump the form again, so the Undo
+    // would disappear having done nothing visible.
+    const p = setup({ summary: ['Step 2 added'], busy: true });
+    const undo = screen.getByRole('button', { name: /undo/i }) as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    await userEvent.click(undo);
+    expect(p.onUndo).not.toHaveBeenCalled();
+  });
   it('says a revision changed nothing rather than looking like it worked', () => {
     setup({ summary: [] });
     expect(screen.getByText(/no changes/i)).toBeTruthy();

@@ -84,6 +84,9 @@ export function registerAiRoutes(app: FastifyInstance, ai: AiClient | undefined,
         })
         : null;
       const brand = rest.brand;
+      // toRecipeDraft normalises its own gaps, so this is idempotent. It stays because the brand gap is appended
+      // below, and the cap on the result has to hold here rather than two modules away: the branch that appends
+      // makes room for it explicitly, and the branch that does not would otherwise rely on nothing visible.
       const gaps = normaliseGaps(rest.gaps);
       // The brand gap is always kept: if the list is full it takes the last place, so the total stays at eight.
       const needsBrand = brand === null && !gaps.some((g) => g.about.trim().toLowerCase() === 'brand');
