@@ -16,7 +16,7 @@ export type RecipeFormProps = {
   initial: RecipeInput;
   gaps?: Gap[];
   /** Makes the gaps panel answerable. Without it the panel is a read-only list. */
-  onAnswer?(answers: Answer[]): void;
+  onAnswer?(answers: Answer[]): Promise<unknown>;
   /** True while the answers are being applied. */
   answering?: boolean;
   /** Why the last apply failed, shown in the gaps panel. */

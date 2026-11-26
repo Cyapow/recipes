@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Gap } from '../../../server/src/recipes/schema';
 import { MAX_ANSWERS, MAX_ANSWER_CHARS, type Answer } from '../lib/gaps';
 
 export type GapsPanelProps = {
   gaps: Gap[];
-  /** Without it the panel is a read-only list. */
-  onAnswer?: (answers: Answer[]) => void;
+  /** Without it the panel is a read-only list. Resolving clears the boxes that were sent; rejecting leaves every box as typed. */
+  onAnswer?: (answers: Answer[]) => Promise<unknown>;
   applying?: boolean;
   error?: string | null;
 };
@@ -13,8 +13,6 @@ export type GapsPanelProps = {
 export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: GapsPanelProps) {
   // Typed text, keyed by `about`. Kept across a failed apply, and for the gaps left unanswered.
   const [typed, setTyped] = useState<Record<string, string>>({});
-  const sent = useRef<string[]>([]);
-  const wasApplying = useRef(false);
 
   // The one list that is both sent and counted: non-blank answers to real questions, capped.
   // The parent derives `asked` from these same gaps, so a blank answer cannot reach it.
@@ -26,20 +24,17 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
   const toSend = answers.slice(0, MAX_ANSWERS);
   const full = toSend.length >= MAX_ANSWERS;
 
-  // A successful apply clears what was answered; a failed one leaves every box as typed.
-  useEffect(() => {
-    if (wasApplying.current && !applying && !error) {
-      const gone = sent.current;
-      setTyped((t) => Object.fromEntries(Object.entries(t).filter(([about]) => !gone.includes(about))));
-    }
-    wasApplying.current = applying;
-  }, [applying, error]);
-
   if (gaps.length === 0) return null;
 
-  const send = () => {
-    sent.current = toSend.map((a) => a.gap.about);
-    onAnswer?.(toSend);
+  const send = async () => {
+    if (!onAnswer) return;
+    const about = toSend.map((a) => a.gap.about);
+    try {
+      await onAnswer(toSend);
+    } catch {
+      return; // the parent shows the error; every box keeps what was typed
+    }
+    setTyped((t) => Object.fromEntries(Object.entries(t).filter(([k]) => !about.includes(k))));
   };
 
   return (
@@ -65,7 +60,7 @@ export function GapsPanel({ gaps, onAnswer, applying = false, error = null }: Ga
         )}
       </ul>
       {onAnswer && (
-        <button type="button" className="primary" onClick={send} disabled={applying || toSend.length === 0}>
+        <button type="button" className="primary" onClick={() => void send()} disabled={applying || toSend.length === 0}>
           {applying ? (
             <>
               <span className="spinner" aria-hidden="true" /> Answering…
