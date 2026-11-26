@@ -3,7 +3,7 @@ import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { canonicalBrand, normaliseTags, originForBrand } from '../recipes/categories.js';
 import { GapSchema, RecipeCoreSchema, TagSchema, normaliseSteps, type Gap, type RecipeInput } from '../recipes/schema.js';
 import { defang, sanitizeForStrict } from './draft.js';
-import { normaliseGaps, unusedIngredientGaps } from './gaps.js';
+import { unusedIngredientGaps, withCodeGaps } from './gaps.js';
 import { renderRecipe } from './render.js';
 import type { ProviderTool } from './providers/types.js';
 
@@ -113,6 +113,6 @@ export function applyRevision(revision: AiRevisionOutput, recipe: RecipeInput): 
     },
     stepsFrom,
     // After the links are final: an ingredient no step links is only visible as a set difference.
-    gaps: normaliseGaps([...modelGaps, ...unusedIngredientGaps({ ingredients: revision.ingredients, steps }, modelGaps)]),
+    gaps: withCodeGaps(modelGaps, unusedIngredientGaps({ ingredients: revision.ingredients, steps }, modelGaps)),
   };
 }

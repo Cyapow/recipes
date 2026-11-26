@@ -27,7 +27,7 @@ export function unusedIngredientGaps(
   existing: Gap[],
 ): Gap[] {
   const used = new Set(recipe.steps.flatMap((s) => s.ingredients));
-  return recipe.ingredients.flatMap((ingredient, i): Gap[] => {
+  const found = recipe.ingredients.flatMap((ingredient, i): Gap[] => {
     if (used.has(i) || ingredient.quantity === null) return [];
     // An item with no significant words cannot match even itself, and so could never be linked to a step.
     if (!mentionsAnySignificantWord(ingredient.item, ingredient)) return [];
@@ -35,4 +35,15 @@ export function unusedIngredientGaps(
     const item = ingredient.item.trim();
     return [{ about: `${item} is not used in any step`, question: `Which step uses the ${item}?` }];
   });
+  // Two lines of the same item (two "butter"s) would otherwise ask the same thing twice.
+  return found.filter((g, i) => found.findIndex((f) => f.about === g.about) === i);
+}
+
+/**
+ * The model's gaps followed by the ones code found. The code's are guaranteed a place: when the list is full
+ * they displace the end of the model's, which is ordered most important first. Display order is unchanged.
+ */
+export function withCodeGaps(modelGaps: Gap[], codeGaps: Gap[]): Gap[] {
+  const added = codeGaps.slice(0, MAX_GAPS);
+  return normaliseGaps([...modelGaps.slice(0, MAX_GAPS - added.length), ...added]);
 }

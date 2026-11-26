@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Gap, Ingredient } from '../recipes/schema.js';
-import { MAX_GAPS, MAX_QUESTION_CHARS, normaliseGaps, unusedIngredientGaps } from './gaps.js';
+import { MAX_GAPS, MAX_QUESTION_CHARS, withCodeGaps, normaliseGaps, unusedIngredientGaps } from './gaps.js';
 
 const ing = (item: string, quantity: number | null, unit: string | null = null): Ingredient => ({ group: null, quantity, unit, item, note: null });
 
@@ -54,5 +54,27 @@ describe('unusedIngredientGaps', () => {
   });
   it('says nothing about an ingredient a step does link', () => {
     expect(unusedIngredientGaps({ ingredients: wine, steps: [{ ingredients: [0] }] }, [])).toEqual([]);
+  });
+});
+
+describe('unusedIngredientGaps with repeated items', () => {
+  it('reports two unused lines of the same item once', () => {
+    const out = unusedIngredientGaps({ ingredients: [ing('butter', 50, 'g'), ing('butter', 20, 'g')], steps: [{ ingredients: [] }] }, []);
+    expect(out).toEqual([{ about: 'butter is not used in any step', question: 'Which step uses the butter?' }]);
+  });
+});
+
+describe('withCodeGaps', () => {
+  const model = (n: number): Gap[] => Array.from({ length: n }, (_, i) => ({ about: `gap ${i}`, question: null }));
+  const added = (n: number): Gap[] => Array.from({ length: n }, (_, i) => ({ about: `unused ${i}`, question: 'Which step?' }));
+  it('keeps the model gaps first and the code gaps after', () => {
+    expect(withCodeGaps(model(2), added(1)).map((g) => g.about)).toEqual(['gap 0', 'gap 1', 'unused 0']);
+  });
+  it('displaces the end of the model gaps rather than the code gaps', () => {
+    const out = withCodeGaps(model(8), added(2));
+    expect(out.map((g) => g.about)).toEqual([...model(6).map((g) => g.about), 'unused 0', 'unused 1']);
+  });
+  it('caps code gaps alone at eight', () => {
+    expect(withCodeGaps(model(3), added(10)).map((g) => g.about)).toEqual(added(8).map((g) => g.about));
   });
 });

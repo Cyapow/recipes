@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { mentionsAnySignificantWord } from '../recipes/links.js';
 import { splitAmount } from '../recipes/amount.js';
 import { canonicalBrand, normaliseTags } from '../recipes/categories.js';
-import { normaliseGaps, unusedIngredientGaps } from './gaps.js';
+import { unusedIngredientGaps, withCodeGaps } from './gaps.js';
 import type { ProviderTool } from './providers/types.js';
 import { GapSchema, RecipeCoreSchema, TagSchema, normaliseSteps, type Ingredient, type RecipeDraft } from '../recipes/schema.js';
 
@@ -69,7 +69,7 @@ export function toRecipeDraft(ai: AiDraft): RecipeDraft & { dishPhoto: DishBox |
     ingredients,
     steps,
     // After the links are final: an ingredient no step links is only visible as a set difference.
-    gaps: normaliseGaps([...ai.gaps, ...unusedIngredientGaps({ ingredients, steps }, ai.gaps)]),
+    gaps: withCodeGaps(ai.gaps, unusedIngredientGaps({ ingredients, steps }, ai.gaps)),
   };
 }
 

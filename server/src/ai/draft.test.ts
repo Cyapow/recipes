@@ -475,6 +475,13 @@ describe('toRecipeDraft gaps the code adds and limits', () => {
     const gaps = Array.from({ length: 12 }, (_, i) => ({ about: `gap ${i}`, question: null }));
     expect(toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps })).gaps).toHaveLength(8);
   });
+  it('keeps the unused-ingredient gap when the model already returned eight', () => {
+    const gaps = Array.from({ length: 8 }, (_, i) => ({ about: `gap ${i}`, question: null }));
+    const out = toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps, ingredients: [wine], steps: [{ text: 'Brown the mince', ingredients: [] }] }));
+    expect(out.gaps).toHaveLength(8);
+    expect(out.gaps.at(-1)).toEqual({ about: 'red wine is not used in any step', question: 'Which step uses the red wine?' });
+    expect(out.gaps[0]).toEqual({ about: 'gap 0', question: null });
+  });
   it('nulls an over-long question', () => {
     const out = toRecipeDraft(AiDraftSchema.parse({ ...draft, gaps: [{ about: 'servings', question: 'x'.repeat(141) }] }));
     expect(out.gaps[0]).toEqual({ about: 'servings', question: null });

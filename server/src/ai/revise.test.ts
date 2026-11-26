@@ -195,4 +195,11 @@ describe('applyRevision', () => {
     const gaps = Array.from({ length: 12 }, (_, i) => ({ about: `gap ${i}`, question: null }));
     expect(applyRevision(revision({ gaps }), photoRecipe).gaps).toHaveLength(8);
   });
+
+  it('keeps the unused-ingredient gap when the model already returned eight', () => {
+    const gaps = Array.from({ length: 8 }, (_, i) => ({ about: `gap ${i}`, question: null }));
+    const out = applyRevision(revision({ gaps, steps: [{ text: 'Add the red wine', ingredients: [1], from: 1 }] }), photoRecipe);
+    expect(out.gaps).toHaveLength(8);
+    expect(out.gaps.at(-1)).toEqual({ about: 'beef mince is not used in any step', question: 'Which step uses the beef mince?' });
+  });
 });
