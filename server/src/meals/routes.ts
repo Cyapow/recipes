@@ -3,9 +3,8 @@ import { z } from 'zod';
 import type { AiClient, PlanMealRequest } from '../ai/client.js';
 import { aiFailure } from '../ai/routes.js';
 import type { createRecipeRepo } from '../recipes/repo.js';
-import type { Recipe } from '../recipes/schema.js';
 import { mergeMealIngredients } from './ingredients.js';
-import { COURSES, type Meal, type MealsRepo, type MealRecipeInput, type MealPatch } from './repo.js';
+import { COURSES, type Meal, type MealsRepo, type MealRecipeInput } from './repo.js';
 import { describeServeAt, stageWhen } from './when.js';
 
 /**
@@ -97,7 +96,7 @@ export function registerMealRoutes(
     if (p.data.stages?.some((s) => s.recipeId !== null && !recipes.get(s.recipeId))) {
       return bad(reply, 'One of those stages refers to a recipe that no longer exists');
     }
-    const meal = meals.update(req.params.id, p.data as MealPatch);
+    const meal = meals.update(req.params.id, p.data);
     return meal ? present(meal) : reply.code(404).send({ error: 'Not found' });
   });
 
@@ -126,7 +125,7 @@ export function registerMealRoutes(
     const recipeIds: string[] = [];
     const planRecipes: PlanMealRequest['recipes'] = [];
     for (const { course, recipe } of liveRecipes(meal)) {
-      const { id, createdAt: _c, updatedAt: _u, favouritedBy: _f, ...input } = recipe as Recipe;
+      const { id, createdAt: _c, updatedAt: _u, favouritedBy: _f, ...input } = recipe;
       recipeIds.push(id);
       planRecipes.push({ course, recipe: input });
     }
@@ -135,18 +134,21 @@ export function registerMealRoutes(
       return reply.code(413).send({ error: 'This meal is too long to schedule' });
     }
 
+    let plan: Awaited<ReturnType<AiClient['planMeal']>>;
     try {
-      const { stages, watchOut } = await ai.planMeal({
+      plan = await ai.planMeal({
         title: meal.title,
         // Local words, not a UTC instant: "13:00Z" does not tell the model it is lunchtime here.
         serveAt: describeServeAt(meal.serveAt),
         recipes: planRecipes,
         recipeIds,
       });
-      const saved = meals.replaceStages(meal.id, stages, watchOut);
-      return saved ? present(saved) : reply.code(404).send({ error: 'Not found' });
     } catch (err) {
       return aiFailure(err, reply);
     }
+    // Outside the try: a storage failure after the AI has been paid for is not an AI failure, and calling it one
+    // would invite a retry that pays again.
+    const saved = meals.replaceStages(meal.id, plan.stages, plan.watchOut);
+    return saved ? present(saved) : reply.code(404).send({ error: 'Not found' });
   });
 }

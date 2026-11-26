@@ -196,6 +196,30 @@ describe('meal routes', () => {
     expect(planMeal).not.toHaveBeenCalled();
   });
 
+  it('answers the first failing check when several fail at once, and calls the AI for none', async () => {
+    const big = makeRecipe('Huge', 'x'.repeat(MAX_MEAL_CHARS));
+    const noAi = make(null);
+    const app = make();
+    // Oversized and already scheduled: 409 outranks 413.
+    const id = (await create(app, { recipes: [{ recipeId: big, course: 'main' }] })).json().id as string;
+    createMealsRepo(db).update(id, { stages: [stage()] });
+    expect((await schedule(app, id)).statusCode).toBe(409);
+    // No AI as well: 503 outranks 409. Unknown meal and no AI: 503 outranks 404.
+    expect((await schedule(noAi, id)).statusCode).toBe(503);
+    expect((await schedule(noAi, 'nope')).statusCode).toBe(503);
+    expect(planMeal).not.toHaveBeenCalled();
+  });
+
+  it('400s a schedule when none of the meal\'s recipes exist any more, without calling the AI', async () => {
+    const app = make();
+    const id = (await create(app, { recipes: [{ recipeId: a, course: 'main' }] })).json().id as string;
+    recipes.delete(a);
+    const res = await schedule(app, id);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('None of the recipes in this meal exist any more');
+    expect(planMeal).not.toHaveBeenCalled();
+  });
+
   it('maps a provider failure to its plain-language sentence', async () => {
     const app = make();
     const id = await created(app);
