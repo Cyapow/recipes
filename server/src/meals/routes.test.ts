@@ -70,7 +70,13 @@ describe('meal routes', () => {
     expect(got.json()).toMatchObject({ id, title: 'Sunday lunch', serveAt: SERVE });
     expect(got.json().recipes.map((r: { recipeTitle: string }) => r.recipeTitle)).toEqual(['Roast lamb', 'Sticky toffee']);
     const list = await app.inject({ method: 'GET', url: '/api/meals' });
-    expect(list.json().meals).toEqual([{ id, title: 'Sunday lunch', serveAt: SERVE, recipeCount: 2, stageCount: 0, doneCount: 0 }]);
+    expect(list.json().meals).toEqual([
+      {
+        id, title: 'Sunday lunch', serveAt: SERVE, recipeCount: 2, stageCount: 0, doneCount: 0,
+        // The list's serving time is the server's own words, so no browser has to format one.
+        serveText: 'Sunday 29 November 2026, 13:00',
+      },
+    ]);
   });
 
   it('a meal read back carries its merged ingredients and each stage at and dayGroup', async () => {
@@ -85,6 +91,14 @@ describe('meal routes', () => {
       ['2026-11-27T13:00:00.000Z', 'two days before'],
       ['2026-11-29T11:00:00.000Z', 'on the day'],
     ]);
+  });
+
+  it('the list says the serving day in the server timezone, not UTC', async () => {
+    const app = make();
+    // 23:30Z in July is half past midnight the next day in London: the day itself differs, and the server decides it.
+    await create(app, { serveAt: '2026-07-12T23:30:00.000Z' });
+    expect(((await app.inject({ method: 'GET', url: '/api/meals' })).json().meals as { serveText: string }[])[0]!.serveText)
+      .toBe('Monday 13 July 2026, 00:30');
   });
 
   it('400s a create with no recipes, an unknown course, or a serveAt that is not a date', async () => {

@@ -13,6 +13,8 @@ export type { Box1000, Tag };
 
 export type { Meal, MealIngredientLine, MealPatch, MealStage, MealSummary, NewMeal };
 export type StageWithWhen = MealStage & { at: string; dayGroup: string; clock: string };
+/** The list's rows carry the serving time already in words: no meal time is ever formatted in the browser. */
+export type MealSummaryWithServeText = MealSummary & { serveText: string };
 export type MealWithIngredients = Omit<Meal, 'stages'> & { serveText: string; stages: StageWithWhen[]; ingredients: MealIngredientLine[] };
 
 export type ListQuery = { search?: string; brands?: string[]; tags?: Tag[]; favouritedBy?: string[] };
@@ -341,8 +343,8 @@ export const addAllowed = (email: string): Promise<void> =>
 export const removeAllowed = (email: string): Promise<void> =>
   request<unknown>(`/api/auth/allowed/${encodeURIComponent(email)}`, { method: 'DELETE' }).then(() => undefined);
 
-export async function listMeals(): Promise<MealSummary[]> {
-  return (await request<{ meals: MealSummary[] }>('/api/meals')).meals;
+export async function listMeals(): Promise<MealSummaryWithServeText[]> {
+  return (await request<{ meals: MealSummaryWithServeText[] }>('/api/meals')).meals;
 }
 
 /** A 400 here carries a plain sentence in `body.error`, which ApiError keeps for the caller to show. */

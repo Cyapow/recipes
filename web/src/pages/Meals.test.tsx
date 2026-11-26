@@ -37,16 +37,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Meals', () => {
-  it('lists meals with their serving time and what they hold', async () => {
+  it('lists meals with the serving time the server gave, not one formatted in the browser', async () => {
+    // 01:00Z on Christmas Day reads as 25 December in this London test browser; the server (here, New York) says the
+    // 24th. The row must show the server's words, down to the day, so the whole string is asserted.
     vi.mocked(listMeals).mockResolvedValue([
-      { id: 'm1', title: 'Christmas dinner', serveAt: '2026-12-25T13:00:00.000Z', recipeCount: 4, stageCount: 10, doneCount: 3 },
+      {
+        id: 'm1', title: 'Christmas dinner', serveAt: '2026-12-25T01:00:00.000Z',
+        serveText: 'Thursday 24 December 2026, 20:00', recipeCount: 4, stageCount: 10, doneCount: 3,
+      },
     ]);
     view();
     const link = await screen.findByRole('link', { name: /Christmas dinner/ });
     expect(link.getAttribute('href')).toBe('/meals/m1');
-    expect(link.textContent).toContain('4 recipes');
-    expect(link.textContent).toContain('3 of 10 steps done');
-    expect(link.textContent).toContain('Dec');
+    expect(link.textContent).toBe('Christmas dinner Thursday 24 December 2026, 20:00 · 4 recipes · 3 of 10 steps done');
+  });
+
+  it('says a meal has no schedule yet', async () => {
+    vi.mocked(listMeals).mockResolvedValue([
+      {
+        id: 'm2', title: 'Supper', serveAt: '2026-12-06T13:30:00.000Z',
+        serveText: 'Sunday 6 December 2026, 13:30', recipeCount: 1, stageCount: 0, doneCount: 0,
+      },
+    ]);
+    view();
+    const link = await screen.findByRole('link', { name: /Supper/ });
+    expect(link.textContent).toBe('Supper Sunday 6 December 2026, 13:30 · 1 recipe · no schedule yet');
   });
 
   it('will not create a meal with no recipes', async () => {

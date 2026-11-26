@@ -73,7 +73,10 @@ export function registerMealRoutes(
     return null;
   };
 
-  app.get('/api/meals', async () => ({ meals: meals.list() }));
+  // The list reads its serving times the same way the meal page does: the server's words, in the server's timezone.
+  app.get('/api/meals', async () => ({
+    meals: meals.list().map((m) => ({ ...m, serveText: describeServeAt(m.serveAt) })),
+  }));
 
   app.post('/api/meals', async (req, reply) => {
     const p = CreateBody.safeParse(req.body);

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, createMeal, listMeals, listRecipes, type MealSummary, type RecipeSummary } from '../api';
+import { ApiError, createMeal, listMeals, listRecipes, type MealSummaryWithServeText, type RecipeSummary } from '../api';
 import { COURSES, type Course } from '../../../server/src/meals/repo';
 import { BackIcon } from '../components/Icons';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const whenText = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 function failureMessage(e: unknown): string {
   const body = e instanceof ApiError ? (e.body as { error?: unknown } | undefined) : undefined;
@@ -15,7 +13,7 @@ function failureMessage(e: unknown): string {
 
 export function Meals() {
   const navigate = useNavigate();
-  const [meals, setMeals] = useState<MealSummary[] | null>(null);
+  const [meals, setMeals] = useState<MealSummaryWithServeText[] | null>(null);
   const [recipes, setRecipes] = useState<RecipeSummary[] | null>(null);
   /** The ticked recipes, each with its course. */
   const [courses, setCourses] = useState<Record<string, Course>>({});
@@ -73,7 +71,7 @@ export function Meals() {
               <span>
                 <strong>{m.title}</strong>
                 <span className="sub">
-                  {' '}{whenText(m.serveAt)} · {plural(m.recipeCount, 'recipe', 'recipes')}
+                  {' '}{m.serveText} · {plural(m.recipeCount, 'recipe', 'recipes')}
                   {m.stageCount > 0 ? ` · ${m.doneCount} of ${plural(m.stageCount, 'step', 'steps')} done` : ' · no schedule yet'}
                 </span>
               </span>
