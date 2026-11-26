@@ -239,6 +239,11 @@ returned)`, also in `web/src/lib/gaps.ts`: keep every gap from `before` whose `a
 just asked, then append everything in `returned`, deduped by `about`. A question that was asked and came
 back (because the answer was unusable) returns through `returned`, with the model's sharper wording.
 
+The merge is capped at eight, the same cap the server applies to one response, because otherwise the two
+lists add up: eight carried plus eight returned is sixteen, and the round after that is worse. The returned
+gaps take their places first — they are the sharper ones — and the kept gaps fill whatever is left. Without
+this cap the "Twenty questions" anti-goal above is only honoured until the first apply.
+
 **Merging happens only when answering.** A free-text revise in the editor keeps today's behaviour of
 replacing the gap list wholesale, because that is what shipped last week and because `REVISE_SYSTEM_PROMPT`
 is written for it. So the editor's revise handler takes the asked gaps as a second argument:
@@ -265,7 +270,13 @@ The repo's habit is to back a prompt rule with code where only code can guarante
 The same applies here:
 
 - **At most eight gaps**, truncated keeping the first eight, since the prompt asks for the most important
-  first. The truncation runs *after* the photos route appends its `brand` gap, so that one counts.
+  first. On the photos path the appended `brand` gap is never the one dropped: the model's gaps are capped
+  first and the brand gap takes the eighth place, displacing the least important of them. A gap the code
+  found rather than the model — an unused ingredient — displaces the model's tail in the same way, because
+  it is the case this feature was asked for and must not be the first thing cut.
+- **Gaps are deduped by `about`**, trimmed and case-insensitively, because `about` is the gap's identity:
+  the panel keys each answer box by it, so two gaps sharing one would share an input and send the answer
+  twice.
 - **A blank or whitespace `question` becomes `null`**, so it degrades to a bullet rather than an empty box.
 - **An over-long `question` becomes `null`** for the same reason, rather than being truncated mid-sentence.
 - **The unused-ingredient check**, above, which is the strongest case of all: the model may reason its way
