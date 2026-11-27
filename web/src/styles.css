@@ -121,7 +121,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .gaps > .primary { width: 100%; margin-top: 12px; }
 .field label { font-size: .875rem; font-weight: 700; }
 .recipe-form > .primary, .form-submit { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
-.page > label, .page > form > label { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
+.page > label:not(.search-field), .page > form > label:not(.search-field) { display: flex; flex-direction: column; gap: 6px; font-size: .875rem; font-weight: 700; }
 .page > form { display: flex; flex-direction: column; gap: 12px; }
 .page > .primary { height: 56px; border-radius: 18px; font-size: 1.0625rem; }
 
@@ -445,6 +445,9 @@ body.cook-scroll-lock { overflow: hidden; }
 .planner-recipes { gap: 8px; }
 .planner-pick { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); font-size: 1.0625rem; font-weight: 600; cursor: pointer; }
 .planner-pick input { width: 24px; min-height: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+/* A picked row shows the recipe's face, as the library's rows do, at a size that keeps the row its own height. */
+.planner-pick .thumb { width: 44px; height: 44px; border-radius: 12px; }
+.planner-pick .sub { font-weight: 400; }
 .planner-total { margin: 0; font-size: 2rem; font-weight: 800; }
 .meter { height: 10px; border-radius: 5px; background: var(--chip); overflow: hidden; margin: 6px 0; }
 .meter-fill { height: 100%; background: var(--accent); }

@@ -9,11 +9,12 @@ import type { Course } from '../../../server/src/meals/courses';
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
   listRecipes: vi.fn(),
+  getFacets: vi.fn(),
 }));
-import { listRecipes } from '../api';
+import { getFacets, listRecipes } from '../api';
 
-const recipe = (id: string, title: string) =>
-  ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
+const recipe = (id: string, title: string, extra: Record<string, unknown> = {}) =>
+  ({ id, title, origin: 'mine', brand: 'Mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null, favouritedBy: [], ...extra }) as never;
 
 /** The real callers hold the picked recipes, so the test does too: ticking must survive a changed search. */
 function Harness({ atLimit = false }: { atLimit?: boolean } = {}) {
@@ -32,6 +33,9 @@ function Harness({ atLimit = false }: { atLimit?: boolean } = {}) {
 
 beforeEach(() => {
   vi.mocked(listRecipes).mockReset().mockResolvedValue([recipe('r1', 'Roast chicken'), recipe('r2', 'Gravy')]);
+  vi.mocked(getFacets).mockReset().mockResolvedValue({
+    brands: [], tags: [{ group: 'meal', name: 'Dinner', count: 2 }], people: [],
+  });
 });
 afterEach(cleanup);
 
@@ -81,6 +85,41 @@ describe('RecipeCourses', () => {
   it('says so when the recipes could not be loaded', async () => {
     vi.mocked(listRecipes).mockRejectedValue(new Error('nope'));
     render(<Harness />);
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load your recipes');
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load recipes');
+  });
+
+  it('pins a picked recipe a filter hides, as it does for a search', async () => {
+    render(<Harness />);
+    await userEvent.click(await screen.findByLabelText('Roast chicken'));
+
+    vi.mocked(listRecipes).mockResolvedValue([recipe('r2', 'Gravy')]);
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Dinner' }));
+    await screen.findByText('Already picked');
+
+    const chicken = screen.getByLabelText('Roast chicken') as HTMLInputElement;
+    expect(chicken.checked).toBe(true);
+  });
+
+  it('does not create the meal when the filters are opened', async () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(<form onSubmit={onSubmit}><Harness /></form>);
+    await screen.findByLabelText('Roast chicken');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Dinner' }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('shows what a recipe is, not only its title', async () => {
+    vi.mocked(listRecipes).mockResolvedValue([
+      recipe('r1', 'Roast chicken', { tags: [{ group: 'meal', name: 'Dinner' }], totalMinutes: 95 }),
+    ]);
+    render(<Harness />);
+
+    expect(await screen.findByText('Mine · Dinner · 1h 35m')).toBeTruthy();
+    // The tick is still named after the recipe alone, so "tick Roast chicken" keeps meaning one thing.
+    expect(screen.getByLabelText('Roast chicken')).toBeTruthy();
   });
 });
