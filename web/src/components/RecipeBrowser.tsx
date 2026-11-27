@@ -112,6 +112,9 @@ export function RecipeBrowser({ renderRow, storageKey, afterSearch, beforeList, 
           placeholder="Search recipes"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          // The picker browses inside the meal form, where Enter in a text field clicks its default button and
+          // creates the meal. Searching is not submitting, and the results are already live as you type.
+          onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
         />
       </label>
       {afterSearch}

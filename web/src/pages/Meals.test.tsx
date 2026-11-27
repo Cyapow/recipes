@@ -9,9 +9,9 @@ import { Meals } from './Meals';
 
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
-  listMeals: vi.fn(), listRecipes: vi.fn(), createMeal: vi.fn(),
+  listMeals: vi.fn(), listRecipes: vi.fn(), createMeal: vi.fn(), getFacets: vi.fn(),
 }));
-import { ApiError, createMeal, listMeals, listRecipes } from '../api';
+import { ApiError, createMeal, getFacets, listMeals, listRecipes } from '../api';
 
 const recipe = (id: string, title: string) => ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
 const view = () =>
@@ -33,10 +33,25 @@ beforeEach(() => {
   vi.mocked(listMeals).mockReset().mockResolvedValue([]);
   vi.mocked(listRecipes).mockReset().mockResolvedValue([recipe('r1', 'Roast chicken'), recipe('r2', 'Gravy')]);
   vi.mocked(createMeal).mockReset().mockResolvedValue({ id: 'm1' } as never);
+  vi.mocked(getFacets).mockReset().mockResolvedValue({
+    brands: [{ name: 'Hairy Bikers', count: 1 }], tags: [{ group: 'meal', name: 'Dinner', count: 2 }], people: [],
+  });
 });
 afterEach(cleanup);
 
 describe('Meals', () => {
+  it('filters the recipes to pick from without creating the meal', async () => {
+    view();
+    await screen.findByLabelText('Roast chicken');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Hairy Bikers' }));
+
+    expect(await screen.findByRole('button', { name: 'Remove filter Hairy Bikers' })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(listRecipes).mock.calls.at(-1)?.[0]).toEqual({ brands: ['Hairy Bikers'] }));
+    expect(createMeal).not.toHaveBeenCalled();
+  });
+
   it('lists meals with the serving time the server gave, not one formatted in the browser', async () => {
     // 01:00Z on Christmas Day reads as 25 December in this London test browser; the server (here, New York) says the
     // 24th. The row must show the server's words, down to the day, so the whole string is asserted.

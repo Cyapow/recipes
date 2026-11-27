@@ -8,9 +8,9 @@ import { Meal } from './Meal';
 
 vi.mock('../api', async (orig) => ({
   ...(await orig<typeof import('../api')>()),
-  getMeal: vi.fn(), scheduleMeal: vi.fn(), updateMeal: vi.fn(), deleteMeal: vi.fn(), listRecipes: vi.fn(),
+  getMeal: vi.fn(), scheduleMeal: vi.fn(), updateMeal: vi.fn(), deleteMeal: vi.fn(), listRecipes: vi.fn(), getFacets: vi.fn(),
 }));
-import { ApiError, deleteMeal, getMeal, listRecipes, scheduleMeal, updateMeal } from '../api';
+import { ApiError, deleteMeal, getFacets, getMeal, listRecipes, scheduleMeal, updateMeal } from '../api';
 import { MAX_MEAL_RECIPES } from '../../../server/src/meals/limits';
 
 const recipe = (id: string, title: string) => ({ id, title, origin: 'mine', sourceName: null, tags: [], thumbnailId: null, totalMinutes: null }) as never;
@@ -59,6 +59,9 @@ beforeEach(() => {
   vi.mocked(updateMeal).mockReset().mockResolvedValue(meal());
   vi.mocked(deleteMeal).mockReset().mockResolvedValue(undefined);
   vi.mocked(listRecipes).mockReset().mockResolvedValue([recipe('r1', 'Roast chicken'), recipe('r2', 'Gravy'), recipe('r3', 'Trifle')]);
+  vi.mocked(getFacets).mockReset().mockResolvedValue({
+    brands: [{ name: 'Hairy Bikers', count: 1 }], tags: [{ group: 'meal', name: 'Dinner', count: 2 }], people: [],
+  });
 });
 afterEach(cleanup);
 

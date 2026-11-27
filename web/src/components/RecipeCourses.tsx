@@ -20,8 +20,9 @@ export function RecipeCourses({ courses, atLimit = false, onToggle, onCourse }: 
   onToggle: (id: string) => void;
   onCourse: (id: string, course: Course) => void;
 }) {
-  // Every recipe this picker has shown, so a picked one can still be named once a search or a filter hides it. The
-  // first load is unnarrowed, so everything pickable has been seen before anything can hide it.
+  // Every recipe this picker has shown, so a picked one can still be named once a search or a filter hides it.
+  // It is fed from results that arrived, so a picked recipe the first load never delivered — it failed, or a filter
+  // applied before it landed cancelled it — is in neither list until a load succeeds. Known; see the branch notes.
   const seen = useRef(new Map<string, RecipeSummary>());
   const [results, setResults] = useState<RecipeSummary[] | null>(null);
 

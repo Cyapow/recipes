@@ -119,6 +119,21 @@ describe('RecipeBrowser', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('does not submit the form it sits in when Enter is pressed in the search box', async () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(
+      <form onSubmit={onSubmit}>
+        <RecipeBrowser renderRow={row} />
+        <button type="submit">Create meal</button>
+      </form>,
+    );
+    await screen.findByText('Roast chicken');
+
+    await userEvent.type(screen.getByLabelText('Search recipes'), 'squash{Enter}');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('hands the results to the caller that wants to remember them', async () => {
     const onResults = vi.fn();
     render(<RecipeBrowser renderRow={row} onResults={onResults} />);
